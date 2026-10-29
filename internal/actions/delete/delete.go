@@ -10,7 +10,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/validation"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
@@ -23,11 +22,12 @@ type Options struct {
 	Upstack    bool
 }
 
-// deleteEngine lists exactly the engine methods delete calls: the branch
+// Engine lists exactly the engine methods delete calls: the branch
 // validators, deletion and reparenting, remote metadata cleanup, and the
 // worktree registry for stacks that disappear entirely.
-type deleteEngine interface {
+type Engine interface {
 	validation.BranchValidationEngine
+	actions.OwnershipEngine
 	Trunk() engine.Branch
 	AllBranches() engine.Branches
 	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
@@ -41,10 +41,16 @@ type deleteEngine interface {
 	UnregisterWorktree(ctx context.Context, stackRoot string) error
 }
 
+// Deps are the collaborators delete needs. Adapters build them from their own
+// runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	actions.MutationDeps
+}
+
 // Action deletes a branch and its metadata.
-func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
-	var eng deleteEngine = ctx.Engine
-	out := ctx.Output
+func Action(ctx context.Context, deps Deps, opts Options, handler Handler) (Result, error) {
+	eng, out := deps.Engine, deps.Out
 
 	// Use null handler if none provided
 	if handler == nil {
@@ -54,7 +60,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 
 	branchName := opts.BranchName
 	if branchName == "" {
-		currentBranch := eng.CurrentBranch(ctx.Context)
+		currentBranch := eng.CurrentBranch(ctx)
 		if currentBranch == nil {
 			return Result{}, errors.New("no branch specified and not on a branch")
 		}
@@ -81,7 +87,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	}
 
 	// Build StackGraph for efficient traversals
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	// Determine branches to delete
 	toDelete := engine.BranchesOf(branch)
@@ -100,7 +106,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	// the same worktree-ownership boundary as other stack mutations. A caller
 	// operating from the owning managed worktree still passes this check, which
 	// preserves delete's deliberate full-stack worktree cleanup below.
-	managedCleanupAnchors, err := managedCleanupAnchors(ctx, eng, toDelete)
+	managedCleanupAnchors, err := managedCleanupAnchors(ctx, eng, deps.Here, toDelete)
 	if err != nil {
 		return Result{}, err
 	}
@@ -109,7 +115,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 
 	// Precompute deletion statuses once (used for confirmation and divergence-preserving reparenting).
 	toDeleteNames := toDelete.Names()
-	statuses, err := eng.GetDeletionStatuses(ctx.Context, toDeleteNames)
+	statuses, err := eng.GetDeletionStatuses(ctx, toDeleteNames)
 	if err != nil {
 		return Result{}, fmt.Errorf("failed to check deletion statuses: %w", err)
 	}
@@ -141,7 +147,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	// declining leaves the undo stack untouched, and before the first mutation.
 	// Deleting reparents surviving children and restacks them, which can
 	// conflict, and abort needs a rollback point that belongs to this delete.
-	actions.TakeBestEffortSnapshot(ctx, actions.NewSnapshot("delete",
+	deps.Snapshots.Take(ctx, actions.NewSnapshot("delete",
 		actions.WithArgs(toDeleteNames...),
 		actions.WithFlag(opts.Upstack, "--upstack"),
 		actions.WithFlag(opts.Downstack, "--downstack"),
@@ -150,7 +156,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 
 	// Preserve divergence for survivors whose parent is being deleted as merged/empty.
 	// This mirrors clean-branches behavior and avoids replaying already-merged parent commits.
-	preReparentedChildren, err := preReparentChildrenWithPreservedDivergence(ctx, eng, toDelete, statuses)
+	preReparentedChildren, err := preReparentChildrenWithPreservedDivergence(ctx, eng, out, toDelete, statuses)
 	if err != nil {
 		return Result{}, err
 	}
@@ -160,7 +166,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	// If we delete a whole stack, only children of the stack need restacking onto the stack's parent.
 
 	// Delete branches and get children to restack
-	childrenToRestack, err := eng.DeleteBranches(ctx.Context, toDelete)
+	childrenToRestack, err := eng.DeleteBranches(ctx, toDelete)
 	if err != nil {
 		return Result{}, err
 	}
@@ -168,7 +174,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 
 	// Batch delete remote metadata for deleted branches
 	branchNames := toDeleteNames
-	if err := eng.DeleteRemoteMetadataForBranches(ctx.Context, branchNames); err != nil {
+	if err := eng.DeleteRemoteMetadataForBranches(ctx, branchNames); err != nil {
 		out.Debug("Failed to batch delete remote metadata: %v", err)
 	}
 
@@ -192,7 +198,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	var mainRepoDirForSwitch string
 	deletedStackRoots = mergeUniqueBranchNames(deletedStackRoots, managedCleanupAnchors)
 	if len(deletedStackRoots) > 0 {
-		mainRepoDirForSwitch = cleanupWorktreesForDeletedStacks(ctx, eng, deletedStackRoots)
+		mainRepoDirForSwitch = cleanupWorktreesForDeletedStacks(ctx, eng, out, deps.Here, deletedStackRoots)
 	}
 
 	// Restack children if any
@@ -200,7 +206,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 		handler.OnRestack(len(childrenToRestack))
 		out.Info("Restacking children of deleted %s...", actions.Pluralize("branch", len(toDelete)))
 		branches := engine.BranchesFromNames(eng, childrenToRestack)
-		if err := actions.RestackBranches(ctx, branches); err != nil {
+		if err := deps.Restack.Restack(ctx, branches); err != nil {
 			return Result{}, fmt.Errorf("failed to restack children: %w", err)
 		}
 	}
@@ -213,17 +219,17 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 // the main repository is deleting every non-anchor branch owned by a managed
 // worktree. That full-stack deletion is delete's intentional cleanup workflow:
 // it removes the worktree registration after removing its stack.
-func managedCleanupAnchors(ctx *app.Context, eng deleteEngine, toDelete engine.Branches) ([]string, error) {
+func managedCleanupAnchors(ctx context.Context, eng Engine, here actions.Here, toDelete engine.Branches) ([]string, error) {
 	// Resolve worktree ownership from a single registration listing
 	// instead of one OwningWorktree call (two git reads each) per branch
 	// examined below, including every branch in the repo while checking anchor
 	// completeness.
-	owners, err := actions.LoadWorktreeOwners(ctx.Context, ctx.Engine)
+	owners, err := actions.LoadWorktreeOwners(ctx, eng)
 	if err != nil {
 		return nil, fmt.Errorf("cannot list managed worktrees: %w", err)
 	}
 	// A malformed registration counts as no owner here: it exempts nothing
-	// from the guard below, where EnsureCanModifyHere refuses it, and it must
+	// from the guard below, where EnsureCanModify refuses it, and it must
 	// not block cleanup of an unrelated worktree's stack.
 	owningWorktree := func(branch engine.Branch) *engine.WorktreeInfo {
 		owner, ownerErr := owners.Owner(branch)
@@ -247,7 +253,7 @@ func managedCleanupAnchors(ctx *app.Context, eng deleteEngine, toDelete engine.B
 
 	cleanup := make([]string, 0, len(anchors))
 	for anchor := range anchors {
-		complete := !ctx.InManagedWorktree
+		complete := !here.InManagedWorktree
 		for _, candidate := range eng.AllBranches() {
 			if candidate.IsWorktreeAnchor() {
 				continue
@@ -269,22 +275,19 @@ func managedCleanupAnchors(ctx *app.Context, eng deleteEngine, toDelete engine.B
 			guarded = append(guarded, branch)
 		}
 	}
-	if err := actions.EnsureCanModifyHere(ctx, guarded...); err != nil {
+	if err := actions.EnsureCanModify(ctx, eng, here, guarded...); err != nil {
 		return nil, err
 	}
 	return cleanup, nil
 }
 
-func preReparentChildrenWithPreservedDivergence(ctx *app.Context, eng deleteEngine, toDelete engine.Branches, statuses engine.DeletionStatuses) ([]string, error) {
-	gctx := ctx.Context
-	out := ctx.Output
-
+func preReparentChildrenWithPreservedDivergence(ctx context.Context, eng Engine, out output.Output, toDelete engine.Branches, statuses engine.DeletionStatuses) ([]string, error) {
 	toDeleteSet := make(map[string]bool, len(toDelete))
 	for _, b := range toDelete {
 		toDeleteSet[b.Name()] = true
 	}
 
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	reparentedChildren := make([]string, 0)
 	reparentedSet := make(map[string]bool)
 	var moves []engine.BranchParentMove
@@ -327,7 +330,7 @@ func preReparentChildrenWithPreservedDivergence(ctx *app.Context, eng deleteEngi
 				Mode:      engine.DivergencePreserve,
 			}
 		}
-		if err := eng.ApplyParentUpdatesAfterRemovals(gctx, updates, toDelete.Names()); err != nil {
+		if err := eng.ApplyParentUpdatesAfterRemovals(ctx, updates, toDelete.Names()); err != nil {
 			return nil, fmt.Errorf("failed to pre-reparent children: %w", err)
 		}
 	}
@@ -369,33 +372,33 @@ func mergeUniqueBranchNames(a []string, b []string) []string {
 
 // cleanupWorktreesForDeletedStacks removes worktrees for stack roots that have been deleted.
 // Best-effort - errors are logged but don't fail the delete operation.
-func cleanupWorktreesForDeletedStacks(ctx *app.Context, eng deleteEngine, deletedStackRoots []string) string {
+func cleanupWorktreesForDeletedStacks(ctx context.Context, eng Engine, out output.Output, here actions.Here, deletedStackRoots []string) string {
 	var mainRepoDir string
 
 	for _, stackRoot := range deletedStackRoots {
-		wt, err := eng.GetWorktreeForStack(ctx.Context, stackRoot)
+		wt, err := eng.GetWorktreeForStack(ctx, stackRoot)
 		if err != nil || wt == nil {
 			continue // No worktree registered for this stack
 		}
 
 		// Check if user is in this worktree - we'll need to navigate back to main repo
-		if ctx.InManagedWorktree && ctx.WorktreeInfo != nil &&
-			ctx.WorktreeInfo.AnchorBranch == stackRoot {
+		if here.InManagedWorktree && here.Worktree != nil &&
+			here.Worktree.AnchorBranch == stackRoot {
 			mainRepoDir = wt.MainRepoDir
 		}
 
-		ctx.Output.Info("Removing worktree for deleted stack %s", output.BranchName(stackRoot))
+		out.Info("Removing worktree for deleted stack %s", output.BranchName(stackRoot))
 
 		// Remove worktree directory if it exists
 		if _, statErr := os.Stat(wt.Path.String()); statErr == nil {
-			if removeErr := eng.RemoveWorktree(ctx.Context, wt.Path); removeErr != nil {
-				ctx.Output.Debug("Failed to remove worktree at %s: %v", wt.Path, removeErr)
+			if removeErr := eng.RemoveWorktree(ctx, wt.Path); removeErr != nil {
+				out.Debug("Failed to remove worktree at %s: %v", wt.Path, removeErr)
 			}
 		}
 
 		// Unregister the worktree from the registry
-		if unregErr := eng.UnregisterWorktree(ctx.Context, stackRoot); unregErr != nil {
-			ctx.Output.Debug("Failed to unregister worktree for %s: %v", stackRoot, unregErr)
+		if unregErr := eng.UnregisterWorktree(ctx, stackRoot); unregErr != nil {
+			out.Debug("Failed to unregister worktree for %s: %v", stackRoot, unregErr)
 		}
 	}
 

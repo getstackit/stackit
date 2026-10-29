@@ -35,6 +35,10 @@ func (h *interactiveTestHandler) PromptConfirmMove(p Preview) (bool, error) {
 	return h.proceed, nil
 }
 
+func deps(s *scenario.Scenario) Deps {
+	return Deps{Engine: s.Context.Engine, MutationDeps: actions.MutationDepsFrom(s.Context)}
+}
+
 // writeAndCommit writes content to a file at the repo root and commits it with
 // the given message. Used to seed conflicting commits across branches.
 func writeAndCommit(t *testing.T, s *scenario.Scenario, file, content, message string) {
@@ -66,7 +70,7 @@ func TestMoveAction(t *testing.T) {
 		require.Equal(t, "branch2", parent3Initial.Name())
 
 		// Move branch2 from branch1 to main (downstack)
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "main",
 		}, nil)
@@ -100,7 +104,7 @@ func TestMoveAction(t *testing.T) {
 			})
 
 		// Move branchA from main to branchB (upstack - moving to a sibling branch)
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branchA",
 			Onto:   "branchB",
 		}, nil)
@@ -135,7 +139,7 @@ func TestMoveAction(t *testing.T) {
 			})
 
 		// Move branchA2 from branchA1 to branchB1 (across stacks)
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branchA2",
 			Onto:   "branchB1",
 		}, nil)
@@ -165,7 +169,7 @@ func TestMoveAction(t *testing.T) {
 		s.Checkout("branch2")
 
 		// Move without specifying source (should use current branch)
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "", // Empty means use current branch
 			Onto:   "main",
 		}, nil)
@@ -182,7 +186,7 @@ func TestMoveAction(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "main",
 			Onto:   "main", // Even if onto is same, should fail earlier
 		}, nil)
@@ -197,7 +201,7 @@ func TestMoveAction(t *testing.T) {
 				"branch1": "main",
 			})
 
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch1",
 			Onto:   "branch1",
 		}, nil)
@@ -215,7 +219,7 @@ func TestMoveAction(t *testing.T) {
 			})
 
 		// Try to move branch1 onto branch3 (which is a descendant of branch1)
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch1",
 			Onto:   "branch3",
 		}, nil)
@@ -230,7 +234,7 @@ func TestMoveAction(t *testing.T) {
 			CreateBranch("untracked").
 			Checkout("main")
 
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "untracked",
 			Onto:   "main",
 		}, nil)
@@ -245,7 +249,7 @@ func TestMoveAction(t *testing.T) {
 				"branch1": "main",
 			})
 
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch1",
 			Onto:   "nonexistent",
 		}, nil)
@@ -261,7 +265,7 @@ func TestMoveAction(t *testing.T) {
 		s.RunGit("checkout", "HEAD~0").Rebuild()
 
 		// Try to move without specifying source - should fail because we're in detached HEAD
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "",
 			Onto:   "main",
 		}, nil)
@@ -283,7 +287,7 @@ func TestMoveAction(t *testing.T) {
 			Checkout("main")
 
 		// Move branch1 onto untracked branch (should work)
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch1",
 			Onto:   "untracked",
 		}, nil)
@@ -315,7 +319,7 @@ func TestMoveAction(t *testing.T) {
 			Commit("new main change")
 
 		// Move branch1 to main (which now has new commits)
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch1",
 			Onto:   "main",
 		}, nil)
@@ -344,7 +348,7 @@ func TestMoveAction(t *testing.T) {
 				"branch1": "main",
 			})
 
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch1",
 			Onto:   "", // Empty onto
 		}, nil)
@@ -365,7 +369,7 @@ func TestMoveAction(t *testing.T) {
 		s.TrackBranch("branch2", "branch1")
 
 		// Move branch2 from branch1 to main
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "main",
 		}, nil)
@@ -403,7 +407,7 @@ func TestMoveAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Move branch2 to main
-		err = Action(s.Context, Options{
+		err = Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "main",
 		}, nil)
@@ -430,7 +434,7 @@ func TestMoveAction(t *testing.T) {
 		s.Checkout("branch2").RunGit("commit", "--amend", "--no-edit", "-m", "amended commit")
 
 		// Move branch2 to main
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "main",
 		}, nil)
@@ -461,7 +465,7 @@ func TestMoveAction(t *testing.T) {
 		s.TrackBranch("branchB1", "main")
 
 		// Move branchA2 from branchA1 to branchB1
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branchA2",
 			Onto:   "branchB1",
 		}, nil)
@@ -497,7 +501,7 @@ func TestMoveAction(t *testing.T) {
 		s.TrackBranch("branchC", "branchB")
 
 		// Move branchB from branchA to main (middle branch to trunk)
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branchB",
 			Onto:   "main",
 		}, nil)
@@ -544,7 +548,7 @@ func TestMoveAction(t *testing.T) {
 			})
 
 		h := &interactiveTestHandler{proceed: false}
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "main",
 		}, h)
@@ -589,7 +593,7 @@ func TestMoveAction(t *testing.T) {
 		// Attempt to move branch2 onto branch1 — this will conflict on conflict.txt.
 		// The interactive handler opts to proceed and resolve manually.
 		h := &interactiveTestHandler{proceed: true}
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "branch1",
 		}, h)
@@ -643,7 +647,7 @@ func TestMoveMarksBranchesForPRBodyUpdate(t *testing.T) {
 		require.False(t, needsPRUpdate(t, s, "feature-a"))
 		require.False(t, needsPRUpdate(t, s, "feature-b"))
 
-		require.NoError(t, Action(s.Context, Options{Source: "feature-b", Onto: "main"}, nil))
+		require.NoError(t, Action(t.Context(), deps(s), Options{Source: "feature-b", Onto: "main"}, nil))
 
 		require.True(t, needsPRUpdate(t, s, "feature-b"), "moved branch should be marked")
 		require.True(t, needsPRUpdate(t, s, "feature-a"), "old parent should be marked")
@@ -658,7 +662,7 @@ func TestMoveMarksBranchesForPRBodyUpdate(t *testing.T) {
 			})
 
 		// Move feature-b (parented to trunk) onto feature-a.
-		require.NoError(t, Action(s.Context, Options{Source: "feature-b", Onto: "feature-a"}, nil))
+		require.NoError(t, Action(t.Context(), deps(s), Options{Source: "feature-b", Onto: "feature-a"}, nil))
 
 		require.True(t, needsPRUpdate(t, s, "feature-b"), "moved branch should be marked")
 		require.False(t, needsPRUpdate(t, s, "feature-a"), "new parent (not old) should not be marked")
@@ -674,7 +678,7 @@ func TestMoveMarksBranchesForPRBodyUpdate(t *testing.T) {
 			})
 
 		// Move feature-c from feature-b to feature-a.
-		require.NoError(t, Action(s.Context, Options{Source: "feature-c", Onto: "feature-a"}, nil))
+		require.NoError(t, Action(t.Context(), deps(s), Options{Source: "feature-c", Onto: "feature-a"}, nil))
 
 		require.True(t, needsPRUpdate(t, s, "feature-c"), "moved branch should be marked")
 		require.True(t, needsPRUpdate(t, s, "feature-b"), "old parent should be marked")

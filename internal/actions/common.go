@@ -9,7 +9,10 @@
 package actions
 
 import (
+	"context"
+
 	"github.com/getstackit/stackit/internal/actions/restack"
+	"github.com/getstackit/stackit/internal/output"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
@@ -20,17 +23,68 @@ func printRerereResolved(ctx *app.Context, count int) {
 	ctx.Output.Info("%s", restack.FormatRerereResolved(count))
 }
 
-// TakeBestEffortSnapshot records an undo snapshot and logs failures without
-// aborting the action. When undo.enabled is false, it clears the rollback
-// binding without writing a snapshot.
-func TakeBestEffortSnapshot(ctx *app.Context, opts engine.SnapshotOptions) {
-	if ctx.Config != nil && !ctx.Config.UndoEnabled() {
-		ctx.Undo().ClearLastSnapshotID()
+// SnapshotEngine is the engine surface undo snapshots use.
+type SnapshotEngine interface {
+	TakeSnapshot(ctx context.Context, opts engine.SnapshotOptions) error
+	ClearLastSnapshotID()
+}
+
+// Snapshots records the undo snapshot a mutating command takes before it
+// changes anything.
+type Snapshots struct {
+	Engine SnapshotEngine
+	// Enabled reflects undo.enabled.
+	Enabled bool
+	Log     DebugLogger
+}
+
+// SnapshotsFrom builds Snapshots from the command's runtime context.
+func SnapshotsFrom(ctx *app.Context) Snapshots {
+	return Snapshots{Engine: ctx.Engine, Enabled: ctx.Config == nil || ctx.Config.UndoEnabled(), Log: ctx.Output}
+}
+
+// Take records an undo snapshot and logs failures without aborting the
+// action. When undo is disabled, it clears the rollback binding without
+// writing a snapshot.
+func (s Snapshots) Take(ctx context.Context, opts engine.SnapshotOptions) {
+	if !s.Enabled {
+		s.Engine.ClearLastSnapshotID()
 		return
 	}
-	if err := ctx.Undo().TakeSnapshot(ctx.Context, opts); err != nil {
-		ctx.Output.Debug("Failed to take snapshot: %v", err)
+	if err := s.Engine.TakeSnapshot(ctx, opts); err != nil {
+		s.Log.Debug("Failed to take snapshot: %v", err)
 	}
+}
+
+// TakeBestEffortSnapshot is the *app.Context form of Snapshots.Take.
+func TakeBestEffortSnapshot(ctx *app.Context, opts engine.SnapshotOptions) {
+	SnapshotsFrom(ctx).Take(ctx.Context, opts)
+}
+
+// MutationDeps are the collaborators every branch-rewriting action shares.
+// Embed it in an action's Deps next to the action's own Engine interface.
+type MutationDeps struct {
+	Out       output.Output
+	Here      Here
+	Snapshots Snapshots
+	Restack   restack.Runner
+}
+
+// MutationDepsFrom builds MutationDeps from the command's runtime context.
+func MutationDepsFrom(ctx *app.Context) MutationDeps {
+	return MutationDeps{
+		Out:       ctx.Output,
+		Here:      HereFrom(ctx),
+		Snapshots: SnapshotsFrom(ctx),
+		Restack:   RestackRunner(ctx),
+	}
+}
+
+// RestackRunner builds the restack runner for the command's runtime context,
+// printing per-branch results as plain text.
+func RestackRunner(ctx *app.Context) restack.Runner {
+	planner, executor := restacker(ctx, nil)
+	return restack.Runner{Planner: planner, Executor: executor}
 }
 
 // Restacker is a minimal interface needed for restacking branches

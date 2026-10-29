@@ -4,24 +4,24 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/actions/restack"
+
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
 
-func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBranch engine.Branch, eng foldEngine, splog output.Output, _ Options) error {
+func foldNormal(ctx context.Context, restacker restack.Runner, currentBranch, parentBranch engine.Branch, eng Engine, splog output.Output, _ Options) error {
 	// Checkout parent branch (engine updates its currentBranch internally).
-	if err := eng.CheckoutBranch(gctx, parentBranch); err != nil {
+	if err := eng.CheckoutBranch(ctx, parentBranch); err != nil {
 		return fmt.Errorf("failed to checkout parent branch: %w", err)
 	}
 
-	if err := fastForwardOrMerge(gctx, eng, currentBranch, parentBranch); err != nil {
+	if err := fastForwardOrMerge(ctx, eng, currentBranch, parentBranch); err != nil {
 		return err
 	}
 
 	// Build StackGraph for traversals
-	graph := eng.Graph(gctx, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	// Get all descendants of parent before deletion (for restacking)
 	descendants := graph.Range(parentBranch, engine.StackRange{
@@ -31,7 +31,7 @@ func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBra
 	})
 
 	// Delete the current branch (this will automatically reparent its children to parent)
-	if err := eng.DeleteBranch(gctx, currentBranch); err != nil {
+	if err := eng.DeleteBranch(ctx, currentBranch); err != nil {
 		return fmt.Errorf("failed to delete branch: %w", err)
 	}
 
@@ -43,7 +43,7 @@ func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBra
 	if len(descendants) > 0 {
 		// DeleteBranch rebuilds engine state internally; just refresh the graph
 		// snapshot (graphs are immutable copies of engine state at query time).
-		graph = eng.Graph(gctx, engine.SortStrategyAlphabetical)
+		graph = eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 		// Get updated descendants list (current branch's children are now children of parent)
 		updatedDescendants := graph.Range(parentBranch, engine.StackRange{
@@ -52,7 +52,7 @@ func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBra
 			RecursiveParents:  false,
 		})
 
-		if err := actions.RestackBranches(ctx, updatedDescendants); err != nil {
+		if err := restacker.Restack(ctx, updatedDescendants); err != nil {
 			return fmt.Errorf("failed to restack branches: %w", err)
 		}
 	}
@@ -62,11 +62,11 @@ func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBra
 
 // fastForwardOrMerge merges source into the checked-out target branch,
 // fast-forwarding when possible and falling back to a merge commit.
-func fastForwardOrMerge(gctx context.Context, eng foldEngine, source, target engine.Branch) error {
-	if err := eng.Merge(gctx, source.Name(), engine.MergeOptions{FFOnly: true}); err == nil {
+func fastForwardOrMerge(ctx context.Context, eng Engine, source, target engine.Branch) error {
+	if err := eng.Merge(ctx, source.Name(), engine.MergeOptions{FFOnly: true}); err == nil {
 		return nil
 	}
-	if err := eng.Merge(gctx, source.Name(), engine.MergeOptions{NoEdit: true}); err != nil {
+	if err := eng.Merge(ctx, source.Name(), engine.MergeOptions{NoEdit: true}); err != nil {
 		return fmt.Errorf("failed to merge %s into %s due to conflicts. Please resolve the conflicts and run 'git commit', or abort with 'git merge --abort'", source.Name(), target.Name())
 	}
 	return nil

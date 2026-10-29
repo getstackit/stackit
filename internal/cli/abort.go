@@ -4,6 +4,7 @@ import (
 	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/abort"
 	"github.com/getstackit/stackit/internal/actions/absorb"
 	"github.com/getstackit/stackit/internal/app"
@@ -45,8 +46,9 @@ Examples:
 				// own cleanup.
 				continuation, continuationErr := config.GetContinuationState(ctx.RepoRoot)
 				ownedByContinuation := continuationErr == nil && abort.ContinuationOwnsAbort(ctx, continuation)
-				if !ownedByContinuation && absorb.IsAbsorbInProgress(ctx) {
-					return absorb.Abort(ctx)
+				absorbDeps := absorb.Deps{Engine: ctx.Engine, MutationDeps: actions.MutationDepsFrom(ctx)}
+				if !ownedByContinuation && absorb.IsAbsorbInProgress(ctx.Context, absorbDeps) {
+					return absorb.Abort(ctx.Context, absorbDeps)
 				}
 
 				// Otherwise use the standard abort action

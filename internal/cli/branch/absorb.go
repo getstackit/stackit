@@ -4,6 +4,7 @@ package branch
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/absorb"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -38,9 +39,11 @@ Use --show-conflict to see the current conflict state and what changes were bein
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
+				deps := absorb.Deps{Engine: ctx.Engine, MutationDeps: actions.MutationDepsFrom(ctx)}
+
 				// Handle conflict resolution flags
 				if showConflict {
-					return absorb.ShowConflict(ctx)
+					return absorb.ShowConflict(ctx.Context, deps)
 				}
 
 				// Create runner and handler
@@ -50,7 +53,7 @@ Use --show-conflict to see the current conflict state and what changes were bein
 				}
 
 				// Run absorb action
-				return absorb.Action(ctx, absorb.Options{
+				return absorb.Action(ctx.Context, deps, absorb.Options{
 					All:     all,
 					DryRun:  dryRun,
 					Force:   force,

@@ -11,17 +11,43 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 )
 
+// Here is where a command runs: the main repository, or a stackit-managed
+// worktree.
+type Here struct {
+	InManagedWorktree bool
+	// Worktree describes the managed worktree when InManagedWorktree is set.
+	Worktree *engine.WorktreeInfo
+}
+
+// HereFrom reads the command's location from its runtime context.
+func HereFrom(ctx *app.Context) Here {
+	return Here{InManagedWorktree: ctx.InManagedWorktree, Worktree: ctx.WorktreeInfo}
+}
+
+// OwnershipEngine is the engine surface the ownership guard reads.
+type OwnershipEngine interface {
+	engine.BranchLookup
+	WorktreeOwnershipByStackRoot(ctx context.Context) (map[string]engine.WorktreeOwnership, error)
+	GetStackRootForBranch(branch engine.Branch) string
+}
+
 // EnsureCanModifyHere refuses to mutate a stack from anywhere other than its
+// managed worktree. It is the *app.Context form of EnsureCanModify.
+func EnsureCanModifyHere(ctx *app.Context, branches ...engine.Branch) error {
+	return EnsureCanModify(ctx.Context, ctx.Engine, HereFrom(ctx), branches...)
+}
+
+// EnsureCanModify refuses to mutate a stack from anywhere other than its
 // managed worktree. The ownership relation is derived from the branch's stack
-// root, while the invocation location comes from the command context.
+// root, while the invocation location comes from here.
 //
 // Branch-level mutation checks deliberately do not live in engine.Branch:
 // Branch has no command context, and the same branch can be valid in one
 // worktree and invalid in another.
-func EnsureCanModifyHere(ctx *app.Context, branches ...engine.Branch) error {
+func EnsureCanModify(ctx context.Context, eng OwnershipEngine, here Here, branches ...engine.Branch) error {
 	// Resolve ownership for every branch from a single listing instead of one
 	// OwningWorktree call (two git reads each) per branch.
-	owners, err := LoadWorktreeOwners(ctx.Context, ctx.Engine)
+	owners, err := LoadWorktreeOwners(ctx, eng)
 	if err != nil {
 		return fmt.Errorf("cannot list managed worktrees: %w", err)
 	}
@@ -43,13 +69,13 @@ func EnsureCanModifyHere(ctx *app.Context, branches ...engine.Branch) error {
 		}
 
 		if owner == nil {
-			if ctx.InManagedWorktree {
-				return fmt.Errorf("branch %s belongs to the main repository stack; run this command from %s", branchName, ctx.WorktreeInfo.MainRepoDir)
+			if here.InManagedWorktree {
+				return fmt.Errorf("branch %s belongs to the main repository stack; run this command from %s", branchName, here.Worktree.MainRepoDir)
 			}
 			continue
 		}
 
-		if ctx.InManagedWorktree && ctx.WorktreeInfo != nil && ctx.WorktreeInfo.AnchorBranch == owner.AnchorBranch {
+		if here.InManagedWorktree && here.Worktree != nil && here.Worktree.AnchorBranch == owner.AnchorBranch {
 			continue
 		}
 
@@ -75,12 +101,12 @@ func EnsureCanModifyHere(ctx *app.Context, branches ...engine.Branch) error {
 // WorktreeOwners answers OwningWorktree for many branches from one listing of
 // worktree registrations.
 type WorktreeOwners struct {
-	eng         engine.Engine
+	eng         OwnershipEngine
 	byStackRoot map[string]engine.WorktreeOwnership
 }
 
 // LoadWorktreeOwners reads every worktree registration once.
-func LoadWorktreeOwners(ctx context.Context, eng engine.Engine) (WorktreeOwners, error) {
+func LoadWorktreeOwners(ctx context.Context, eng OwnershipEngine) (WorktreeOwners, error) {
 	byStackRoot, err := eng.WorktreeOwnershipByStackRoot(ctx)
 	if err != nil {
 		return WorktreeOwners{}, err
@@ -102,12 +128,17 @@ func (o WorktreeOwners) Owner(branch engine.Branch) (*engine.WorktreeInfo, error
 // EnsureCanModifyNamesHere is the convenient form for operations that resolve
 // their targets as branch names before constructing a plan.
 func EnsureCanModifyNamesHere(ctx *app.Context, branchNames ...string) error {
+	return EnsureCanModifyNames(ctx.Context, ctx.Engine, HereFrom(ctx), branchNames...)
+}
+
+// EnsureCanModifyNames is EnsureCanModify for branch names.
+func EnsureCanModifyNames(ctx context.Context, eng OwnershipEngine, here Here, branchNames ...string) error {
 	uniqueNames := slices.Compact(slices.Sorted(slices.Values(branchNames)))
 	branches := make([]engine.Branch, 0, len(uniqueNames))
 	for _, name := range uniqueNames {
 		if name != "" {
-			branches = append(branches, ctx.Engine.GetBranch(name))
+			branches = append(branches, eng.GetBranch(name))
 		}
 	}
-	return EnsureCanModifyHere(ctx, branches...)
+	return EnsureCanModify(ctx, eng, here, branches...)
 }

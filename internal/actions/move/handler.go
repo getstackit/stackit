@@ -1,10 +1,10 @@
 package move
 
 import (
+	"context"
 	"errors"
 
 	"github.com/getstackit/stackit/internal/actions/handler"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 )
 
@@ -72,7 +72,7 @@ type Handler interface {
 
 	// PromptSelectOnto prompts user to select a new parent when --onto is not provided.
 	// Returns the selected branch and any precomputed rebase specs.
-	PromptSelectOnto(ctx *app.Context, sourceBranch string) (string, []engine.RebaseSpec, error)
+	PromptSelectOnto(ctx context.Context, sourceBranch string) (string, []engine.RebaseSpec, error)
 }
 
 // NullHandler is a no-op handler for when nil is passed.
@@ -98,6 +98,6 @@ func (h *NullHandler) PromptRename(string, string, string) (bool, error) { retur
 func (h *NullHandler) PromptConfirmMove(Preview) (bool, error) { return true, nil }
 
 // PromptSelectOnto implements Handler. Returns error for null handler.
-func (h *NullHandler) PromptSelectOnto(*app.Context, string) (string, []engine.RebaseSpec, error) {
+func (h *NullHandler) PromptSelectOnto(context.Context, string) (string, []engine.RebaseSpec, error) {
 	return "", nil, errors.New("target branch must be specified for move")
 }

@@ -2,6 +2,7 @@
 package absorb
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/validation"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
@@ -33,10 +33,18 @@ type Options struct {
 	Restack RestackMode
 }
 
+// Deps are the collaborators absorb needs. Adapters build them from their own
+// runtime state; the action never sees bootstrap types. Absorb drives a broad
+// slice of the engine (hunk parsing, stashes, cherry-picks, restacks), so it
+// takes the full engine rather than a narrow interface.
+type Deps struct {
+	Engine engine.Engine
+	actions.MutationDeps
+}
+
 // Action performs the absorb operation
-func Action(ctx *app.Context, opts Options, handler Handler) error {
-	eng := ctx.Engine
-	out := ctx.Output
+func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error {
+	eng, out := deps.Engine, deps.Out
 
 	// Use null handler if none provided
 	if handler == nil {
@@ -47,11 +55,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.Start(opts.DryRun)
 
 	// Validate preconditions
-	if err := validation.AbsorbChain(ctx.Context, eng, "absorb into").Validate(); err != nil {
+	if err := validation.AbsorbChain(ctx, eng, "absorb into").Validate(); err != nil {
 		return err
 	}
-	currentBranch := eng.CurrentBranch(ctx.Context)
-	if err := actions.EnsureCanModifyHere(ctx, *currentBranch); err != nil {
+	currentBranch := eng.CurrentBranch(ctx)
+	if err := actions.EnsureCanModify(ctx, eng, deps.Here, *currentBranch); err != nil {
 		return err
 	}
 	opts.Restack = NormalizeRestackMode(opts.Restack)
@@ -71,10 +79,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		// the tracked capture covers everything it can consume.
 		actions.WithWorktreeCapture(engine.WorktreeCaptureTracked),
 	)
-	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
+	deps.Snapshots.Take(ctx, snapshotOpts)
 
 	// Build a StackGraph for efficient traversals
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	// Handle staging flags. Unlike create/modify, --all stages tracked changes
 	// only (git add -u): untracked files can never be absorbed. When combined
@@ -83,12 +91,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		Update: opts.All,
 		Patch:  opts.Patch && !opts.All,
 	}
-	if err := ctx.Engine.StageChanges(ctx.Context, stagingOpts); err != nil {
+	if err := eng.StageChanges(ctx, stagingOpts); err != nil {
 		return err
 	}
 
 	// Re-check staged changes after flags
-	hasStaged, err := eng.HasStagedChanges(ctx.Context)
+	hasStaged, err := eng.HasStagedChanges(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check staged changes: %w", err)
 	}
@@ -99,7 +107,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Parse staged hunks
-	hunks, err := eng.ParseStagedHunks(ctx.Context)
+	hunks, err := eng.ParseStagedHunks(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to parse staged hunks: %w", err)
 	}
@@ -161,7 +169,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			continue
 		}
 
-		commitSHA, commitIndex, err := eng.FindTargetCommitForHunk(ctx.Context, hunk, commitSHAs)
+		commitSHA, commitIndex, err := eng.FindTargetCommitForHunk(ctx, hunk, commitSHAs)
 		if err != nil {
 			return fmt.Errorf("failed to find target commit for hunk: %w", err)
 		}
@@ -181,7 +189,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Group hunks by branch, then by commit. Resolve every target commit's
 	// owning branch in one batched scan instead of a git-log sweep per hunk.
-	commitBranches := eng.FindBranchesForCommits(ctx.Context, targetCommitSHAs(candidateTargets))
+	commitBranches := eng.FindBranchesForCommits(ctx, targetCommitSHAs(candidateTargets))
 	hunksByBranch := make(map[string]map[string][]git.Hunk)
 	for _, target := range candidateTargets {
 		branchName := commitBranches[target.CommitSHA]
@@ -226,16 +234,16 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		for _, branchHunks := range hunksByBranch {
 			maps.Copy(flatHunksByCommit, branchHunks)
 		}
-		printDryRunOutput(ctx.Context, flatHunksByCommit, unabsorbedHunks, eng, out)
+		printDryRunOutput(ctx, flatHunksByCommit, unabsorbedHunks, eng, out)
 
 		// Output JSON if requested (works with dry-run for preview)
 		if opts.JSON {
-			newFiles, err := ctx.Engine.GetUntrackedFiles(ctx.Context)
+			newFiles, err := eng.GetUntrackedFiles(ctx)
 			if err != nil {
 				out.Debug("Failed to get untracked files: %v", err)
 			}
 
-			planJSON, err := GeneratePlanJSON(ctx.Context,
+			planJSON, err := GeneratePlanJSON(ctx,
 				currentBranch.Name(),
 				absorbedTargets,
 				unabsorbedHunks,
@@ -258,7 +266,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	for _, branchHunks := range hunksByBranch {
 		maps.Copy(flatHunksByCommit, branchHunks)
 	}
-	printAbsorbPlan(ctx.Context, flatHunksByCommit, unabsorbedHunks, eng, out)
+	printAbsorbPlan(ctx, flatHunksByCommit, unabsorbedHunks, eng, out)
 
 	// Prompt for confirmation if not --force
 	if !opts.Force && handler.IsInteractive() {
@@ -279,7 +287,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Stash staged and unstaged changes separately to avoid reintroducing absorbed hunks.
-	status, err := eng.GetWorkingTreeStatus(ctx.Context)
+	status, err := eng.GetWorkingTreeStatus(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to read working tree status: %w", err)
 	}
@@ -294,10 +302,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	)
 
 	if hasStaged {
-		stashOutput, stashErr := eng.StashPushStaged(ctx.Context, absorbStashStagedMarker)
+		stashOutput, stashErr := eng.StashPushStaged(ctx, absorbStashStagedMarker)
 		if stashErr != nil {
 			// Some Git versions can return a non-zero exit while still creating the stash entry.
-			stashList, listErr := eng.StashList(ctx.Context)
+			stashList, listErr := eng.StashList(ctx)
 			if listErr == nil {
 				if findStashRef(stashList, absorbStashStagedMarker) != "" {
 					stashedStaged = true
@@ -326,18 +334,18 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		// (and, because git apply is atomic per invocation, poisoning any
 		// coexisting text edits too).
 		if status.Unstaged {
-			diff, diffErr := eng.GetUnstagedDiffBinary(ctx.Context)
+			diff, diffErr := eng.GetUnstagedDiffBinary(ctx)
 			if diffErr != nil {
 				return fmt.Errorf("failed to capture unstaged changes: %w", diffErr)
 			}
 			unstagedPatch = diff
 		}
 
-		if err := eng.ResetHard(ctx.Context, "HEAD"); err != nil {
+		if err := eng.ResetHard(ctx, "HEAD"); err != nil {
 			return fmt.Errorf("failed to reset staged changes: %w", err)
 		}
 	} else if hasUnstagedOrUntracked {
-		stashOutput, stashErr := eng.StashPush(ctx.Context, absorbStashUnstagedMarker)
+		stashOutput, stashErr := eng.StashPush(ctx, absorbStashUnstagedMarker)
 		if stashErr != nil {
 			return fmt.Errorf("failed to stash unstaged changes: %w", stashErr)
 		}
@@ -347,7 +355,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	defer func() {
-		restoreStashedState(ctx.Context, eng, out, restoreParams{
+		restoreStashedState(ctx, eng, out, restoreParams{
 			stashedStaged:   stashedStaged,
 			stashedUnstaged: stashedUnstaged,
 			stagedFallback:  stagedFallback,
@@ -364,7 +372,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Get branches in topological order (bottom-up)
 	allBranches := eng.AllBranches()
-	sortedBranches := eng.SortBranchesTopologically(ctx.Context, allBranches)
+	sortedBranches := eng.SortBranchesTopologically(ctx, allBranches)
 
 	for _, branch := range sortedBranches {
 		branchHunks, ok := hunksByBranch[branch.Name()]
@@ -378,7 +386,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		modifiedBranches = append(modifiedBranches, branch.Name())
 
 		// Apply all hunks for this branch together
-		if err := eng.ApplyHunksToBranch(ctx.Context, branch, branchHunks); err != nil {
+		if err := eng.ApplyHunksToBranch(ctx, branch, branchHunks); err != nil {
 			return fmt.Errorf("failed to apply hunks to branch %s: %w", branch.Name(), err)
 		}
 
@@ -419,7 +427,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Restack branches according to mode
 	if oldestModifiedBranch != "" {
 		// Rebuild graph with fresh engine state
-		graph = eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+		graph = eng.Graph(ctx, engine.SortStrategyAlphabetical)
 		upstackBranches := selectRestackBranches(graph, eng, opts.Restack, currentBranch.Name(), oldestModifiedBranch, currentScope)
 
 		if len(upstackBranches) > 0 {
@@ -430,7 +438,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			// so absorb always finishes on a clean worktree; the user resolves
 			// with 'stackit restack'.
 			var conflicted, blocked []string
-			if err := actions.RestackBranchesWithHandler(ctx, upstackBranches, func(p restack.Progress) {
+			if err := deps.Restack.RestackWithReport(ctx, upstackBranches, func(p restack.Progress) {
 				switch p.Result {
 				case engine.RestackDone:
 					out.Info("Restacked %s on %s.",
@@ -477,12 +485,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Output JSON summary if requested
 	if opts.JSON {
-		newFiles, err := ctx.Engine.GetUntrackedFiles(ctx.Context)
+		newFiles, err := eng.GetUntrackedFiles(ctx)
 		if err != nil {
 			out.Debug("Failed to get untracked files: %v", err)
 		}
 
-		jsonOutput, err := GeneratePlanJSON(ctx.Context,
+		jsonOutput, err := GeneratePlanJSON(ctx,
 			currentBranch.Name(),
 			absorbedTargets,
 			unabsorbedHunks,

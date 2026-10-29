@@ -61,9 +61,15 @@ linters:
         # it cannot drift back to the bootstrap bundle.
         actions-no-app-context:
           files:
+            - "**/internal/actions/absorb/**"
+            - "**/internal/actions/delete/**"
             - "**/internal/actions/describe/**"
             - "**/internal/actions/doctor/**"
+            - "**/internal/actions/flatten/**"
+            - "**/internal/actions/fold/**"
             - "**/internal/actions/freeze/**"
+            - "**/internal/actions/move/**"
+            - "**/internal/actions/pluck/**"
             - "**/internal/actions/pop/**"
             - "**/internal/actions/restack/**"
             - "**/internal/actions/scope/**"

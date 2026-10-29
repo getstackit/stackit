@@ -148,8 +148,11 @@ When adding or refactoring an operation:
    point is `func Action(ctx context.Context, deps Deps, opts Options, ...)`,
    where `Deps` holds the package's exported consumer-side `Engine` interface
    plus whatever else it needs (`output.Output`, a GitHub runner, the repo
-   root). The CLI adapter builds `Deps` from its `app.Context`. `describe`,
-   `doctor`, `freeze`, `pop`, `scope` and `untrack` follow this shape; the
+   root). The CLI adapter builds `Deps` from its `app.Context`.
+   Branch-rewriting actions embed `actions.MutationDeps` (output, `Here`,
+   `Snapshots`, a `restack.Runner`), built with `actions.MutationDepsFrom`.
+   `absorb`, `delete`, `describe`, `doctor`, `flatten`, `fold`, `freeze`,
+   `move`, `pluck`, `pop`, `scope` and `untrack` follow this shape; the
    `actions-no-app-context` depguard rule keeps them off `internal/app`, so
    add a package to that rule when you convert it.
 4. Return structured results and typed events instead of writing output directly.

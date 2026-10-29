@@ -9,8 +9,8 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/actions/restack"
 	"github.com/getstackit/stackit/internal/actions/validation"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
@@ -27,10 +27,11 @@ type Options struct {
 	RebaseSpecs []engine.RebaseSpec
 }
 
-// moveEngine lists exactly the engine methods move (and interactive target
+// Engine lists exactly the engine methods move (and interactive target
 // selection) call.
-type moveEngine interface {
+type Engine interface {
 	validation.BranchValidationEngine
+	actions.OwnershipEngine
 	Trunk() engine.Branch
 	IsTrunk(branch engine.Branch) bool
 	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
@@ -58,11 +59,16 @@ type movePlan struct {
 	rebaseSpecs   []engine.RebaseSpec
 }
 
+// Deps are the collaborators move needs. Adapters build them from their own
+// runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	actions.MutationDeps
+}
+
 // Action performs the move operation
-func Action(ctx *app.Context, opts Options, h Handler) error {
-	var eng moveEngine = ctx.Engine
-	out := ctx.Output
-	gctx := ctx.Context
+func Action(ctx context.Context, deps Deps, opts Options, h Handler) error {
+	eng, out := deps.Engine, deps.Out
 
 	// Use null handler if none provided
 	if h == nil {
@@ -70,12 +76,12 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	}
 	defer h.Cleanup()
 
-	source, err := resolveSource(ctx.Context, eng, opts.Source)
+	source, err := resolveSource(ctx, eng, opts.Source)
 	if err != nil {
 		return err
 	}
 
-	if err := ensureOnto(ctx, &opts, h, source); err != nil {
+	if err := ensureOnto(ctx, eng, &opts, h, source); err != nil {
 		return err
 	}
 
@@ -83,23 +89,23 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 		return err
 	}
 
-	plan, err := buildMovePlan(ctx.Context, eng, out, source, opts.Onto, opts.RebaseSpecs)
+	plan, err := buildMovePlan(ctx, eng, out, source, opts.Onto, opts.RebaseSpecs)
 	if err != nil {
 		return err
 	}
-	if err := actions.EnsureCanModifyHere(ctx, plan.descendants.Concat(engine.BranchesOf(plan.ontoBranch))...); err != nil {
+	if err := actions.EnsureCanModify(ctx, eng, deps.Here, plan.descendants.Concat(engine.BranchesOf(plan.ontoBranch))...); err != nil {
 		return err
 	}
 
 	// After the ownership guard, so a refusal leaves the undo stack untouched
 	// rather than evicting a real snapshot with a no-op entry.
-	takeSnapshot(ctx, opts)
+	takeSnapshot(ctx, deps.Snapshots, opts)
 
 	if opts.DryRun {
-		return dryRun(ctx, plan.source, plan.oldParentName, plan.onto, plan.sourceBranch, plan.descendants, plan.rebaseSpecs)
+		return dryRun(ctx, eng, out, plan.source, plan.oldParentName, plan.onto, plan.sourceBranch, plan.descendants, plan.rebaseSpecs)
 	}
 
-	proceed, err := validateForExecution(ctx, h, plan, opts.SkipConfirm)
+	proceed, err := validateForExecution(ctx, eng, out, h, plan, opts.SkipConfirm)
 	if err != nil {
 		return err
 	}
@@ -107,22 +113,22 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 		return nil
 	}
 
-	renamed, source, sourceBranch := maybeRename(ctx, h, opts, plan)
+	renamed, source, sourceBranch := maybeRename(ctx, eng, out, h, opts, plan)
 	plan.source = source
 	plan.sourceBranch = sourceBranch
 
 	h.Start(handler.Reparent{Branch: plan.source, OldParent: plan.oldParentName, NewParent: plan.onto})
 
-	if err := eng.ReparentBranch(gctx, plan.sourceBranch, plan.ontoBranch); err != nil {
+	if err := eng.ReparentBranch(ctx, plan.sourceBranch, plan.ontoBranch); err != nil {
 		return fmt.Errorf("failed to set parent: %w", err)
 	}
 	if eng.IsTrunk(plan.ontoBranch) {
-		if _, err := eng.AssignBranchesToNewStack(gctx, plan.sourceBranch, plan.descendants); err != nil {
-			ctx.Output.Warn("Failed to update stack IDs: %v", err)
+		if _, err := eng.AssignBranchesToNewStack(ctx, plan.sourceBranch, plan.descendants); err != nil {
+			out.Warn("Failed to update stack IDs: %v", err)
 		}
 	}
 
-	if err := restackAndMark(ctx, plan, plan.sourceBranch); err != nil {
+	if err := restackAndMark(ctx, eng, out, deps.Restack, plan, plan.sourceBranch); err != nil {
 		return err
 	}
 
@@ -130,7 +136,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	return nil
 }
 
-func resolveSource(ctx context.Context, eng moveEngine, source string) (string, error) {
+func resolveSource(ctx context.Context, eng Engine, source string) (string, error) {
 	if source == "" {
 		currentBranch := eng.CurrentBranch(ctx)
 		if currentBranch == nil {
@@ -141,7 +147,7 @@ func resolveSource(ctx context.Context, eng moveEngine, source string) (string, 
 	return source, nil
 }
 
-func ensureOnto(ctx *app.Context, opts *Options, h Handler, source string) error {
+func ensureOnto(ctx context.Context, eng Engine, opts *Options, h Handler, source string) error {
 	if opts.Onto != "" {
 		return nil
 	}
@@ -149,7 +155,7 @@ func ensureOnto(ctx *app.Context, opts *Options, h Handler, source string) error
 		return errors.New("--onto flag is required when using --dry-run")
 	}
 	if !h.IsInteractive() {
-		return validation.ValidateTargetBranch(ctx.Engine, source, "", "move")
+		return validation.ValidateTargetBranch(eng, source, "", "move")
 	}
 	selected, rebaseSpecs, err := h.PromptSelectOnto(ctx, source)
 	if err != nil {
@@ -160,15 +166,15 @@ func ensureOnto(ctx *app.Context, opts *Options, h Handler, source string) error
 	return nil
 }
 
-func takeSnapshot(ctx *app.Context, opts Options) {
+func takeSnapshot(ctx context.Context, snapshots actions.Snapshots, opts Options) {
 	snapshotOpts := actions.NewSnapshot("move",
 		actions.WithFlagValue("--source", opts.Source),
 		actions.WithFlagValue("--onto", opts.Onto),
 	)
-	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
+	snapshots.Take(ctx, snapshotOpts)
 }
 
-func validateMoveTargets(eng moveEngine, source, onto string) error {
+func validateMoveTargets(eng Engine, source, onto string) error {
 	if err := validation.ValidateSourceBranch(eng, source, "move"); err != nil {
 		return err
 	}
@@ -178,7 +184,7 @@ func validateMoveTargets(eng moveEngine, source, onto string) error {
 	return nil
 }
 
-func buildMovePlan(ctx context.Context, eng moveEngine, out output.Output, source, onto string, rebaseSpecs []engine.RebaseSpec) (*movePlan, error) {
+func buildMovePlan(ctx context.Context, eng Engine, out output.Output, source, onto string, rebaseSpecs []engine.RebaseSpec) (*movePlan, error) {
 	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	sourceBranch := eng.GetBranch(source)
@@ -218,19 +224,16 @@ func buildMovePlan(ctx context.Context, eng moveEngine, out output.Output, sourc
 // confirms with the user). It returns (proceed, error): proceed=false with a
 // nil error means the user canceled and the caller should stop without
 // surfacing an error.
-func validateForExecution(ctx *app.Context, h Handler, plan *movePlan, skipConfirm bool) (bool, error) {
+func validateForExecution(ctx context.Context, eng Engine, out output.Output, h Handler, plan *movePlan, skipConfirm bool) (bool, error) {
 	if h.IsInteractive() && !skipConfirm {
-		return confirmInteractive(ctx, h, plan)
+		return confirmInteractive(ctx, eng, out, h, plan)
 	}
-	return validateNonInteractive(ctx, h, plan)
+	return validateNonInteractive(ctx, eng, h, plan)
 }
 
-func confirmInteractive(ctx *app.Context, h Handler, plan *movePlan) (bool, error) {
-	var eng moveEngine = ctx.Engine
-	out := ctx.Output
-
-	validation, validationErr := eng.ValidateRebases(ctx.Context, plan.rebaseSpecs)
-	commitsData, _ := eng.GetAllCommits(ctx.Context, plan.sourceBranch)
+func confirmInteractive(ctx context.Context, eng Engine, out output.Output, h Handler, plan *movePlan) (bool, error) {
+	validation, validationErr := eng.ValidateRebases(ctx, plan.rebaseSpecs)
+	commitsData, _ := eng.GetAllCommits(ctx, plan.sourceBranch)
 	commits := commitsData.Subjects()
 
 	preview := buildPreview(plan, commits, validation, validationErr)
@@ -255,10 +258,9 @@ func confirmInteractive(ctx *app.Context, h Handler, plan *movePlan) (bool, erro
 	return true, nil
 }
 
-func validateNonInteractive(ctx *app.Context, h Handler, plan *movePlan) (bool, error) {
+func validateNonInteractive(ctx context.Context, eng Engine, h Handler, plan *movePlan) (bool, error) {
 	h.OnStep(StepValidating, handler.StatusStarted, "Validating rebases...")
-	var eng moveEngine = ctx.Engine
-	validation, err := eng.ValidateRebases(ctx.Context, plan.rebaseSpecs)
+	validation, err := eng.ValidateRebases(ctx, plan.rebaseSpecs)
 	if err != nil {
 		h.OnStep(StepValidating, handler.StatusFailed, err.Error())
 		return false, fmt.Errorf("failed to validate rebases: %w", err)
@@ -296,10 +298,7 @@ func descendantNames(descendants engine.Branches, source string) []string {
 	}).Names()
 }
 
-func maybeRename(ctx *app.Context, h Handler, opts Options, plan *movePlan) (bool, string, engine.Branch) {
-	var eng moveEngine = ctx.Engine
-	out := ctx.Output
-
+func maybeRename(ctx context.Context, eng Engine, out output.Output, h Handler, opts Options, plan *movePlan) (bool, string, engine.Branch) {
 	source := plan.source
 	sourceBranch := plan.sourceBranch
 	ontoBranch := plan.ontoBranch
@@ -319,7 +318,7 @@ func maybeRename(ctx *app.Context, h Handler, opts Options, plan *movePlan) (boo
 
 		if shouldRename {
 			newName := strings.Replace(source, sourceScope.String(), ontoScope.String(), 1)
-			if err := eng.RenameBranch(ctx.Context, eng.GetBranch(source), eng.GetBranch(newName)); err != nil {
+			if err := eng.RenameBranch(ctx, eng.GetBranch(source), eng.GetBranch(newName)); err != nil {
 				out.Info("Warning: failed to rename branch: %v", err)
 			} else {
 				h.OnRename(source, newName)
@@ -334,11 +333,8 @@ func maybeRename(ctx *app.Context, h Handler, opts Options, plan *movePlan) (boo
 	return false, source, sourceBranch
 }
 
-func restackAndMark(ctx *app.Context, plan *movePlan, sourceBranch engine.Branch) error {
-	var eng moveEngine = ctx.Engine
-	out := ctx.Output
-
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+func restackAndMark(ctx context.Context, eng Engine, out output.Output, restacker restack.Runner, plan *movePlan, sourceBranch engine.Branch) error {
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	out.Info("Moved %s from %s to %s.",
 		output.CurrentBranch(plan.source),
@@ -351,7 +347,7 @@ func restackAndMark(ctx *app.Context, plan *movePlan, sourceBranch engine.Branch
 		RecursiveParents:  false,
 	})
 
-	if err := actions.RestackBranches(ctx, branchesToRestack); err != nil {
+	if err := restacker.Restack(ctx, branchesToRestack); err != nil {
 		return fmt.Errorf("failed to restack branches: %w", err)
 	}
 
@@ -381,16 +377,12 @@ func completeMove(h Handler, plan *movePlan, renamed bool) {
 }
 
 // dryRun validates and prints what the move would do without making changes.
-func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch engine.Branch, descendants engine.Branches, rebaseSpecs []engine.RebaseSpec) error {
-	var eng moveEngine = ctx.Engine
-	out := ctx.Output
-	gctx := ctx.Context
-
+func dryRun(ctx context.Context, eng Engine, out output.Output, source, oldParentName, onto string, sourceBranch engine.Branch, descendants engine.Branches, rebaseSpecs []engine.RebaseSpec) error {
 	// Run validation
-	validation, validationErr := eng.ValidateRebases(gctx, rebaseSpecs)
+	validation, validationErr := eng.ValidateRebases(ctx, rebaseSpecs)
 
 	// Get commits that will be moved
-	commitsData, _ := eng.GetAllCommits(ctx.Context, sourceBranch)
+	commitsData, _ := eng.GetAllCommits(ctx, sourceBranch)
 	commits := commitsData.Subjects()
 
 	// Get descendant names (excluding source itself)
@@ -450,7 +442,7 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 
 // BuildRebaseSpecs builds the rebase specifications for validating/executing the move.
 // Exported so it can be used by the selection validation callback.
-func BuildRebaseSpecs(ctx context.Context, eng moveEngine, out output.Output, source, onto string, oldParent *engine.Branch, oldParentRev string, descendants engine.Branches) []engine.RebaseSpec {
+func BuildRebaseSpecs(ctx context.Context, eng Engine, out output.Output, source, onto string, oldParent *engine.Branch, oldParentRev string, descendants engine.Branches) []engine.RebaseSpec {
 	rebaseSpecs := make([]engine.RebaseSpec, 0, len(descendants))
 
 	ontoBranch := eng.GetBranch(onto)

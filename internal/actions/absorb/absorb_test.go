@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -406,7 +407,7 @@ func sectionB() {
 		s.RunGit("add", "shared.go")
 
 		// Run absorb with force flag (non-interactive)
-		err = Action(s.Context, Options{Force: true}, nil)
+		err = Action(t.Context(), deps(s), Options{Force: true}, nil)
 		require.NoError(t, err)
 
 		// Verify the change was absorbed into branch-a
@@ -478,7 +479,7 @@ func example() {
 		require.Equal(t, "branch-a", originalBranch)
 
 		// Run absorb
-		_ = Action(s.Context, Options{Force: true}, nil)
+		_ = Action(t.Context(), deps(s), Options{Force: true}, nil)
 
 		// Regardless of success or failure, we should be back on the original branch
 		currentBranch, branchErr := s.Scene.Repo.CurrentBranchName()
@@ -693,7 +694,7 @@ func DefaultConfig() *Config {
 		s.RunGit("add", "config.go")
 
 		// Run absorb
-		err = Action(s.Context, Options{Force: true}, nil)
+		err = Action(t.Context(), deps(s), Options{Force: true}, nil)
 		require.NoError(t, err)
 
 		// Verify the change was absorbed into branch-a
@@ -735,7 +736,7 @@ func TestAbsorbRestoresBinaryUnabsorbableHunks(t *testing.T) {
 	require.NoError(t, err)
 	s.RunGit("add", "text.txt", "asset.bin")
 
-	err = Action(s.Context, Options{Force: true}, nil)
+	err = Action(t.Context(), deps(s), Options{Force: true}, nil)
 	require.NoError(t, err)
 
 	cachedFiles, err := s.Scene.Repo.RunGitCommandAndGetOutput("diff", "--cached", "--name-only")
@@ -773,7 +774,7 @@ func TestAbsorbCleansUpStashOnStashPushStagedError(t *testing.T) {
 	err = os.WriteFile(textFile, []byte("line one\nline two staged\nline three unstaged\n"), 0600)
 	require.NoError(t, err)
 
-	err = Action(s.Context, Options{Force: true}, nil)
+	err = Action(t.Context(), deps(s), Options{Force: true}, nil)
 	require.NoError(t, err)
 
 	// No absorb stash of either marker may remain.
@@ -836,7 +837,7 @@ func TestAbsorbRestoresUnabsorbableTextHunkToWorktree(t *testing.T) {
 	require.NoError(t, err)
 	s.RunGit("add", "branch.txt", "trunk.txt")
 
-	err = Action(s.Context, Options{Force: true}, nil)
+	err = Action(t.Context(), deps(s), Options{Force: true}, nil)
 	require.NoError(t, err)
 
 	// The unabsorbable hunk is staged in the index...
@@ -895,7 +896,7 @@ func TestAbsorbRestackConflictKeepsCleanWorktree(t *testing.T) {
 	require.NoError(t, os.WriteFile(aFile, []byte("a-line absorbed\n"), 0600))
 	s.RunGit("add", "a.txt")
 
-	err := Action(s.Context, Options{Force: true, Restack: RestackAll}, nil)
+	err := Action(t.Context(), deps(s), Options{Force: true, Restack: RestackAll}, nil)
 	require.NoError(t, err)
 
 	// The absorbed hunk is committed on branch-a.
@@ -980,7 +981,7 @@ func TestAbsorbDryRunDoesNotMutateRepository(t *testing.T) {
 	stashBefore, err := s.Scene.Repo.RunGitCommandAndGetOutput("stash", "list")
 	require.NoError(t, err)
 
-	err = Action(s.Context, Options{DryRun: true, Force: true}, nil)
+	err = Action(t.Context(), deps(s), Options{DryRun: true, Force: true}, nil)
 	require.NoError(t, err)
 
 	headAfter, err := s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "HEAD")
@@ -1016,7 +1017,7 @@ func TestAbsorbAllAndPatchStagesTrackedOnly(t *testing.T) {
 	err = os.WriteFile(untrackedFile, []byte("new file\n"), 0600)
 	require.NoError(t, err)
 
-	err = Action(s.Context, Options{All: true, Patch: true, DryRun: true, Force: true}, nil)
+	err = Action(t.Context(), deps(s), Options{All: true, Patch: true, DryRun: true, Force: true}, nil)
 	require.NoError(t, err)
 
 	cached, err := s.Scene.Repo.RunGitCommandAndGetOutput("diff", "--cached", "--name-only")
@@ -1052,7 +1053,7 @@ func TestAbsorbPlanOutputIsUserFriendly(t *testing.T) {
 	s.RunGit("add", "target.txt", "new.txt")
 
 	s.Output.Reset()
-	err = Action(s.Context, Options{Force: false}, nil)
+	err = Action(t.Context(), deps(s), Options{Force: false}, nil)
 	require.NoError(t, err)
 
 	out := s.Output.String()
@@ -1099,7 +1100,7 @@ func TestAbsorbDryRunJSONIncludesUnabsorbableReasons(t *testing.T) {
 	s.RunGit("add", "target.txt", "delete.txt", "new.txt", "asset.bin")
 
 	s.Output.Reset()
-	err = Action(s.Context, Options{DryRun: true, Force: true, JSON: true}, nil)
+	err = Action(t.Context(), deps(s), Options{DryRun: true, Force: true, JSON: true}, nil)
 	require.NoError(t, err)
 
 	out := s.Output.String()
@@ -1142,7 +1143,7 @@ func TestAbsorbNonInteractiveWithoutForceSkipsApply(t *testing.T) {
 	headBefore, err := s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "HEAD")
 	require.NoError(t, err)
 
-	err = Action(s.Context, Options{Force: false}, nil)
+	err = Action(t.Context(), deps(s), Options{Force: false}, nil)
 	require.NoError(t, err)
 
 	headAfter, err := s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "HEAD")
@@ -1170,7 +1171,7 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		s.RunGit("add", "test.go")
 		s.RunGit("commit", "-m", "add test.go")
 		// Should return false in normal state
-		require.False(t, IsAbsorbInProgress(s.Context))
+		require.False(t, IsAbsorbInProgress(t.Context(), deps(s)))
 	})
 
 	t.Run("IsAbsorbInProgress returns true in detached HEAD state", func(t *testing.T) {
@@ -1190,7 +1191,7 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		s.RunGit("checkout", "--detach", "HEAD")
 
 		// Should return true in detached HEAD state (with checkout in reflog)
-		require.True(t, IsAbsorbInProgress(s.Context))
+		require.True(t, IsAbsorbInProgress(t.Context(), deps(s)))
 	})
 
 	t.Run("IsAbsorbInProgress returns false during a rebase even when detached", func(t *testing.T) {
@@ -1217,7 +1218,7 @@ func TestAbsorbConflictHandling(t *testing.T) {
 
 		// A rebase in progress means this is a restack/sync conflict, not an
 		// absorb — the standard abort owns it.
-		require.False(t, IsAbsorbInProgress(s.Context))
+		require.False(t, IsAbsorbInProgress(t.Context(), deps(s)))
 	})
 
 	t.Run("ShowConflict displays staged changes info", func(t *testing.T) {
@@ -1239,7 +1240,7 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		s.RunGit("add", "test.go")
 
 		// ShowConflict should work without error when we have staged changes
-		err = ShowConflict(s.Context)
+		err = ShowConflict(t.Context(), deps(s))
 		require.NoError(t, err)
 	})
 
@@ -1257,7 +1258,7 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		s.RunGit("add", "test.go")
 		s.RunGit("commit", "-m", "add test.go")
 		// ShowConflict should work without error when no staged changes
-		err = ShowConflict(s.Context)
+		err = ShowConflict(t.Context(), deps(s))
 		require.NoError(t, err)
 	})
 
@@ -1275,7 +1276,7 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		s.RunGit("add", "test.go")
 		s.RunGit("commit", "-m", "add test.go")
 		// Abort should work without error when not in a failed absorb state
-		err = Abort(s.Context)
+		err = Abort(t.Context(), deps(s))
 		require.NoError(t, err)
 	})
 
@@ -1301,7 +1302,7 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		require.Equal(t, "HEAD", strings.TrimSpace(output))
 
 		// Abort should recover from detached HEAD
-		err = Abort(s.Context)
+		err = Abort(t.Context(), deps(s))
 		require.NoError(t, err)
 
 		// Verify we're back on a branch (reflog should help find it)
@@ -1353,7 +1354,7 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		require.Contains(t, stashListBefore, absorbStashUnstagedMarker)
 		require.Contains(t, stashListBefore, "unrelated-stash")
 
-		err = Abort(s.Context)
+		err = Abort(t.Context(), deps(s))
 		require.NoError(t, err)
 
 		stashListAfter, err := s.Scene.Repo.RunGitCommandAndGetOutput("stash", "list")
@@ -1414,7 +1415,7 @@ func TestAbsorbFallbackPreservesUnstagedBinaryEdit(t *testing.T) {
 	err = os.WriteFile(binFile, editedBinary, 0600)
 	require.NoError(t, err)
 
-	err = Action(s.Context, Options{Force: true}, nil)
+	err = Action(t.Context(), deps(s), Options{Force: true}, nil)
 	require.NoError(t, err)
 
 	// The binary file's worktree bytes equal the unstaged edit exactly.
@@ -1460,8 +1461,12 @@ func TestAbsorbWarnsWhenSkippingRestack(t *testing.T) {
 	require.NoError(t, err)
 	s.RunGit("add", "a_test.txt")
 
-	err = Action(s.Context, Options{Restack: RestackNone, Force: true}, nil)
+	err = Action(t.Context(), deps(s), Options{Restack: RestackNone, Force: true}, nil)
 	require.NoError(t, err)
 
 	require.Contains(t, s.Output.String(), "Skipped restacking")
+}
+
+func deps(s *scenario.Scenario) Deps {
+	return Deps{Engine: s.Context.Engine, MutationDeps: actions.MutationDepsFrom(s.Context)}
 }

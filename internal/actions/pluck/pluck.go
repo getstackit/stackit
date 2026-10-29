@@ -9,15 +9,15 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	basehandler "github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/actions/validation"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 )
 
-// pluckEngine lists exactly the engine methods pluck calls.
-type pluckEngine interface {
+// Engine lists exactly the engine methods pluck calls.
+type Engine interface {
 	validation.BranchValidationEngine
+	actions.OwnershipEngine
 	Trunk() engine.Branch
 	IsTrunk(branch engine.Branch) bool
 	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
@@ -37,14 +37,20 @@ type Options struct {
 	SkipConfirm bool   // Skip confirmation prompt (--yes flag)
 }
 
+// Deps are the collaborators pluck needs. Adapters build them from their own
+// runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	Log    output.Logger
+	actions.MutationDeps
+}
+
 // Action performs the pluck operation.
 // Pluck extracts a single branch from its current position and moves it to a new parent.
 // Unlike move, pluck does NOT bring descendants along - they are reparented to the
 // grandparent (the plucked branch's former parent).
-func Action(ctx *app.Context, opts Options, handler Handler) error {
-	var eng pluckEngine = ctx.Engine
-	out := ctx.Output
-	gctx := ctx.Context
+func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error {
+	eng, out := deps.Engine, deps.Out
 
 	// Use null handler if none provided
 	if handler == nil {
@@ -52,12 +58,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 	defer handler.Cleanup()
 
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	// Default source to current branch
 	source := opts.Source
 	if source == "" {
-		currentBranch := eng.CurrentBranch(ctx.Context)
+		currentBranch := eng.CurrentBranch(ctx)
 		if currentBranch == nil {
 			return errors.New("not on a branch and no source branch specified")
 		}
@@ -85,7 +91,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Get source's direct children (they will be reparented to grandparent)
 	children := graph.ChildBranches(sourceBranch)
-	if err := actions.EnsureCanModifyHere(ctx, append(engine.BranchesOf(sourceBranch, ontoBranch), children...)...); err != nil {
+	if err := actions.EnsureCanModify(ctx, eng, deps.Here, append(engine.BranchesOf(sourceBranch, ontoBranch), children...)...); err != nil {
 		return err
 	}
 
@@ -96,7 +102,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		actions.WithFlagValue("--source", opts.Source),
 		actions.WithFlagValue("--onto", opts.Onto),
 	)
-	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
+	deps.Snapshots.Take(ctx, snapshotOpts)
 
 	// Get current parent (grandparent for children)
 	oldParent := sourceBranch.Parent()
@@ -111,7 +117,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Prompt for confirmation in interactive mode
 	if handler.IsInteractive() && !opts.SkipConfirm {
-		commitsData, _ := eng.GetAllCommits(ctx.Context, sourceBranch)
+		commitsData, _ := eng.GetAllCommits(ctx, sourceBranch)
 		commits := commitsData.Subjects()
 
 		preview := Preview{
@@ -140,7 +146,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Get revisions needed for rebase specs in a single batched call instead
 	// of one git process per branch.
 	grandparentName := grandparentBranch.Name()
-	revisions := eng.BatchRevisions(ctx.Context, engine.BranchesOf(ontoBranch, grandparentBranch, sourceBranch))
+	revisions := eng.BatchRevisions(ctx, engine.BranchesOf(ontoBranch, grandparentBranch, sourceBranch))
 
 	ontoRev, ok := revisions.Rev(onto)
 	if !ok {
@@ -159,13 +165,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Capture old divergence point for source branch, falling back to the
 	// grandparent's revision (source's old parent) when unavailable.
-	sourceOldParentRev, divErr := eng.GetDivergencePoint(ctx.Context, source)
+	sourceOldParentRev, divErr := eng.GetDivergencePoint(ctx, source)
 	if divErr != nil || sourceOldParentRev == "" {
 		sourceOldParentRev = grandparentRev
 	}
 
 	// Children: rebase onto grandparent (source's old parent)
-	childDivPoints := eng.BatchDivergencePoints(ctx.Context, children)
+	childDivPoints := eng.BatchDivergencePoints(ctx, children)
 	for _, child := range children {
 		// Get the old upstream (divergence point)
 		childOldUpstream, ok := childDivPoints.Rev(child.Name())
@@ -190,7 +196,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Validate rebases before modifying any state
 	handler.OnStep(StepValidating, basehandler.StatusStarted, "Validating rebases...")
-	validation, err := eng.ValidateRebases(gctx, rebaseSpecs)
+	validation, err := eng.ValidateRebases(ctx, rebaseSpecs)
 	if err != nil {
 		handler.OnStep(StepValidating, basehandler.StatusFailed, err.Error())
 		return fmt.Errorf("failed to validate rebases: %w", err)
@@ -198,7 +204,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if !validation.Success {
 		errorMsg := validation.ErrorMessage
 		if len(validation.ConflictingFiles) > 0 {
-			ctx.Logger.Debug("conflict detected during pluck validation branch=%v files=%v", validation.FailedBranch, validation.ConflictingFiles)
+			deps.Log.Debug("conflict detected during pluck validation branch=%v files=%v", validation.FailedBranch, validation.ConflictingFiles)
 		}
 		handler.OnStep(StepValidating, basehandler.StatusFailed, errorMsg)
 		return fmt.Errorf("pluck would cause conflicts: %s on branch %s", errorMsg, validation.FailedBranch)
@@ -226,7 +232,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 	handler.OnStep(StepMovingSource, basehandler.StatusStarted, "Moving source branch...")
 
-	if err := eng.ReparentBranchesToParents(gctx, moves, engine.ReparentOpts{}); err != nil {
+	if err := eng.ReparentBranchesToParents(ctx, moves, engine.ReparentOpts{}); err != nil {
 		if len(children) > 0 {
 			handler.OnStep(StepReparentingChild, basehandler.StatusFailed, err.Error())
 		}
@@ -250,7 +256,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Step 2: the source is now on its new parent.
 	if eng.IsTrunk(ontoBranch) {
-		if _, err := eng.AssignBranchesToNewStack(gctx, sourceBranch, engine.BranchesOf(sourceBranch)); err != nil {
+		if _, err := eng.AssignBranchesToNewStack(ctx, sourceBranch, engine.BranchesOf(sourceBranch)); err != nil {
 			out.Warn("Failed to update stack ID for %s: %v", source, err)
 		}
 	}
@@ -265,7 +271,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.OnStep(StepRestackingOrphans, basehandler.StatusStarted, "Restacking branches...")
 
 	// Rebuild graph after parent changes
-	graph = eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph = eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	// Collect all branches that need restacking:
 	// 1. The children (now on grandparent) and their descendants
@@ -286,7 +292,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	sourceBranch = eng.GetBranch(source)
 	branchesToRestack = branchesToRestack.Append(sourceBranch)
 
-	if err := actions.RestackBranches(ctx, branchesToRestack); err != nil {
+	if err := deps.Restack.Restack(ctx, branchesToRestack); err != nil {
 		handler.OnStep(StepRestackingOrphans, basehandler.StatusFailed, err.Error())
 		return fmt.Errorf("failed to restack branches: %w", err)
 	}

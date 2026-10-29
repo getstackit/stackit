@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
 
 // Selection contains precomputed data for validating potential move targets.
 type Selection struct {
-	eng          moveEngine
+	eng          Engine
 	out          output.Output
 	source       string
 	sourceBranch engine.Branch
@@ -21,15 +20,14 @@ type Selection struct {
 }
 
 // PrepareSelection builds the data needed for interactive onto validation.
-func PrepareSelection(ctx *app.Context, source string) (*Selection, error) {
+func PrepareSelection(ctx context.Context, eng Engine, out output.Output, source string) (*Selection, error) {
 	if source == "" {
 		return nil, errors.New("source branch is required")
 	}
 
-	var eng moveEngine = ctx.Engine
 	sourceBranch := eng.GetBranch(source)
 
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	descendants := graph.Range(sourceBranch, engine.StackRange{
 		RecursiveChildren: true,
 		IncludeCurrent:    true,
@@ -39,11 +37,11 @@ func PrepareSelection(ctx *app.Context, source string) (*Selection, error) {
 	oldParent := sourceBranch.Parent()
 
 	// Match move.Action behavior: capture divergence point, allow empty fallback.
-	oldParentRev, _ := eng.GetDivergencePoint(ctx.Context, source)
+	oldParentRev, _ := eng.GetDivergencePoint(ctx, source)
 
 	return &Selection{
 		eng:          eng,
-		out:          ctx.Output,
+		out:          out,
 		source:       source,
 		sourceBranch: sourceBranch,
 		descendants:  descendants,

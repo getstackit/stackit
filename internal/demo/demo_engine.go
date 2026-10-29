@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
@@ -25,13 +24,15 @@ func simulateDelay(base time.Duration) {
 	time.Sleep(base + jitter)
 }
 
-func init() {
-	// Register the demo engine factory with runtime package
-	app.DemoEngineFactory = func() (engine.Engine, github.GitCommandRunner) {
-		runner := NewDemoGitRunner()
-		eng, _ := newDemoEngineWithRunner(context.Background(), runner)
-		return eng, runner
+// NewDemoEngine returns an engine backed by a simulated git runner, along with
+// that runner for the GitHub integration to use alongside it.
+func NewDemoEngine(ctx context.Context) (engine.Engine, github.GitCommandRunner, error) {
+	runner := NewDemoGitRunner()
+	eng, err := newDemoEngineWithRunner(ctx, runner)
+	if err != nil {
+		return nil, nil, err
 	}
+	return eng, runner, nil
 }
 
 func newDemoEngineWithRunner(ctx context.Context, runner git.Runner) (engine.Engine, error) {

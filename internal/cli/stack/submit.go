@@ -11,7 +11,6 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/config"
-	_ "github.com/getstackit/stackit/internal/demo" // Register demo engine factory
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/utils"
 )

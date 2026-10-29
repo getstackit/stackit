@@ -201,9 +201,9 @@ func TestAnalyzeMidStackScope(t *testing.T) {
 func TestPostMergeActionRequired_Error(t *testing.T) {
 	t.Parallel()
 
-	err := &PostMergeActionRequired{Action: PostMergeSyncTrunk}
+	err := &PostMergeActionRequiredError{Action: PostMergeSyncTrunk}
 	require.Equal(t, "post-merge action required: sync-trunk", err.Error())
 
-	err2 := &PostMergeActionRequired{Action: PostMergeDone}
+	err2 := &PostMergeActionRequiredError{Action: PostMergeDone}
 	require.Equal(t, "post-merge action required: done", err2.Error())
 }

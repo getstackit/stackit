@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getstackit/stackit/internal/demo"
+
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
@@ -337,24 +339,16 @@ func NewContext(eng engine.Engine, opts ...ContextOption) *Context {
 	}
 }
 
-// DemoEngineFactory is a function that creates a demo engine and the runner
-// the GitHub integration should use alongside it.
-// This is set by the demo package to avoid circular imports.
-var DemoEngineFactory func() (engine.Engine, github.GitCommandRunner)
-
-// DemoGitHubClientFactory is a function that creates a demo GitHub client.
-// This is set by the demo package to avoid circular imports.
-var DemoGitHubClientFactory func() github.Client
-
 // NewContextAutoWithWriter is like NewContextAuto but allows specifying the output writer.
 func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalOptions, writer io.Writer) (*Context, error) {
-	if utils.IsDemoMode() && DemoEngineFactory != nil {
-		eng, ghRunner := DemoEngineFactory()
+	if utils.IsDemoMode() {
+		eng, ghRunner, err := demo.NewDemoEngine(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("demo engine: %w", err)
+		}
 		runtimeCtx := NewContext(eng, WithRepoRoot(repoRoot), WithGlobalOptions(opts), WithWriter(writer), WithGitHubRunner(ghRunner))
 		runtimeCtx.Context = ctx
-		if DemoGitHubClientFactory != nil {
-			runtimeCtx.GitHubClient = DemoGitHubClientFactory()
-		}
+		runtimeCtx.GitHubClient = demo.NewDemoGitHubClient()
 		return runtimeCtx, nil
 	}
 

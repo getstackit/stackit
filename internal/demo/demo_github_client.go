@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/utils"
@@ -21,13 +20,6 @@ const (
 
 // prCounter is used to generate unique PR numbers, starting after #100
 var prCounter atomic.Int32
-
-func init() {
-	// Register the demo GitHub client factory with runtime package
-	app.DemoGitHubClientFactory = func() github.Client {
-		return NewDemoGitHubClient()
-	}
-}
 
 // GitHubClient implements github.Client for demo mode
 type GitHubClient struct {

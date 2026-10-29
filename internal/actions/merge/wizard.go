@@ -324,7 +324,7 @@ func HandlePostMerge(ctx *app.Context, handler InteractiveHandler) error {
 		// The handler will need to handle this action
 		// This involves checking out trunk and running sync
 		// For now, return a sentinel error that the CLI can handle
-		return &PostMergeActionRequired{Action: action}
+		return &PostMergeActionRequiredError{Action: action}
 	case PostMergeDone:
 		return nil
 	}
@@ -332,12 +332,12 @@ func HandlePostMerge(ctx *app.Context, handler InteractiveHandler) error {
 	return nil
 }
 
-// PostMergeActionRequired is returned when post-merge action is needed
-type PostMergeActionRequired struct {
+// PostMergeActionRequiredError is returned when post-merge action is needed
+type PostMergeActionRequiredError struct {
 	Action PostMergeAction
 }
 
-func (e *PostMergeActionRequired) Error() string {
+func (e *PostMergeActionRequiredError) Error() string {
 	return fmt.Sprintf("post-merge action required: %s", e.Action)
 }
 

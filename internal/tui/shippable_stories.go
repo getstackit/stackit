@@ -747,10 +747,10 @@ func (m *shippableStoryModel) renderFooter() string {
 }
 
 // registerShippableStories registers all shippable dashboard stories.
-func registerShippableStories() {
+func (r *storyRegistry) registerShippableStories() {
 	for _, scenario := range shippableScenarios {
 		s := scenario // Capture for closure
-		RegisterStory(Story{
+		r.add(Story{
 			Name:        s.name,
 			Category:    "Shippable",
 			Description: s.description,
@@ -761,12 +761,12 @@ func registerShippableStories() {
 	}
 
 	// Also register merge progress flow stories
-	registerMergeProgressStories()
+	r.registerMergeProgressStories()
 }
 
 // registerMergeProgressStories adds stories for merge progress simulation.
-func registerMergeProgressStories() {
-	RegisterStory(Story{
+func (r *storyRegistry) registerMergeProgressStories() {
+	r.add(Story{
 		Name:        "Merge Progress - Happy Path",
 		Category:    "Merge Flow",
 		Description: "Simulated merge progress with all steps succeeding",
@@ -775,7 +775,7 @@ func registerMergeProgressStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "Merge Progress - Waiting for CI",
 		Category:    "Merge Flow",
 		Description: "Simulated merge progress stuck waiting for CI checks",
@@ -784,7 +784,7 @@ func registerMergeProgressStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "Merge Progress - Failure",
 		Category:    "Merge Flow",
 		Description: "Simulated merge progress with a failure",
@@ -1082,8 +1082,4 @@ func allStepsDone(steps []mergeStep) bool {
 	return !slices.ContainsFunc(steps, func(s mergeStep) bool {
 		return s.status != stepStatusDone
 	})
-}
-
-func init() {
-	registerShippableStories()
 }

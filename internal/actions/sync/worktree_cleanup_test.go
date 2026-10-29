@@ -38,7 +38,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 
 		// Run sync - this should clean up the orphaned worktree registration
 		handler := &sync.NullHandler{}
-		err = sync.Action(s.Context, sync.Options{}, handler)
+		err = sync.Action(s.Context.Context, sync.DepsFrom(s.Context), sync.Options{}, handler)
 		require.NoError(t, err)
 
 		// Verify worktree registration was cleaned up
@@ -62,7 +62,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		// Go back to main and run sync
 		s.Checkout("main")
 		handler := &sync.NullHandler{}
-		err = sync.Action(s.Context, sync.Options{}, handler)
+		err = sync.Action(s.Context.Context, sync.DepsFrom(s.Context), sync.Options{}, handler)
 		require.NoError(t, err)
 
 		// Verify worktree registration is preserved
@@ -82,7 +82,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		require.NoError(t, err)
 
 		handler := &sync.NullHandler{}
-		err = sync.Action(s.Context, sync.Options{}, handler)
+		err = sync.Action(s.Context.Context, sync.DepsFrom(s.Context), sync.Options{}, handler)
 		require.NoError(t, err)
 
 		wt, err := s.Engine.GetWorktreeForStack(t.Context(), "missing-anchor")

@@ -2,6 +2,7 @@
 package sync
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"slices"
@@ -10,7 +11,6 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/actions/worktree"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 
@@ -38,13 +38,12 @@ type Options struct {
 }
 
 // Action performs the sync operation
-func Action(ctx *app.Context, opts Options, handler Handler) error {
-	eng := ctx.Engine
-	out := ctx.Output
-	gctx := ctx.Context
+func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error {
+	eng := deps.Engine
+	out := deps.Out
 	summary := &Summary{}
 
-	ctx.Logger.Info("sync started restack=%v noRestack=%v force=%v", opts.Restack, opts.NoRestack, opts.Force)
+	deps.Log.Info("sync started restack=%v noRestack=%v force=%v", opts.Restack, opts.NoRestack, opts.Force)
 
 	// Use null handler if none provided
 	if handler == nil {
@@ -65,9 +64,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Rather than failing on dirty worktrees, we skip their entire stack to allow
 	// parallel work in other worktrees while preserving consistency. restack
 	// holds the same stacks for the same reasons: both read ManagedWorktreeHolds.
-	stackHolds, err := actions.ManagedWorktreeHolds(gctx, eng)
+	stackHolds, err := actions.ManagedWorktreeHolds(ctx, eng)
 	if err != nil {
-		ctx.Logger.Warn("could not inspect managed worktrees: %v", err)
+		deps.Log.Warn("could not inspect managed worktrees: %v", err)
 	}
 	var dirtyAnchors dirtyAnchorSet
 	for _, hold := range stackHolds {
@@ -83,7 +82,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// the one place divergence reliably gets seen — previously it surfaced only
 	// if someone happened to run `worktree list`, while the guards that refuse
 	// mutations because of it said nothing about where to look.
-	for _, warning := range worktree.OwnershipWarnings(gctx, eng) {
+	for _, warning := range worktree.OwnershipWarnings(ctx, eng) {
 		out.Warn("%s", warning)
 	}
 
@@ -92,8 +91,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if !opts.NoRestack {
 		// Estimate based on tracked branches
 		progressCountStart := time.Now()
-		branchCount := len(ctx.Navigator().AllBranches())
-		ctx.Logger.Info("count branches for progress completed durationMs=%v branchCount=%v", time.Since(progressCountStart).Milliseconds(), branchCount)
+		branchCount := len(eng.AllBranches())
+		deps.Log.Info("count branches for progress completed durationMs=%v branchCount=%v", time.Since(progressCountStart).Milliseconds(), branchCount)
 		totalOps += branchCount
 	}
 	handler.Start(totalOps)
@@ -113,29 +112,29 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Snapshot the branch set for the remote-status probe below. The set is
 	// stable through the parallel phase (no branches are created or deleted
 	// until later), so reading it once here is safe.
-	branchesForStatus := ctx.Navigator().AllBranches()
+	branchesForStatus := eng.AllBranches()
 
-	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+	remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
 	defer cancelRemote()
 
 	parallelStart := time.Now()
-	ctx.Logger.Info("starting parallel phase")
+	deps.Log.Info("starting parallel phase")
 
 	g, _ := errgroup.WithContext(remoteCtx)
 
 	// Goroutine 1: Fetch trunk and Stackit metadata refs in one round trip.
 	g.Go(func() error {
-		ctx.Logger.Info("goroutine remote fetch started delayMs=%v", time.Since(parallelStart).Milliseconds())
+		deps.Log.Info("goroutine remote fetch started delayMs=%v", time.Since(parallelStart).Milliseconds())
 		fetchStart := time.Now()
 		trunkFetchErr = eng.FetchRemote(remoteCtx, engine.RemoteFetchRequest{
-			Remote:               eng.GetRemote(ctx.Context),
+			Remote:               eng.GetRemote(ctx),
 			Branches:             []string{eng.Trunk().Name()},
 			IncludeMetadata:      true,
 			IncludeStackMetadata: true,
 		})
-		ctx.Logger.Info("fetch trunk and metadata completed durationMs=%v", time.Since(fetchStart).Milliseconds())
+		deps.Log.Info("fetch trunk and metadata completed durationMs=%v", time.Since(fetchStart).Milliseconds())
 		if trunkFetchErr != nil {
-			ctx.Logger.Debug("fetch trunk and metadata failed error=%v", trunkFetchErr)
+			deps.Log.Debug("fetch trunk and metadata failed error=%v", trunkFetchErr)
 			return trunkFetchErr
 		}
 		return nil
@@ -143,9 +142,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Goroutine 2: Sync PR info from GitHub (network operation only)
 	g.Go(func() error {
-		ctx.Logger.Info("goroutine github started delayMs=%v", time.Since(parallelStart).Milliseconds())
+		deps.Log.Info("goroutine github started delayMs=%v", time.Since(parallelStart).Milliseconds())
 		var err error
-		githubSyncResult, err = syncGitHubPRInfo(remoteCtx, ctx)
+		githubSyncResult, err = syncGitHubPRInfo(remoteCtx, deps)
 		githubErr = err
 		return nil
 	})
@@ -154,18 +153,18 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// network round trip overlaps the trunk fetch and GitHub call instead of
 	// running serially later in syncStackBranches.
 	g.Go(func() error {
-		ctx.Logger.Info("goroutine remote statuses started delayMs=%v", time.Since(parallelStart).Milliseconds())
+		deps.Log.Info("goroutine remote statuses started delayMs=%v", time.Since(parallelStart).Milliseconds())
 		statusStart := time.Now()
 		remoteStatuses = eng.ReadBranchRemoteStatuses(remoteCtx, branchesForStatus)
-		ctx.Logger.Info("prefetch remote branch statuses completed durationMs=%v branchCount=%v", time.Since(statusStart).Milliseconds(), len(remoteStatuses))
+		deps.Log.Info("prefetch remote branch statuses completed durationMs=%v branchCount=%v", time.Since(statusStart).Milliseconds(), len(remoteStatuses))
 		return nil
 	})
 
 	parallelErr := g.Wait()
-	ctx.Logger.Info("parallel phase completed durationMs=%v", time.Since(parallelStart).Milliseconds())
+	deps.Log.Info("parallel phase completed durationMs=%v", time.Since(parallelStart).Milliseconds())
 
 	if trunkFetchErr != nil {
-		return fmt.Errorf("failed to fetch trunk from %s: %w", eng.GetRemote(ctx.Context), trunkFetchErr)
+		return fmt.Errorf("failed to fetch trunk from %s: %w", eng.GetRemote(ctx), trunkFetchErr)
 	}
 	if parallelErr != nil {
 		return parallelErr
@@ -178,12 +177,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// that can halt on a conflict, so a snapshot taken any later would let
 	// `abort` claim it restored the state before sync while leaving every one
 	// of those deletions in place.
-	actions.TakeBestEffortSnapshot(ctx, actions.NewSnapshot("sync",
+	deps.Snapshots.Take(ctx, actions.NewSnapshot("sync",
 		actions.WithFlag(opts.Restack, "--restack"),
 		actions.WithFlag(opts.All, "--all"),
 	))
 
-	trunkErr = syncFetchedTrunk(ctx, &opts, handler, &trunkSummary)
+	trunkErr = syncFetchedTrunk(ctx, deps, &opts, handler, &trunkSummary)
 	if trunkErr != nil {
 		return trunkErr
 	}
@@ -202,7 +201,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Process GitHub PR info results (sequential - depends on PR info)
 	if githubSyncResult != nil {
-		if err := processGitHubSyncResult(ctx, githubSyncResult, dirtyAnchors, handler); err != nil {
+		if err := processGitHubSyncResult(ctx, deps, githubSyncResult, dirtyAnchors, handler); err != nil {
 			return err
 		}
 	}
@@ -210,46 +209,46 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	branchesToRestack := []string{}
 
 	// Process remote metadata (sequential - depends on fetch)
-	if err := processRemoteMetadata(ctx, &opts, handler); err != nil {
+	if err := processRemoteMetadata(ctx, deps, &opts, handler); err != nil {
 		return err
 	}
 
 	// Phase 2.5: Sync stack branches from remote
-	if err := syncStackBranches(ctx, dirtyAnchors, remoteStatuses, handler, summary); err != nil {
+	if err := syncStackBranches(ctx, deps, dirtyAnchors, remoteStatuses, handler, summary); err != nil {
 		return err
 	}
 
 	// Phase 3: Clean branches (delete merged/closed)
-	cleanResult, err := cleanBranches(ctx, &opts, dirtyAnchors, remoteStatuses, handler, summary)
+	cleanResult, err := cleanBranches(ctx, deps, &opts, dirtyAnchors, remoteStatuses, handler, summary)
 	if err != nil {
 		return fmt.Errorf("failed to clean branches: %w", err)
 	}
 
 	// Clean orphaned worktrees (after branch cleanup so we know what's been deleted)
-	worktreeResult := cleanOrphanedWorktrees(ctx, dirtyAnchors)
+	worktreeResult := cleanOrphanedWorktrees(ctx, deps, dirtyAnchors)
 	if len(worktreeResult.RemovedWorktrees) > 0 {
 		summary.WorktreesCleaned = len(worktreeResult.RemovedWorktrees)
 	}
 	// Surface any worktree cleanup errors as warnings (non-fatal)
 	for _, errMsg := range worktreeResult.Errors {
-		ctx.Output.Warn("Worktree cleanup: %s", errMsg)
+		out.Warn("Worktree cleanup: %s", errMsg)
 	}
 
 	// GC orphaned stack metadata refs (after branch cleanup so we know what's been deleted)
-	gcResult := gcOrphanedStackMetadata(ctx)
+	gcResult := gcOrphanedStackMetadata(ctx, deps)
 	if len(gcResult.DeletedStackIDs) > 0 {
-		ctx.Logger.Info("cleaned orphaned stack metadata count=%v", len(gcResult.DeletedStackIDs))
+		deps.Log.Info("cleaned orphaned stack metadata count=%v", len(gcResult.DeletedStackIDs))
 	}
 	// Surface any GC errors as warnings (non-fatal)
 	for _, errMsg := range gcResult.Errors {
-		ctx.Output.Warn("Stack metadata cleanup: %s", errMsg)
+		out.Warn("Stack metadata cleanup: %s", errMsg)
 	}
 
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	// Add branches with new parents to restack list (skip dirty stacks)
 	for _, branchName := range cleanResult.BranchesWithNewParents {
-		if dirtyAnchors.includes(ctx, branchName) {
+		if dirtyAnchors.includes(eng, branchName) {
 			continue
 		}
 		branch := eng.GetBranch(branchName)
@@ -288,7 +287,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	handler.EmitEvent(Event{Phase: PhaseRestack, Type: EventStarted})
 
-	outcome, err := restackBranches(ctx, branchesToRestack, opts.RestackScope, expandScope, dirtyAnchors, handler, summary)
+	outcome, err := restackBranches(ctx, deps, branchesToRestack, opts.RestackScope, expandScope, dirtyAnchors, handler, summary)
 	if outcome.EnteredConflictWorkflow {
 		// The user chose to resolve a conflict now; sync hands off to the
 		// conflict workflow and does not report a finished summary.
@@ -305,7 +304,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		summary.UpToDate = true
 	}
 
-	ctx.Logger.Info("sync completed trunkUpdated=%v branchesRestacked=%v branchesDeleted=%v branchesSkipped=%v", summary.TrunkUpdated, summary.BranchesRestacked, summary.BranchesDeleted, summary.BranchesSkipped)
+	deps.Log.Info("sync completed trunkUpdated=%v branchesRestacked=%v branchesDeleted=%v branchesSkipped=%v", summary.TrunkUpdated, summary.BranchesRestacked, summary.BranchesDeleted, summary.BranchesSkipped)
 
 	handler.Complete(*summary)
 	return nil
@@ -457,6 +456,12 @@ func (h *NullHandler) PromptBranchDeletions(branches map[string]string, unpushed
 	return confirmed, nil
 }
 
+// stackRootResolver resolves the stack a branch belongs to.
+type stackRootResolver interface {
+	GetBranch(name string) engine.Branch
+	GetStackRootForBranch(branch engine.Branch) string
+}
+
 // dirtyAnchorSet is the set of stack-anchor branches whose worktrees have
 // uncommitted changes; sync skips every branch in those stacks.
 type dirtyAnchorSet map[string]bool
@@ -464,11 +469,11 @@ type dirtyAnchorSet map[string]bool
 // includes returns true if the branch belongs to a dirty worktree's stack.
 // A branch is in a dirty stack if its stack root (first ancestor whose parent is trunk)
 // matches the anchor branch of a dirty worktree.
-func (d dirtyAnchorSet) includes(ctx *app.Context, branchName string) bool {
+func (d dirtyAnchorSet) includes(eng stackRootResolver, branchName string) bool {
 	if len(d) == 0 {
 		return false
 	}
-	branch := ctx.Engine.GetBranch(branchName)
-	stackRoot := ctx.Engine.GetStackRootForBranch(branch)
+	branch := eng.GetBranch(branchName)
+	stackRoot := eng.GetStackRootForBranch(branch)
 	return d[stackRoot]
 }

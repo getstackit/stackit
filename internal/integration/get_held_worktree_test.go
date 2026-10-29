@@ -66,7 +66,7 @@ func TestGetSkipsBranchHeldByAnotherWorktree(t *testing.T) {
 			sh.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, config)
 
 			require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
-			require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+			require.NoError(t, syncaction.Action(sh.Context.Context, common.SyncDeps(sh.Context), syncaction.Options{}, nil))
 
 			// Park a in another worktree. Both a and b already exist locally,
 			// so get takes the update path for each and needs them at HEAD in

@@ -126,7 +126,7 @@ func stackWithLandedParent(t *testing.T, land mergeMethod, forget forgottenMetad
 
 	sh.Context.GitHubClient = newCountingGitHubClient(t, testhelpers.NewMockGitHubServerConfig())
 	require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
-	require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+	require.NoError(t, syncaction.Action(sh.Context.Context, common.SyncDeps(sh.Context), syncaction.Options{}, nil))
 
 	sh.Checkout("main")
 	land(t, sh)
@@ -267,7 +267,7 @@ func TestGetPastLandedParentReport(t *testing.T) {
 
 		sh.Context.GitHubClient = newCountingGitHubClient(t, testhelpers.NewMockGitHubServerConfig())
 		require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
-		require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+		require.NoError(t, syncaction.Action(sh.Context.Context, common.SyncDeps(sh.Context), syncaction.Options{}, nil))
 
 		sh.Checkout("main")
 		squashLanding(t, sh)

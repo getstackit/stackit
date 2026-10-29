@@ -101,7 +101,7 @@ func TestGetMetadataDiscovery(t *testing.T) {
 
 		// Submit + sync so parent and PR info land in the pushed metadata.
 		require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
-		require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+		require.NoError(t, syncaction.Action(sh.Context.Context, common.SyncDeps(sh.Context), syncaction.Options{}, nil))
 
 		// Precondition: the remote metadata carries the PR number, so get has no reason
 		// to call GitHub for display either.
@@ -210,7 +210,7 @@ func TestGetMetadataDiscovery(t *testing.T) {
 		sh.Context.GitHubClient = gh
 
 		require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
-		require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+		require.NoError(t, syncaction.Action(sh.Context.Context, common.SyncDeps(sh.Context), syncaction.Options{}, nil))
 
 		// Keep b's metadata pointing to a, but remove a's metadata. Metadata discovery
 		// should not accept this partial chain; GitHub can still provide a -> main.
@@ -241,7 +241,7 @@ func TestGetMetadataDiscovery(t *testing.T) {
 		sh.Context.GitHubClient = gh
 
 		require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
-		require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+		require.NoError(t, syncaction.Action(sh.Context.Context, common.SyncDeps(sh.Context), syncaction.Options{}, nil))
 
 		sh.Checkout("main")
 		dropLocalBranch(t, sh, "feature")

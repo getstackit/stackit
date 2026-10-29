@@ -1,12 +1,12 @@
 package sync
 
 import (
+	"context"
 	"time"
 
 	"github.com/getstackit/stackit/internal/xslices"
 
 	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/rerere"
 )
@@ -15,17 +15,17 @@ import (
 // restack pipeline, folding its outcome into the sync summary.
 // When restackScope is non-nil, only those branches are restacked (skipping current-branch expansion).
 // When expandScope is true, expands to the full current stack (used when --restack is explicitly passed).
-func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope []string, expandScope bool, dirtyAnchors dirtyAnchorSet, handler Handler, summary *Summary) (actions.RestackOutcome, error) {
-	nav := ctx.Navigator()
+func restackBranches(ctx context.Context, deps Deps, branchesToRestack []string, restackScope []string, expandScope bool, dirtyAnchors dirtyAnchorSet, handler Handler, summary *Summary) (actions.RestackOutcome, error) {
+	eng := deps.Engine
 
 	if restackScope != nil {
 		// Scoped restack: use only the explicitly provided branches
 		branchesToRestack = append(branchesToRestack, restackScope...)
 	} else if expandScope {
 		// Explicit --restack: expand from current branch position to full stack
-		graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+		graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
-		currentBranch := nav.CurrentBranch(ctx.Context)
+		currentBranch := eng.CurrentBranch(ctx)
 		if currentBranch != nil {
 			if currentBranch.IsTracked() {
 				// Get full stack (up to trunk)
@@ -55,17 +55,17 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 	// Remove duplicates and filter out non-existent/untracked branches and dirty stacks
 	uniqueBranches := engine.NewBranchesBuilder(len(branchesToRestack))
 	for _, branchName := range xslices.Unique(branchesToRestack) {
-		if dirtyAnchors.includes(ctx, branchName) {
+		if dirtyAnchors.includes(eng, branchName) {
 			continue
 		}
 		// Only include branches that exist, are tracked, and are not trunks
-		if branch := nav.GetBranch(branchName); branch.IsTracked() && !branch.IsTrunk() {
+		if branch := eng.GetBranch(branchName); branch.IsTracked() && !branch.IsTrunk() {
 			uniqueBranches.Add(branch)
 		}
 	}
 
 	// Sort branches topologically (parents before children) for correct restack order
-	sortedBranches := nav.SortBranchesTopologically(ctx.Context, uniqueBranches.Build())
+	sortedBranches := eng.SortBranchesTopologically(ctx, uniqueBranches.Build())
 
 	if len(sortedBranches) == 0 {
 		return actions.RestackOutcome{}, nil
@@ -75,11 +75,11 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 	// per-branch events reach the handler.
 	pauser, _ := handler.(rerere.Pauser)
 	restackStart := time.Now()
-	outcome, err := actions.RunRestack(ctx, actions.RestackDepsFrom(ctx), actions.RestackRequest{
+	outcome, err := actions.RunRestack(ctx, deps.Restack, actions.RestackRequest{
 		Branches:       sortedBranches,
 		ConflictPolicy: actions.RestackConflictPrompt,
 		Prompter:       handler,
-		PromptRerere:   ctx.Interactive && !ctx.Quiet && handler.IsInteractive(),
+		PromptRerere:   deps.Restack.Interactive && !deps.Restack.Quiet && handler.IsInteractive(),
 		Pauser:         pauser,
 	}, actions.RestackBranchFunc(handler.OnRestackBranch))
 
@@ -87,7 +87,7 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 	summary.BranchesSkipped += len(outcome.Summary.Conflicts)
 	summary.ConflictBranches = append(summary.ConflictBranches, outcome.Summary.Conflicts...)
 	summary.BranchesBlocked += len(outcome.Summary.Blocked)
-	ctx.Logger.Info("restack branches completed durationMs=%d branchCount=%d", time.Since(restackStart).Milliseconds(), len(sortedBranches))
+	deps.Log.Info("restack branches completed durationMs=%d branchCount=%d", time.Since(restackStart).Milliseconds(), len(sortedBranches))
 
 	return outcome, err
 }

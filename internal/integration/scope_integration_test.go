@@ -107,7 +107,7 @@ func TestScopeSubmitSyncFlow(t *testing.T) {
 
 	// 5. Run sync to fetch remote metadata
 	// This will fetch refs/stackit/metadata/*:refs/stackit/remote-metadata/*
-	err = sync.Action(sh.Context, sync.Options{}, nil)
+	err = sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{}, nil)
 	require.NoError(t, err)
 
 	// 6. Verify the scope is now in the remote metadata cache

@@ -1,22 +1,21 @@
 package sync
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 )
 
-func syncFetchedTrunk(ctx *app.Context, opts *Options, handler Handler, summary *Summary) error {
-	eng := ctx.Sync()
-	gctx := ctx.Context
+func syncFetchedTrunk(ctx context.Context, deps Deps, opts *Options, handler Handler, summary *Summary) error {
+	eng := deps.Engine
 
 	updateStart := time.Now()
-	pullResult, err := eng.UpdateTrunkFromRemote(gctx)
-	ctx.Logger.Info("update trunk from remote completed durationMs=%d", time.Since(updateStart).Milliseconds())
+	pullResult, err := eng.UpdateTrunkFromRemote(ctx)
+	deps.Log.Info("update trunk from remote completed durationMs=%d", time.Since(updateStart).Milliseconds())
 	if err != nil {
 		// A worktree holding trunk is a hold, not a failure. Report it and let
 		// the rest of the sync run: cleanup and restack do not depend on trunk
@@ -35,21 +34,19 @@ func syncFetchedTrunk(ctx *app.Context, opts *Options, handler Handler, summary 
 		return nil
 	}
 
-	return handleTrunkPullResult(ctx, opts, handler, summary, pullResult)
+	return handleTrunkPullResult(ctx, deps, opts, handler, summary, pullResult)
 }
 
-func handleTrunkPullResult(ctx *app.Context, opts *Options, handler Handler, summary *Summary, pullResult engine.PullResult) error {
-	eng := ctx.Sync()
-	nav := ctx.Navigator()
-	out := ctx.Output
-	gctx := ctx.Context
-	trunk := nav.Trunk()
+func handleTrunkPullResult(ctx context.Context, deps Deps, opts *Options, handler Handler, summary *Summary, pullResult engine.PullResult) error {
+	eng := deps.Engine
+	out := deps.Out
+	trunk := eng.Trunk()
 	trunkName := trunk.Name()
 
 	switch pullResult {
 	case engine.PullDone:
-		trunk := nav.Trunk()
-		rev, _ := trunk.Revision(ctx.Context)
+		trunk := eng.Trunk()
+		rev, _ := trunk.Revision(ctx)
 		revShort := git.ShortRevision(rev, 0)
 		summary.TrunkUpdated = true
 		summary.TrunkRevision = revShort
@@ -76,12 +73,12 @@ func handleTrunkPullResult(ctx *app.Context, opts *Options, handler Handler, sum
 
 		if shouldReset {
 			resetStart := time.Now()
-			if err := eng.ResetTrunkToRemote(gctx); err != nil {
+			if err := eng.ResetTrunkToRemote(ctx); err != nil {
 				return fmt.Errorf("failed to reset trunk: %w", err)
 			}
-			ctx.Logger.Info("reset trunk to remote completed durationMs=%d", time.Since(resetStart).Milliseconds())
-			trunk := nav.Trunk()
-			rev, _ := trunk.Revision(ctx.Context)
+			deps.Log.Info("reset trunk to remote completed durationMs=%d", time.Since(resetStart).Milliseconds())
+			trunk := eng.Trunk()
+			rev, _ := trunk.Revision(ctx)
 			revShort := git.ShortRevision(rev, 0)
 			summary.TrunkUpdated = true
 			summary.TrunkRevision = revShort

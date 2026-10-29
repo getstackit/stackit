@@ -1,11 +1,10 @@
 package sync
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/output"
@@ -13,39 +12,39 @@ import (
 
 // processRemoteMetadata processes remote metadata after fetch completes
 // This is designed to run after the network fetch operation completes in parallel
-func processRemoteMetadata(ctx *app.Context, opts *Options, handler Handler) error {
-	eng := ctx.RemoteMetadata()
-	out := ctx.Output
+func processRemoteMetadata(ctx context.Context, deps Deps, opts *Options, handler Handler) error {
+	eng := deps.Engine
+	out := deps.Out
 
 	// Configure refspec so future git fetch commands also fetch metadata
 	configStart := time.Now()
-	if err := eng.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
+	if err := eng.ConfigureRemoteMetadataSync(ctx); err != nil {
 		out.Debug("Failed to configure metadata refspec: %v", err)
 	}
 	// Also configure stack metadata refspec
-	if err := eng.ConfigureStackMetadataSync(ctx.Context); err != nil {
+	if err := eng.ConfigureStackMetadataSync(ctx); err != nil {
 		out.Debug("Failed to configure stack metadata refspec: %v", err)
 	}
-	ctx.Logger.Info("configure remote metadata sync completed durationMs=%d", time.Since(configStart).Milliseconds())
+	deps.Log.Info("configure remote metadata sync completed durationMs=%d", time.Since(configStart).Milliseconds())
 
 	// Load remote metadata into cache
 	loadCacheStart := time.Now()
-	if err := eng.LoadRemoteMetadataCache(ctx.Context); err != nil {
+	if err := eng.LoadRemoteMetadataCache(ctx); err != nil {
 		out.Debug("Failed to load remote metadata cache: %v", err)
 	}
-	ctx.Logger.Info("load remote metadata cache completed durationMs=%d", time.Since(loadCacheStart).Milliseconds())
+	deps.Log.Info("load remote metadata cache completed durationMs=%d", time.Since(loadCacheStart).Milliseconds())
 
 	// Handle orphaned local metadata (dual-checkout scenario or manual branch deletion)
 	orphanedStart := time.Now()
-	if err := handleOrphanedMetadata(ctx, opts, handler); err != nil {
+	if err := handleOrphanedMetadata(ctx, deps, opts, handler); err != nil {
 		return err
 	}
-	ctx.Logger.Info("handle orphaned metadata completed durationMs=%d", time.Since(orphanedStart).Milliseconds())
+	deps.Log.Info("handle orphaned metadata completed durationMs=%d", time.Since(orphanedStart).Milliseconds())
 
 	// Compute diffs
 	diffsStart := time.Now()
 	diffs, err := eng.ComputeAllMetadataDiffs()
-	ctx.Logger.Info("compute all metadata diffs completed durationMs=%d diffCount=%d", time.Since(diffsStart).Milliseconds(), len(diffs))
+	deps.Log.Info("compute all metadata diffs completed durationMs=%d diffCount=%d", time.Since(diffsStart).Milliseconds(), len(diffs))
 	if err != nil {
 		return fmt.Errorf("failed to compute metadata diffs: %w", err)
 	}
@@ -62,7 +61,7 @@ func processRemoteMetadata(ctx *app.Context, opts *Options, handler Handler) err
 
 	// Resolve each conflicting branch via handler
 	for _, diff := range diffs {
-		if err := resolveMetadataConflict(ctx, diff, handler); err != nil {
+		if err := resolveMetadataConflict(ctx, deps.Engine, diff, handler); err != nil {
 			return err
 		}
 	}
@@ -71,11 +70,11 @@ func processRemoteMetadata(ctx *app.Context, opts *Options, handler Handler) err
 }
 
 // handleOrphanedMetadata handles branches where remote metadata was deleted but local exists
-func handleOrphanedMetadata(ctx *app.Context, opts *Options, handler Handler) error {
-	eng := ctx.Engine
-	out := ctx.Output
+func handleOrphanedMetadata(ctx context.Context, deps Deps, opts *Options, handler Handler) error {
+	eng := deps.Engine
+	out := deps.Out
 
-	orphaned, err := eng.FindOrphanedLocalMetadata(ctx.Context)
+	orphaned, err := eng.FindOrphanedLocalMetadata(ctx)
 	if err != nil {
 		out.Debug("Failed to find orphaned metadata: %v", err)
 		return nil
@@ -133,32 +132,32 @@ func handleOrphanedMetadata(ctx *app.Context, opts *Options, handler Handler) er
 		}
 	}
 
-	if err := eng.CleanOrphanedMetadata(ctx.Context, deleteRefs, clearLocalHash); err != nil {
+	if err := eng.CleanOrphanedMetadata(ctx, deleteRefs, clearLocalHash); err != nil {
 		out.Debug("Failed to clean orphaned metadata: %v", err)
 	}
-	pushOrphanedMetadata(ctx, pushBranches)
+	pushOrphanedMetadata(ctx, deps, pushBranches)
 
 	return promptErr
 }
 
 // pushOrphanedMetadata pushes each branch's local metadata back to the remote.
 // Branches push one at a time so a single rejected ref doesn't fail the rest.
-func pushOrphanedMetadata(ctx *app.Context, branchNames []string) {
+func pushOrphanedMetadata(ctx context.Context, deps Deps, branchNames []string) {
 	if len(branchNames) == 0 {
 		return
 	}
-	out := ctx.Output
+	out := deps.Out
 
-	// PushMetadataAndSyncPRs returns nil without pushing when remote metadata
+	// PRSync.PushAndSync returns nil without pushing when remote metadata
 	// sync is unsupported, so check first rather than report a push that never
 	// happened. Skipping leaves the branches orphaned, so the next sync asks again.
-	if err := ctx.Engine.PrepareRemoteMetadataPush(ctx.Context); err != nil {
+	if err := deps.Engine.PrepareRemoteMetadataPush(ctx); err != nil {
 		out.Warn("Could not push metadata, remote metadata sync not supported: %v", err)
 		return
 	}
 
 	for _, name := range branchNames {
-		if err := actions.PushMetadataAndSyncPRs(ctx, []string{name}); err != nil {
+		if err := deps.PRSync.PushAndSync(ctx, []string{name}); err != nil {
 			out.Warn("Failed to push metadata for %s: %v", output.BranchName(name), err)
 			continue
 		}
@@ -179,9 +178,7 @@ func printMetadataDiffs(diffs []*engine.MetadataDiff, splog interface{ Info(stri
 }
 
 // resolveMetadataConflict resolves a metadata conflict by prompting via handler
-func resolveMetadataConflict(ctx *app.Context, diff *engine.MetadataDiff, handler Handler) error {
-	eng := ctx.RemoteMetadata()
-
+func resolveMetadataConflict(ctx context.Context, eng engine.RemoteMetadataManager, diff *engine.MetadataDiff, handler Handler) error {
 	acceptRemote, err := handler.PromptMetadataConflict(diff)
 	if err != nil {
 		// Handle user cancellation (Ctrl+C)
@@ -192,7 +189,7 @@ func resolveMetadataConflict(ctx *app.Context, diff *engine.MetadataDiff, handle
 	}
 
 	if acceptRemote {
-		return eng.AcceptRemoteMetadata(ctx.Context, diff.Branch)
+		return eng.AcceptRemoteMetadata(ctx, diff.Branch)
 	}
 	eng.RejectRemoteMetadata(diff.Branch)
 	return nil

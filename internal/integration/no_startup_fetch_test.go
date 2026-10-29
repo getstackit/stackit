@@ -16,6 +16,7 @@ import (
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/actions/track"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/cli/navigation"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
@@ -132,7 +133,7 @@ func TestSyncFetchesDuringSyncPhase(t *testing.T) {
 	s := remoteMetadataScenario(t)
 
 	ctx, counting := countingContext(t, s)
-	require.NoError(t, syncaction.Action(ctx, syncaction.Options{}, nil))
+	require.NoError(t, syncaction.Action(ctx.Context, common.SyncDeps(ctx), syncaction.Options{}, nil))
 
 	require.GreaterOrEqual(t, counting.fetchRefSpecs.Load(), int64(1),
 		"sync must fetch from the remote during its sync phase")

@@ -6,7 +6,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/git"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 )
 
@@ -14,22 +13,20 @@ import (
 // It skips branches that are trunk, locked, frozen, or in a dirty stack.
 // This allows the sync command to fast-forward branches when someone else pushes
 // commits to a stack branch from another machine.
-func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStatuses engine.BranchRemoteStatuses, handler Handler, summary *Summary) error {
-	eng := ctx.Engine
-	nav := ctx.Navigator()
-	gctx := ctx.Context
-	remote := eng.GetRemote(ctx.Context)
+func syncStackBranches(ctx context.Context, deps Deps, dirtyAnchors dirtyAnchorSet, remoteStatuses engine.BranchRemoteStatuses, handler Handler, summary *Summary) error {
+	eng := deps.Engine
+	remote := eng.GetRemote(ctx)
 
 	// Emit phase started event
 	handler.EmitEvent(Event{Phase: PhaseBranches, Type: EventStarted})
 
 	// Get all tracked branches
-	allBranches := nav.AllBranches()
+	allBranches := eng.AllBranches()
 	// Remote statuses are normally prefetched in sync's parallel phase so the
 	// ls-remote overlaps the trunk fetch and GitHub call. Fall back to computing
 	// them here when the caller didn't supply them.
 	if remoteStatuses == nil {
-		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+		remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
 		remoteStatuses = eng.ReadBranchRemoteStatuses(remoteCtx, allBranches)
 		cancelRemote()
 	}
@@ -39,7 +36,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 	statusCheckCount := 0
 	branchesSynced := 0
 	defer func() {
-		ctx.Logger.Info("syncStackBranches completed durationMs=%d branchCount=%d branchesSynced=%d statusChecksMs=%d statusCheckCount=%d",
+		deps.Log.Info("syncStackBranches completed durationMs=%d branchCount=%d branchesSynced=%d statusChecksMs=%d statusCheckCount=%d",
 			time.Since(syncStart).Milliseconds(), len(allBranches), branchesSynced, statusCheckTotalMs, statusCheckCount)
 	}()
 
@@ -48,8 +45,8 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 	var behind engine.Branches
 	for _, branch := range allBranches {
 		// Check for context cancellation
-		if err := gctx.Err(); err != nil {
-			return context.Cause(gctx)
+		if err := ctx.Err(); err != nil {
+			return context.Cause(ctx)
 		}
 
 		branchName := branch.Name()
@@ -75,7 +72,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 		}
 
 		// Skip branches in dirty stacks
-		if dirtyAnchors.includes(ctx, branchName) {
+		if dirtyAnchors.includes(eng, branchName) {
 			continue
 		}
 
@@ -101,14 +98,14 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 	// Fetch every behind branch in a single git fetch, replacing the previous
 	// N per-branch fetches (one network round trip instead of N).
 	behindNames := behind.Names()
-	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+	remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
 	defer cancelRemote()
 	fetchStart := time.Now()
 	fetchErr := eng.FetchRemote(remoteCtx, engine.RemoteFetchRequest{
 		Remote:   remote,
 		Branches: behindNames,
 	})
-	ctx.Logger.Info("batch fetch stack branches completed durationMs=%d branchCount=%d fetchErr=%v",
+	deps.Log.Info("batch fetch stack branches completed durationMs=%d branchCount=%d fetchErr=%v",
 		time.Since(fetchStart).Milliseconds(), len(behindNames), fetchErr)
 
 	// Pass 2: apply the fast-forward for each branch. When the batch fetch
@@ -119,8 +116,8 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 	// remoteCtx so a single deadline governs the whole pass.
 	for _, branch := range behind {
 		// Check for context cancellation
-		if err := gctx.Err(); err != nil {
-			return context.Cause(gctx)
+		if err := ctx.Err(); err != nil {
+			return context.Cause(ctx)
 		}
 
 		branchName := branch.Name()
@@ -133,9 +130,9 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 		} else {
 			result, err = eng.UpdateBranchFromRemote(remoteCtx, remote, branchName)
 		}
-		ctx.Logger.Info("update branch from remote completed branch=%v durationMs=%v", branchName, time.Since(pullStart).Milliseconds())
+		deps.Log.Info("update branch from remote completed branch=%v durationMs=%v", branchName, time.Since(pullStart).Milliseconds())
 
-		if applyBranchSyncResult(ctx.Context, branch, result, err, handler, summary) {
+		if applyBranchSyncResult(ctx, branch, result, err, handler, summary) {
 			branchesSynced++
 		}
 	}

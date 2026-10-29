@@ -7,6 +7,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 
@@ -60,7 +61,7 @@ func TestSquashMergeMultiCommitParent(t *testing.T) {
 	sh.CommitChange("file-p", "v1\nv2\nv3")
 	markPrMerged(t, sh, "parent", 1, mainName)
 
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -204,7 +205,7 @@ func TestSyncCleansUpSquashMergedBranchWithStalePRState(t *testing.T) {
 	// PR number is recorded, but its state is stale (still OPEN) — not MERGED.
 	markPrWithState(t, sh, "feature", 7, "OPEN", mainName)
 
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -236,7 +237,7 @@ func TestSyncKeepsUnmergedBranchWithPRNumber(t *testing.T) {
 
 	markPrWithState(t, sh, "feature", 9, "OPEN", mainName)
 
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -282,7 +283,7 @@ func TestSquashMergedSiblingKeepsOwnCommit(t *testing.T) {
 	sh.CommitChange("file-a", "a1\na2")
 	markPrMerged(t, sh, "branch-a", 1, mainName)
 
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	// A is cleaned up; B survives.
 	branches, err := sh.Scene.Repo.LocalBranches()

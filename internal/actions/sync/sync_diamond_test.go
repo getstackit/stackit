@@ -125,7 +125,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 			},
 		}
 
-		syncResult, err := PushParentsToGitHub(s.Context, githubResult, nil)
+		syncResult, err := PushParentsToGitHub(s.Context.Context, DepsFrom(s.Context), githubResult, nil)
 		require.NoError(t, err)
 
 		// Verify that branch-c's PR base was updated on GitHub
@@ -250,7 +250,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 		s.Checkout("branch-a")
 
 		// Sync
-		err = Action(s.Context, Options{
+		err = Action(s.Context.Context, DepsFrom(s.Context), Options{
 			All:     false,
 			Force:   false,
 			Restack: true, // Include restack this time
@@ -327,7 +327,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 		})
 
 		// Sync - should PRESERVE branch-a as local parent and push to GitHub
-		err = Action(s.Context, Options{
+		err = Action(s.Context.Context, DepsFrom(s.Context), Options{
 			All:     false,
 			Force:   false,
 			Restack: false,

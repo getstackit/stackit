@@ -28,7 +28,8 @@ func TestCleanBranchesNonInteractiveRespectsDirtyStackFilter(t *testing.T) {
 
 	// Non-interactive path uses NullHandler. Dirty stack filter should prevent deletion.
 	result, err := cleanBranches(
-		s.Context,
+		s.Context.Context,
+		DepsFrom(s.Context),
 		&Options{Force: true},
 		map[string]bool{"branch1": true},
 		nil,
@@ -87,7 +88,8 @@ func TestCleanBranchesInteractiveDoesNotAutoDeleteUnpushedUtilityBranch(t *testi
 
 	handler := &interactiveDeleteTestHandler{}
 	result, err := cleanBranches(
-		s.Context,
+		s.Context.Context,
+		DepsFrom(s.Context),
 		&Options{Force: true},
 		nil,
 		nil,

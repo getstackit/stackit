@@ -91,6 +91,7 @@ linters:
             - "**/internal/actions/squash/**"
             - "**/internal/actions/state/**"
             - "**/internal/actions/submit/**"
+            - "**/internal/actions/sync/**"
             - "**/internal/actions/track/**"
             - "**/internal/actions/undo/**"
             - "**/internal/actions/untrack/**"

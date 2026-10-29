@@ -63,7 +63,7 @@ func PostMergeSync(ctx *app.Context, opts PostMergeSyncOptions, newSyncHandler f
 	}
 
 	wrapped := &postMergeSyncHandler{Handler: newSyncHandler()}
-	err = sync.Action(ctx, sync.Options{
+	err = sync.Action(ctx.Context, syncDeps(ctx), sync.Options{
 		Restack:      true,
 		RestackScope: opts.RestackScope,
 	}, wrapped)
@@ -90,4 +90,22 @@ func (h *postMergeSyncHandler) PromptResolveConflicts(_ []string) (bool, error) 
 func (h *postMergeSyncHandler) Complete(summary sync.Summary) {
 	h.summary = summary
 	h.Handler.Complete(summary)
+}
+
+// syncDeps builds sync's collaborators from merge's runtime context. Actions
+// cannot reach the CLI's builder, so merge assembles them here.
+func syncDeps(ctx *app.Context) sync.Deps {
+	return sync.Deps{
+		Engine:    ctx.Engine,
+		Out:       ctx.Output,
+		Log:       ctx.Logger,
+		GitHub:    ctx.GitHub,
+		GHRunner:  ctx.GHRunner,
+		PRSync:    actions.PRSyncFrom(ctx),
+		Restack:   actions.RestackDepsFrom(ctx),
+		Cleanup:   actions.CleanBranchesDepsFrom(ctx),
+		Snapshots: actions.SnapshotsFrom(ctx),
+		Here:      actions.HereFrom(ctx),
+		Config:    ctx.Config,
+	}
 }

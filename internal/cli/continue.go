@@ -20,7 +20,7 @@ This command will continue the rebase and resume restacking remaining branches.`
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				return actions.ContinueAction(ctx, actions.ContinueOptions{
+				return actions.ContinueAction(ctx.Context, actions.ContinueDepsFrom(ctx), actions.ContinueOptions{
 					AddAll: addAll,
 				})
 			})

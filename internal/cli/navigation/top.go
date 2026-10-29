@@ -4,7 +4,7 @@ import (
 	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/checkout"
 	"github.com/getstackit/stackit/internal/actions/navigation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -26,11 +26,11 @@ to follow.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
 				handler := stack.NewNavigationUI(ctx.Output, term.IsInteractive())
-				result, err := navigation.SwitchBranchAction(navigation.DirectionTop, ctx, handler)
+				result, err := navigation.SwitchBranchAction(ctx.Context, navigationDeps(ctx), navigation.DirectionTop, handler)
 				if err != nil {
 					return err
 				}
-				return common.CompleteCheckout(ctx, result, actions.CheckoutOptions{BranchName: result.TargetBranch}, nil)
+				return common.CompleteCheckout(ctx, result, checkout.Options{BranchName: result.TargetBranch}, nil)
 			})
 		},
 	}

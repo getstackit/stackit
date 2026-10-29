@@ -189,8 +189,10 @@ split so each half depends only on what it uses:
 
 Neither writes output directly: progress goes to the `ProgressFunc`, and
 `restack.TextReporter` renders it for commands without a progress UI.
-`actions.RestackBranches` is the `*app.Context` adapter that builds both for
-not-yet-converted callers.
+Converted actions get a `restack.Runner` through `actions.MutationDeps`; the
+command-level pipeline (`PlanRestack`, `RestackAction`, `RunRestack`) takes
+`actions.RestackDeps`. The CLI builds both from its `app.Context`
+(`MutationDepsFrom`, `RestackDepsFrom`).
 
 ## Transitional Guidance
 

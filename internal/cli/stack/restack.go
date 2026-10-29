@@ -99,7 +99,8 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 
 				// Build the plan once. RestackAction reuses it so we don't
 				// pay for engine.PlanRestack twice (~3 git ops per branch).
-				plan, err := actions.PlanRestack(ctx, opts)
+				deps := actions.RestackDepsFrom(ctx)
+				plan, err := actions.PlanRestack(ctx, deps, opts)
 				if err != nil {
 					return err
 				}
@@ -108,7 +109,7 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 				if jsonOutput {
 					cmd.SilenceErrors = true
 					jsonHandler := NewJSONRestackHandler()
-					err := actions.RestackAction(ctx, plan, jsonHandler)
+					err := actions.RestackAction(ctx, deps, plan, jsonHandler)
 
 					// Set error status if there was an error
 					if err != nil {
@@ -141,14 +142,14 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 				// modifyOtherKeys, mode reports) don't leak as garbled text on
 				// terminals that don't recognize them.
 				if !plan.HasWork() {
-					return actions.RestackAction(ctx, plan, NewSimpleSyncHandler(ctx.Output))
+					return actions.RestackAction(ctx, deps, plan, NewSimpleSyncHandler(ctx.Output))
 				}
 
 				// Create runner (manages terminal state) and handler (processes events)
 				runner, handler := NewSyncUI(ctx.Output, ctx.Logger)
 				defer runner.Cleanup()
 
-				return actions.RestackAction(ctx, plan, handler)
+				return actions.RestackAction(ctx, deps, plan, handler)
 			})
 		},
 	}

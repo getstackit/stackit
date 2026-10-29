@@ -3,9 +3,10 @@ package integration
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/actions/get"
+
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
 	worktreeaction "github.com/getstackit/stackit/internal/actions/worktree"
@@ -17,12 +18,12 @@ import (
 // the message explaining why. EmitEvent is only called from get's sequential
 // sync loop, so no locking is needed.
 type skipRecordingGetHandler struct {
-	actions.GetNullHandler
+	get.NullHandler
 	skipped map[string]string
 }
 
-func (h *skipRecordingGetHandler) EmitEvent(e actions.GetEvent) {
-	if e.Type != actions.GetEventSkipped {
+func (h *skipRecordingGetHandler) EmitEvent(e get.Event) {
+	if e.Type != get.EventSkipped {
 		return
 	}
 	if h.skipped == nil {
@@ -76,7 +77,7 @@ func TestGetSkipsBranchHeldByAnotherWorktree(t *testing.T) {
 			require.NoError(t, err)
 
 			handler := &skipRecordingGetHandler{}
-			require.NoError(t, actions.GetAction(sh.Context, "b", actions.GetOptions{Restack: false}, handler),
+			require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "b", get.Options{Restack: false}, handler),
 				"a branch held elsewhere must not fail the whole run")
 			sh.Rebuild()
 

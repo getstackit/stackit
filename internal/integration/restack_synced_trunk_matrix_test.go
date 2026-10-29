@@ -109,12 +109,12 @@ func TestRestackOnSyncedTrunkMatrix(t *testing.T) {
 			}
 
 			sh.Checkout("child")
-			plan, err := actions.PlanRestack(sh.Context, actions.RestackOptions{
+			plan, err := actions.PlanRestack(sh.Context, actions.RestackDepsFrom(sh.Context), actions.RestackOptions{
 				BranchName: "child",
 				Scope:      engine.StackRangeFull(),
 			})
 			require.NoError(t, err)
-			require.NoError(t, actions.RestackAction(sh.Context, plan, &actions.NullRestackHandler{}))
+			require.NoError(t, actions.RestackAction(sh.Context, actions.RestackDepsFrom(sh.Context), plan, &actions.NullRestackHandler{}))
 			sh.Rebuild()
 
 			require.Equal(t, mainName, sh.Engine.GetBranch("child").Parent().Name(),

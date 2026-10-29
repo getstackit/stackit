@@ -15,6 +15,19 @@ import (
 	"github.com/getstackit/stackit/internal/output"
 )
 
+// CleanBranchesDeps are the collaborators branch cleanup needs.
+type CleanBranchesDeps struct {
+	Engine engine.Engine
+	Out    output.Output
+	Log    output.Logger
+}
+
+// CleanBranchesDepsFrom builds CleanBranchesDeps from the command's runtime
+// context.
+func CleanBranchesDepsFrom(ctx *app.Context) CleanBranchesDeps {
+	return CleanBranchesDeps{Engine: ctx.Engine, Out: ctx.Output, Log: ctx.Logger}
+}
+
 // CleanBranchesOptions contains options for cleaning branches
 type CleanBranchesOptions struct {
 	Force             bool
@@ -102,15 +115,15 @@ func (p *deletionPlan) removeBlocker(branchName, blockerName string) {
 
 // PlanBranchDeletions identifies branches that should be deleted and builds a deletion plan.
 // This does NOT execute any deletions - use ExecuteBranchDeletions to apply the plan.
-func PlanBranchDeletions(ctx *app.Context, opts CleanBranchesOptions) (*BranchDeletionPlan, error) {
+func PlanBranchDeletions(ctx context.Context, deps CleanBranchesDeps, opts CleanBranchesOptions) (*BranchDeletionPlan, error) {
 	// Phase 1: Identify candidates for deletion
-	deleteStatuses, skippedInWorktree, utilityBranches, err := identifyBranchesToDelete(ctx, opts)
+	deleteStatuses, skippedInWorktree, utilityBranches, err := identifyBranchesToDelete(ctx, deps, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	// Phase 2: Build deletion plan
-	plan, branchesWithNewParents, reparentMoves := buildDeletionPlan(ctx, deleteStatuses)
+	plan, branchesWithNewParents, reparentMoves := buildDeletionPlan(ctx, deps, deleteStatuses)
 
 	// Build the public plan
 	branchesToDelete := make(map[string]string)
@@ -139,7 +152,7 @@ func PlanBranchDeletions(ctx *app.Context, opts CleanBranchesOptions) (*BranchDe
 // ExecuteBranchDeletions executes a previously planned deletion.
 // The branchesToDelete parameter allows filtering which branches from the plan to actually delete.
 // If nil, all planned branches are deleted.
-func ExecuteBranchDeletions(ctx *app.Context, plannedDeletion *BranchDeletionPlan, branchesToDelete map[string]bool) (*CleanBranchesResult, error) {
+func ExecuteBranchDeletions(ctx context.Context, deps CleanBranchesDeps, plannedDeletion *BranchDeletionPlan, branchesToDelete map[string]bool) (*CleanBranchesResult, error) {
 	plan := plannedDeletion.plan
 	branchesWithNewParents := plannedDeletion.BranchesWithNewParents
 	reparentMoves := plannedDeletion.reparentMoves
@@ -163,7 +176,7 @@ func ExecuteBranchDeletions(ctx *app.Context, plannedDeletion *BranchDeletionPla
 			filteredStatuses[name] = status
 		}
 
-		plan, branchesWithNewParents, reparentMoves = buildDeletionPlan(ctx, filteredStatuses)
+		plan, branchesWithNewParents, reparentMoves = buildDeletionPlan(ctx, deps, filteredStatuses)
 	}
 
 	// Record each planned branch's reason before execution, which removes them
@@ -174,12 +187,12 @@ func ExecuteBranchDeletions(ctx *app.Context, plannedDeletion *BranchDeletionPla
 		reasons[name] = info.reason
 	}
 
-	if err := applyReparentMoves(ctx, reparentMoves, plan.branchNames()); err != nil {
+	if err := applyReparentMoves(ctx, deps, reparentMoves, plan.branchNames()); err != nil {
 		return nil, err
 	}
 
 	// Execute deletions
-	deleted, skippedCheckedOut, err := executeDeletions(ctx, plan)
+	deleted, skippedCheckedOut, err := executeDeletions(ctx, deps, plan)
 	if err != nil {
 		return nil, err
 	}
@@ -200,11 +213,11 @@ func ExecuteBranchDeletions(ctx *app.Context, plannedDeletion *BranchDeletionPla
 // identifyBranchesToDelete pre-calculates deletion status for all tracked branches.
 // Returns the branches to delete, any branches that were skipped due to being in a worktree,
 // and which branches are utility branches (e.g., consolidated merge branches).
-func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (engine.DeletionStatuses, []string, map[string]bool, error) {
-	eng := ctx.Engine
-	c := ctx.Context
+func identifyBranchesToDelete(ctx context.Context, deps CleanBranchesDeps, opts CleanBranchesOptions) (engine.DeletionStatuses, []string, map[string]bool, error) {
+	eng := deps.Engine
+	c := ctx
 
-	ctx.Logger.Info("identifyBranchesToDelete started force=%v inManagedWorktree=%v", opts.Force, opts.InManagedWorktree)
+	deps.Log.Info("identifyBranchesToDelete started force=%v inManagedWorktree=%v", opts.Force, opts.InManagedWorktree)
 	identifyStart := time.Now()
 
 	// Collect non-trunk candidate branch names
@@ -214,7 +227,7 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (engi
 	// Single batch call to engine for deletion statuses
 	batchStart := time.Now()
 	statuses, err := eng.GetDeletionStatuses(c, candidateNames)
-	ctx.Logger.Info("GetDeletionStatuses completed durationMs=%d candidateCount=%d ok=%v",
+	deps.Log.Info("GetDeletionStatuses completed durationMs=%d candidateCount=%d ok=%v",
 		time.Since(batchStart).Milliseconds(), len(candidateNames), err == nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to get deletion statuses: %w", err)
@@ -231,7 +244,7 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (engi
 				branchesNeedingRemoteStatus.Add(eng.GetBranch(name))
 			}
 		}
-		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+		remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
 		remoteStatuses = eng.ReadBranchRemoteStatuses(remoteCtx, branchesNeedingRemoteStatus.Build())
 		cancelRemote()
 	}
@@ -245,7 +258,7 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (engi
 		// Skip current branch if in a managed worktree (can't checkout trunk to delete it)
 		if opts.InManagedWorktree && name == opts.CurrentBranch {
 			skippedInWorktree = append(skippedInWorktree, name)
-			ctx.Logger.Info("identifyBranchesToDelete skipped (worktree) branch=%v", name)
+			deps.Log.Info("identifyBranchesToDelete skipped (worktree) branch=%v", name)
 			continue
 		}
 
@@ -260,7 +273,7 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (engi
 		if remoteStatus.Ahead() || remoteStatus.Diverged() ||
 			(status.Kind == engine.DeletionReasonClosedPR && remoteStatus.MissingRemote()) {
 			status.HasUnpushedChanges = true
-			ctx.Logger.Info("identifyBranchesToDelete branch has unpushed or unverifiable changes branch=%v ahead=%v diverged=%v missingRemote=%v", name, remoteStatus.Ahead(), remoteStatus.Diverged(), remoteStatus.MissingRemote())
+			deps.Log.Info("identifyBranchesToDelete branch has unpushed or unverifiable changes branch=%v ahead=%v diverged=%v missingRemote=%v", name, remoteStatus.Ahead(), remoteStatus.Diverged(), remoteStatus.MissingRemote())
 		}
 
 		deleteStatuses[name] = status
@@ -270,10 +283,10 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (engi
 			utilityBranches[name] = true
 		}
 
-		ctx.Logger.Info("identifyBranchesToDelete marked for deletion branch=%v reason=%v unpushed=%v", name, status.Reason, status.HasUnpushedChanges)
+		deps.Log.Info("identifyBranchesToDelete marked for deletion branch=%v reason=%v unpushed=%v", name, status.Reason, status.HasUnpushedChanges)
 	}
 
-	ctx.Logger.Info("identifyBranchesToDelete completed durationMs=%d toDeleteCount=%v skippedCount=%v",
+	deps.Log.Info("identifyBranchesToDelete completed durationMs=%d toDeleteCount=%v skippedCount=%v",
 		time.Since(identifyStart).Milliseconds(), len(deleteStatuses), len(skippedInWorktree))
 
 	return deleteStatuses, skippedInWorktree, utilityBranches, nil
@@ -281,9 +294,9 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (engi
 
 // buildDeletionPlan constructs the deletion hierarchy and records parent updates
 // for surviving branches. It does not mutate branch metadata.
-func buildDeletionPlan(ctx *app.Context, deleteStatuses engine.DeletionStatuses) (*deletionPlan, []string, []plannedReparentMove) {
-	eng := ctx.Engine
-	out := ctx.Output
+func buildDeletionPlan(ctx context.Context, deps CleanBranchesDeps, deleteStatuses engine.DeletionStatuses) (*deletionPlan, []string, []plannedReparentMove) {
+	eng := deps.Engine
+	out := deps.Out
 
 	plan := newDeletionPlan()
 	branchesWithNewParents := []string{}
@@ -291,7 +304,7 @@ func buildDeletionPlan(ctx *app.Context, deleteStatuses engine.DeletionStatuses)
 	visited := make(map[string]bool)
 
 	// Build StackGraph for efficient traversals
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	// Start DFS from trunk children to handle the tracked hierarchy
 	trunk := eng.Trunk()
@@ -307,7 +320,7 @@ func buildDeletionPlan(ctx *app.Context, deleteStatuses engine.DeletionStatuses)
 	// trunk-children DFS above misses them entirely. Synthesize deletion
 	// entries for each ghost so the existing reparent + cleanup machinery
 	// runs against them.
-	branchesToProcess = appendStrandedRoots(ctx.Context, eng, graph, deleteStatuses, branchesToProcess)
+	branchesToProcess = appendStrandedRoots(ctx, eng, graph, deleteStatuses, branchesToProcess)
 
 	for len(branchesToProcess) > 0 {
 		branchName := branchesToProcess[len(branchesToProcess)-1]
@@ -370,21 +383,21 @@ var errMainWorktreeCheckout = errors.New("checked out in the main working tree")
 //
 // Returns the branches actually deleted and those skipped because they are
 // checked out in the main working tree.
-func executeDeletions(ctx *app.Context, plan *deletionPlan) ([]string, []string, error) {
+func executeDeletions(ctx context.Context, deps CleanBranchesDeps, plan *deletionPlan) ([]string, []string, error) {
 	if len(plan.branches) == 0 {
 		return nil, nil, nil
 	}
 
-	eng := ctx.Engine
-	out := ctx.Output
-	c := ctx.Context
+	eng := deps.Engine
+	out := deps.Out
+	c := ctx
 
 	// Snapshot the worktree list once for the whole cleanup. Deleting a
 	// worktree cannot make another branch appear in a worktree, so this list is
 	// sufficient for every branch selected below.
 	listStart := time.Now()
 	worktrees, err := eng.ListWorktrees(c)
-	ctx.Logger.Info("list worktrees for cleanup completed durationMs=%d worktreeCount=%d",
+	deps.Log.Info("list worktrees for cleanup completed durationMs=%d worktreeCount=%d",
 		time.Since(listStart).Milliseconds(), len(worktrees))
 	if err != nil {
 		out.Debug("Failed to list worktrees for branch cleanup: %v", err)
@@ -415,7 +428,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) ([]string, []string,
 	}, func(name string) string {
 		return getParentName(eng.GetBranch(name))
 	})
-	ctx.Logger.Info("select branches for cleanup completed durationMs=%d branchCount=%d worktreesRemoved=%d worktreesFailed=%d skippedCheckedOut=%d",
+	deps.Log.Info("select branches for cleanup completed durationMs=%d branchCount=%d worktreesRemoved=%d worktreesFailed=%d skippedCheckedOut=%d",
 		time.Since(selectionStart).Milliseconds(), len(branchNames), worktreesRemoved, worktreesFailed, len(skippedCheckedOut))
 
 	if len(branchNames) == 0 {
@@ -429,7 +442,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) ([]string, []string,
 
 	engineStart := time.Now()
 	_, engineErr := eng.DeleteBranches(c, branches.Build())
-	ctx.Logger.Info("engine delete branches completed durationMs=%d branchCount=%d ok=%v",
+	deps.Log.Info("engine delete branches completed durationMs=%d branchCount=%d ok=%v",
 		time.Since(engineStart).Milliseconds(), len(branchNames), engineErr == nil)
 	if engineErr != nil {
 		return nil, skippedCheckedOut, fmt.Errorf("failed to delete branches [%s]: %w", strings.Join(branchNames, ", "), engineErr)
@@ -437,7 +450,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) ([]string, []string,
 
 	pushStart := time.Now()
 	err = eng.DeleteRemoteMetadataForBranches(c, branchNames)
-	ctx.Logger.Info("delete remote metadata refs completed durationMs=%d branchCount=%d ok=%v",
+	deps.Log.Info("delete remote metadata refs completed durationMs=%d branchCount=%d ok=%v",
 		time.Since(pushStart).Milliseconds(), len(branchNames), err == nil)
 	if err != nil {
 		out.Debug("Failed to batch delete remote metadata: %v", err)
@@ -590,12 +603,12 @@ func shouldPreserveDivergenceOnReparent(plan *deletionPlan, oldParentName string
 	}
 }
 
-func applyReparentMoves(ctx *app.Context, moves []plannedReparentMove, removed []string) error {
+func applyReparentMoves(ctx context.Context, deps CleanBranchesDeps, moves []plannedReparentMove, removed []string) error {
 	if len(moves) == 0 {
 		return nil
 	}
 
-	eng := ctx.Engine
+	eng := deps.Engine
 	updates := make([]engine.BranchParentUpdate, len(moves))
 	for i, move := range moves {
 		mode := engine.DivergenceRecompute
@@ -608,11 +621,11 @@ func applyReparentMoves(ctx *app.Context, moves []plannedReparentMove, removed [
 			Mode:      mode,
 		}
 	}
-	if err := eng.ApplyParentUpdatesAfterRemovals(ctx.Context, updates, removed); err != nil {
+	if err := eng.ApplyParentUpdatesAfterRemovals(ctx, updates, removed); err != nil {
 		return fmt.Errorf("failed to set parent updates: %w", err)
 	}
 	for _, move := range moves {
-		ctx.Output.Info("Set parent of %s to %s.",
+		deps.Out.Info("Set parent of %s to %s.",
 			output.BranchName(move.branchName),
 			output.BranchName(move.newParentName))
 	}

@@ -15,13 +15,8 @@ import (
 	"github.com/getstackit/stackit/internal/output"
 
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 )
-
-func printRerereResolved(ctx *app.Context, count int) {
-	ctx.Output.Info("%s", restack.FormatRerereResolved(count))
-}
 
 // SnapshotEngine is the engine surface undo snapshots use.
 type SnapshotEngine interface {
@@ -83,71 +78,8 @@ func MutationDepsFrom(ctx *app.Context) MutationDeps {
 // RestackRunner builds the restack runner for the command's runtime context,
 // printing per-branch results as plain text.
 func RestackRunner(ctx *app.Context) restack.Runner {
-	planner, executor := restacker(ctx, nil)
+	planner, executor := restackerFor(RestackDepsFrom(ctx), nil)
 	return restack.Runner{Planner: planner, Executor: executor}
-}
-
-// Restacker is a minimal interface needed for restacking branches
-type Restacker interface {
-	engine.BranchReader
-	engine.SyncManager
-}
-
-// RestackBranches restacks a list of branches using the engine's batch restack method
-func RestackBranches(ctx *app.Context, branches engine.Branches) error {
-	return RestackBranchesWithHandler(ctx, branches, nil, restack.ConflictEnterWorkflow)
-}
-
-// RestackBranchesWithHandler restacks branches with optional progress callback.
-// See restack.ConflictMode for how mode controls conflict handling.
-func RestackBranchesWithHandler(ctx *app.Context, branches engine.Branches, callback restack.ProgressFunc, mode restack.ConflictMode) error {
-	return restackBranchesWithPlan(ctx, branches, nil, callback, mode, nil)
-}
-
-// restacker builds the restack planner and executor for one command run.
-// report receives each branch's outcome; nil prints plain text instead.
-func restacker(ctx *app.Context, report restack.ProgressFunc) (restack.Planner, restack.Executor) {
-	if report == nil {
-		report = restack.TextReporter(ctx.Output)
-	}
-	return restack.Planner{Engine: ctx.Engine, Log: ctx.Logger}, restack.Executor{
-		Engine:        ctx.Engine,
-		Log:           ctx.Logger,
-		Report:        report,
-		Continuations: restack.ContinuationFile(ctx.RepoRoot),
-		Conflicts:     conflictReporter(ctx),
-	}
-}
-
-func conflictReporter(ctx *app.Context) *restack.ConflictReporter {
-	return &restack.ConflictReporter{Engine: ctx.Engine, Out: ctx.Output, RepoRoot: ctx.RepoRoot}
-}
-
-// restackBranchesWithPlan plans and executes a restack of branches. When
-// prePlan is non-nil the engine plan is reused rather than recomputed — used
-// by RestackAction, which already built it to gate TUI initialization.
-// resume is set when continuing an interrupted command.
-func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan *engine.RestackPlan, report restack.ProgressFunc, mode restack.ConflictMode, resume *config.ContinuationState) error {
-	planner, executor := restacker(ctx, report)
-	plan, err := planner.Plan(ctx.Context, branches, prePlan)
-	if err != nil {
-		return err
-	}
-	return executor.Execute(ctx.Context, plan, mode, resume)
-}
-
-// ResolveConflictWorkflow enters the conflict workflow from an interactive
-// "resolve conflicts now?" prompt by re-running the conflicted stack in
-// restack.ConflictEnterWorkflow. The prompt paths run their initial restack in
-// restack.ConflictContinue, which holds back the ENTIRE conflicted stack — the
-// conflict branch's ancestors included. Calling EnterConflictWorkflow directly
-// from that state would rebase the conflict branch against its never-moved
-// parent, find no conflict, and fail after detaching HEAD. Re-running in
-// EnterWorkflow mode applies the ancestors first (that mode is exempt from
-// per-stack atomicity on purpose) and then enters the conflict on top of them.
-// stackBranches must be the conflicted stack in topological order.
-func ResolveConflictWorkflow(ctx *app.Context, stackBranches engine.Branches) error {
-	return restackBranchesWithPlan(ctx, stackBranches, nil, nil, restack.ConflictEnterWorkflow, nil)
 }
 
 // wordBranch is the pluralizable noun passed to PluralSuffix/Pluralize by
@@ -247,10 +179,4 @@ func WithFlagValue(flag string, value string) SnapshotOption {
 			opts.Args = append(opts.Args, flag, value)
 		}
 	}
-}
-
-// PrintConflictStatus displays conflict information and instructions to the user.
-// Assumes a rebase is in progress.
-func PrintConflictStatus(ctx *app.Context, branchName string) error {
-	return conflictReporter(ctx).Print(ctx.Context, branchName)
 }

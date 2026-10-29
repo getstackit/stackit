@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/actions/checkout"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/output"
@@ -22,24 +22,34 @@ const (
 	DirectionTop Direction = "TOP"
 )
 
-// navigationEngine lists exactly the engine methods navigation calls.
-type navigationEngine interface {
-	engine.BranchLookup
-	CurrentBranch(ctx context.Context) *engine.Branch
-	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+// Engine lists exactly the engine methods navigation calls, including those
+// of the checkout it finishes with.
+type Engine interface {
+	checkout.Engine
+}
+
+// Deps are the collaborators navigation needs. Adapters build them from their
+// own runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	Out    output.Output
+	// Log, Quiet and Here pass through to the checkout of the target branch.
+	Log   output.Logger
+	Quiet bool
+	Here  actions.Here
 }
 
 // SwitchBranchAction switches to a branch based on the given direction
-func SwitchBranchAction(direction Direction, ctx *app.Context, handler Handler) (actions.CheckoutResult, error) {
+func SwitchBranchAction(ctx context.Context, deps Deps, direction Direction, handler Handler) (checkout.Result, error) {
 	if handler == nil {
 		handler = &NullHandler{}
 	}
 	defer handler.Cleanup()
 
-	var eng navigationEngine = ctx.Engine
-	currentBranch := eng.CurrentBranch(ctx.Context)
+	eng := deps.Engine
+	currentBranch := eng.CurrentBranch(ctx)
 	if currentBranch == nil {
-		return actions.CheckoutResult{}, errors.ErrNotOnBranch
+		return checkout.Result{}, errors.ErrNotOnBranch
 	}
 
 	var targetBranch string
@@ -49,17 +59,17 @@ func SwitchBranchAction(direction Direction, ctx *app.Context, handler Handler) 
 	case DirectionBottom:
 		// Walks the parent chain only — no full graph needed, so the command can
 		// run under LoadModeBranchesOnly and lazily promote just the chain.
-		targetBranch = traverseDownward(currentBranch.Name(), eng, ctx.Output)
+		targetBranch = traverseDownward(currentBranch.Name(), eng, deps.Out)
 	case DirectionTop:
 		// Walking toward the tips needs child relationships, which requires the
 		// full stack graph.
-		graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
-		targetBranch, err = traverseUpward(currentBranch.Name(), eng, ctx.Output, graph, handler)
+		graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
+		targetBranch, err = traverseUpward(currentBranch.Name(), eng, deps.Out, graph, handler)
 		if err != nil {
-			return actions.CheckoutResult{}, err
+			return checkout.Result{}, err
 		}
 	default:
-		return actions.CheckoutResult{}, fmt.Errorf("invalid direction: %s", direction)
+		return checkout.Result{}, fmt.Errorf("invalid direction: %s", direction)
 	}
 
 	if targetBranch == currentBranch.Name() {
@@ -67,14 +77,20 @@ func SwitchBranchAction(direction Direction, ctx *app.Context, handler Handler) 
 		if direction == DirectionTop {
 			directionText = "top most"
 		}
-		ctx.Output.Info("Already at the %s branch in the stack.", directionText)
-		return actions.CheckoutResult{}, nil
+		deps.Out.Info("Already at the %s branch in the stack.", directionText)
+		return checkout.Result{}, nil
 	}
 
 	// Checkout the target branch
-	result, err := actions.CheckoutAction(ctx, actions.CheckoutOptions{BranchName: targetBranch}, nil)
+	result, err := checkout.Action(ctx, checkout.Deps{
+		Engine: deps.Engine,
+		Out:    deps.Out,
+		Log:    deps.Log,
+		Quiet:  deps.Quiet,
+		Here:   deps.Here,
+	}, checkout.Options{BranchName: targetBranch}, nil)
 	if err != nil {
-		return actions.CheckoutResult{}, fmt.Errorf("failed to checkout branch %s: %w", targetBranch, err)
+		return checkout.Result{}, fmt.Errorf("failed to checkout branch %s: %w", targetBranch, err)
 	}
 
 	return result, nil

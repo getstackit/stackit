@@ -272,7 +272,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			))
 		}
 		handler.OnEvent(RestackEvent{Started: true})
-		restack, err := actions.RunRestack(ctx, actions.RestackRequest{
+		restack, err := actions.RunRestack(ctx, actions.RestackDepsFrom(ctx), actions.RestackRequest{
 			Branches:       branchObjs,
 			ConflictPolicy: actions.RestackConflictEnterWorkflow,
 		}, actions.RestackBranchFunc(func(event actions.RestackBranchEvent) {

@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/checkout"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/output"
 )
@@ -14,10 +15,22 @@ func HasShellIntegration() bool {
 	return os.Getenv("STACKIT_SHELL_INTEGRATION") == "1"
 }
 
-// HandleCheckoutResult handles the worktree switch result from CheckoutAction.
+// CheckoutDeps builds the checkout action's collaborators from the runtime
+// context.
+func CheckoutDeps(ctx *app.Context) checkout.Deps {
+	return checkout.Deps{
+		Engine: ctx.Engine,
+		Out:    ctx.Output,
+		Log:    ctx.Logger,
+		Quiet:  ctx.Quiet,
+		Here:   actions.HereFrom(ctx),
+	}
+}
+
+// HandleCheckoutResult handles the worktree switch result from checkout.Action.
 // Returns true if shell integration handled the switch (caller should return nil).
 // Returns false with tips printed if no shell integration.
-func HandleCheckoutResult(out output.Output, result actions.CheckoutResult) bool {
+func HandleCheckoutResult(out output.Output, result checkout.Result) bool {
 	if result.WorktreeSwitchPath == "" {
 		return false
 	}
@@ -34,12 +47,12 @@ func HandleCheckoutResult(out output.Output, result actions.CheckoutResult) bool
 	return false
 }
 
-// CompleteCheckout handles a CheckoutAction result, including a worktree switch
+// CompleteCheckout handles a checkout.Action result, including a worktree switch
 // when shell integration is available. Without shell integration, retain the
 // regular-checkout fallback only when the target is not already checked out in
 // another worktree; Git permits a branch to be checked out by only one
 // worktree at a time.
-func CompleteCheckout(ctx *app.Context, result actions.CheckoutResult, fallbackOpts actions.CheckoutOptions, handler actions.CheckoutHandler) error {
+func CompleteCheckout(ctx *app.Context, result checkout.Result, fallbackOpts checkout.Options, handler checkout.Handler) error {
 	if HandleCheckoutResult(ctx.Output, result) {
 		return nil
 	}
@@ -56,15 +69,15 @@ func CompleteCheckout(ctx *app.Context, result actions.CheckoutResult, fallbackO
 		fallbackOpts.BranchName = result.TargetBranch
 	}
 	fallbackOpts.SkipWorktreeSwitch = true
-	_, err = actions.CheckoutAction(ctx, fallbackOpts, handler)
+	_, err = checkout.Action(ctx.Context, CheckoutDeps(ctx), fallbackOpts, handler)
 	return err
 }
 
-// Checkout runs CheckoutAction and completes any worktree switch.
-func Checkout(ctx *app.Context, opts actions.CheckoutOptions, handler actions.CheckoutHandler) (actions.CheckoutResult, error) {
-	result, err := actions.CheckoutAction(ctx, opts, handler)
+// Checkout runs checkout.Action and completes any worktree switch.
+func Checkout(ctx *app.Context, opts checkout.Options, handler checkout.Handler) (checkout.Result, error) {
+	result, err := checkout.Action(ctx.Context, CheckoutDeps(ctx), opts, handler)
 	if err != nil {
-		return actions.CheckoutResult{}, err
+		return checkout.Result{}, err
 	}
 	return result, CompleteCheckout(ctx, result, opts, handler)
 }

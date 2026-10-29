@@ -32,12 +32,12 @@ import (
 func restackMineOntoTrunk(t *testing.T, sh *scenario.Scenario) {
 	t.Helper()
 	sh.Checkout("mine")
-	plan, err := actions.PlanRestack(sh.Context, actions.RestackOptions{
+	plan, err := actions.PlanRestack(sh.Context, actions.RestackDepsFrom(sh.Context), actions.RestackOptions{
 		BranchName: "mine",
 		Scope:      engine.StackRangeFull(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, actions.RestackAction(sh.Context, plan, &actions.NullRestackHandler{}))
+	require.NoError(t, actions.RestackAction(sh.Context, actions.RestackDepsFrom(sh.Context), plan, &actions.NullRestackHandler{}))
 	sh.Rebuild()
 }
 

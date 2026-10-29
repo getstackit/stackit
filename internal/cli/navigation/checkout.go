@@ -3,7 +3,7 @@ package navigation
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/checkout"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
@@ -41,13 +41,13 @@ by typing. Use flags to customize which branches are shown.`,
 
 			return common.RunWithOptions(cmd, globalOpts, func(ctx *app.Context) error {
 				// Create runner (manages terminal state) and handler (processes events)
-				runner, handler := NewCheckoutUI(ctx.Output, ctx.Logger)
+				runner, handler := NewCheckoutUI(ctx)
 				if runner != nil {
 					defer runner.Cleanup()
 				}
 
 				// Prepare options
-				opts := actions.CheckoutOptions{
+				opts := checkout.Options{
 					BranchName:    branchName,
 					ShowUntracked: showUntracked,
 					All:           all,

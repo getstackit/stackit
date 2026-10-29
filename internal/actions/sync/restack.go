@@ -75,7 +75,7 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 	// per-branch events reach the handler.
 	pauser, _ := handler.(rerere.Pauser)
 	restackStart := time.Now()
-	outcome, err := actions.RunRestack(ctx, actions.RestackRequest{
+	outcome, err := actions.RunRestack(ctx, actions.RestackDepsFrom(ctx), actions.RestackRequest{
 		Branches:       sortedBranches,
 		ConflictPolicy: actions.RestackConflictPrompt,
 		Prompter:       handler,

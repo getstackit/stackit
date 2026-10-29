@@ -1,4 +1,4 @@
-package actions_test
+package get_test
 
 import (
 	"context"
@@ -9,10 +9,24 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/get"
 	stackitgithub "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+// deps builds get's collaborators from the scenario. Call it after the test
+// has installed its GitHub client so the client is the one get sees.
+func deps(s *scenario.Scenario) get.Deps {
+	ctx := s.Context
+	return get.Deps{
+		Engine:      ctx.Engine,
+		Out:         ctx.Output,
+		GitHub:      ctx.GitHub,
+		GitHubError: ctx.GitHubError,
+		Restack:     actions.RestackDepsFrom(ctx),
+	}
+}
 
 type countingGitHubClient struct {
 	stackitgithub.Client
@@ -41,7 +55,7 @@ func (c *countingGitHubClient) branchCallCount(branchName string) int {
 	return c.branchCalls[branchName]
 }
 
-func TestGetAction(t *testing.T) {
+func TestAction(t *testing.T) {
 	t.Parallel()
 	t.Run("resolves PR number and fetches branches", func(t *testing.T) {
 		t.Parallel()
@@ -72,8 +86,8 @@ func TestGetAction(t *testing.T) {
 			RunGit("checkout", "main").
 			RunGit("branch", "-D", "feature-a")
 
-		// Run GetAction with PR number
-		err := actions.GetAction(s.Context, "123", actions.GetOptions{}, &actions.GetNullHandler{})
+		// Run get.Action with PR number
+		err := get.Action(t.Context(), deps(s), "123", get.Options{}, &get.NullHandler{})
 		require.NoError(t, err)
 
 		// Verify branch feature-a exists and is tracked
@@ -118,8 +132,8 @@ func TestGetAction(t *testing.T) {
 			RunGit("branch", "-D", "feature-a").
 			RunGit("branch", "-D", "feature-b")
 
-		// Run GetAction for feature-b
-		err := actions.GetAction(s.Context, "feature-b", actions.GetOptions{}, &actions.GetNullHandler{})
+		// Run get.Action for feature-b
+		err := get.Action(t.Context(), deps(s), "feature-b", get.Options{}, &get.NullHandler{})
 		require.NoError(t, err)
 
 		// Verify both branches are tracked correctly
@@ -154,8 +168,8 @@ func TestGetAction(t *testing.T) {
 
 		s.RunGit("remote", "add", "origin", s.Scene.Dir)
 
-		// Run GetAction for feature-a
-		err := actions.GetAction(s.Context, "feature-a", actions.GetOptions{}, &actions.GetNullHandler{})
+		// Run get.Action for feature-a
+		err := get.Action(t.Context(), deps(s), "feature-a", get.Options{}, &get.NullHandler{})
 		require.NoError(t, err)
 
 		// feature-b should also have been refreshed/checked out because it's upstack of a
@@ -168,7 +182,7 @@ func TestGetAction(t *testing.T) {
 		s.WithInitialCommit().
 			WithUncommittedChange("dirty.txt")
 
-		err := actions.GetAction(s.Context, "some-branch", actions.GetOptions{}, &actions.GetNullHandler{})
+		err := get.Action(t.Context(), deps(s), "some-branch", get.Options{}, &get.NullHandler{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "uncommitted changes")
 	})

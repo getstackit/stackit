@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/checkout"
 	"github.com/getstackit/stackit/internal/actions/navigation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -116,7 +116,7 @@ the --to flag is used to specify a target branch to navigate towards.`,
 					return nil
 				}
 
-				_, err = common.Checkout(ctx, actions.CheckoutOptions{BranchName: targetBranch}, nil)
+				_, err = common.Checkout(ctx, checkout.Options{BranchName: targetBranch}, nil)
 				return err
 			})
 		},

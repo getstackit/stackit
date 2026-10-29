@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/checkout"
 	mergeAction "github.com/getstackit/stackit/internal/actions/merge"
 	"github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/app"
@@ -38,7 +38,7 @@ func handlePostMergeAction(ctx *app.Context, action mergeAction.PostMergeAction)
 		// state. Conflicts are reported in the sync summary with instructions
 		// to run 'stackit restack' manually.
 		_, err := mergeAction.PostMergeSync(ctx, mergeAction.PostMergeSyncOptions{
-			OnTrunkCheckedOut: func(result actions.CheckoutResult) {
+			OnTrunkCheckedOut: func(result checkout.Result) {
 				if result.WorktreeSwitchPath != "" {
 					common.HandleCheckoutResult(ctx.Output, result)
 				}

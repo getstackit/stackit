@@ -925,7 +925,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 	// the worktree leaves a staged revert that the next `modify -a` commits, and
 	// resetWorktreeIfClean refuses to reset while there is uncommitted work.
 	// Hold the branch back instead. This is the plan path, reached by every
-	// caller of actions.RestackBranches (modify, squash, absorb, delete, split,
+	// caller of the restack Executor (modify, squash, absorb, delete, split,
 	// reorder, pluck) as well as the `restack` command.
 	if reason := e.holdBranch(ctx, branch, snap); reason != "" {
 		return RestackBranchResult{Result: RestackUnneeded, RebasedBranchBase: parentRev, HeldBy: reason}, nil

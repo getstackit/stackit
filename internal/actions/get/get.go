@@ -1,4 +1,6 @@
-package actions
+// Package get implements the get command, which fetches a branch (or a PR's
+// head branch) and its stack from the remote and tracks it locally.
+package get
 
 import (
 	"context"
@@ -9,41 +11,93 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/getstackit/stackit/internal/workpool"
-
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/validation"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/workpool"
 )
 
-// GetPhase represents the current phase of the get operation
-type GetPhase string
+// Engine lists exactly the engine methods get calls: the branch reads (which
+// also back the PR-number fallback), the remote fetch and metadata cache, and
+// the create/track/update/freeze mutations of the sync phase.
+type Engine interface {
+	engine.BranchReader
+	BranchNames() *engine.BranchSet
+	GetRemote(ctx context.Context) string
+	FetchRemote(ctx context.Context, req engine.RemoteFetchRequest) error
+	MissingRemoteBranches(ctx context.Context, branchNames []string) ([]string, error)
+	LoadRemoteMetadataCache(ctx context.Context) error
+	RemoteMetadataCache() engine.RemoteMetadataView
+	ApplyRemoteMetadataForBranches(ctx context.Context, branchNames []string) error
+	ListWorktrees(ctx context.Context) (git.WorktreeList, error)
+	CreateBranch(ctx context.Context, branchName string, startPoint string) error
+	TrackBranch(ctx context.Context, branchName string, parentBranchName string) error
+	TrackBranchPastLandedParent(ctx context.Context, branchName string, parentBranchName string, prior engine.PriorParent) error
+	ReparentBranch(ctx context.Context, branch engine.Branch, newParent engine.Branch) error
+	CheckoutBranch(ctx context.Context, branch engine.Branch) error
+	ResetHard(ctx context.Context, revision string) error
+	Merge(ctx context.Context, revision string, opts engine.MergeOptions) error
+	SetFrozen(ctx context.Context, branches engine.Branches, state engine.FreezeState) (engine.BatchFreezeResult, error)
+	BatchUpsertPrInfo(ctx context.Context, updates map[string]*engine.PrInfo) error
+}
+
+// Deps are the collaborators get needs. Adapters build them from their own
+// runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	Out    output.Output
+	// GitHub returns the client, or nil when GitHub is unavailable. It is a
+	// function so the client is only built when get actually needs it.
+	GitHub func() github.Client
+	// GitHubError explains why GitHub returned nil, when known. May be nil.
+	GitHubError func() error
+	// Restack is what the restack phase runs actions.RunRestack with.
+	Restack actions.RestackDeps
+}
+
+// requireGitHub returns the GitHub client or an error explaining why it is
+// unavailable.
+func (deps Deps) requireGitHub() (github.Client, error) {
+	if client := deps.GitHub(); client != nil {
+		return client, nil
+	}
+	if deps.GitHubError != nil {
+		if err := deps.GitHubError(); err != nil {
+			return nil, fmt.Errorf("GitHub client not available: %w", err)
+		}
+	}
+	return nil, errors.New("GitHub client not available — check your GITHUB_TOKEN or run 'gh auth login'")
+}
+
+// Phase represents the current phase of the get operation
+type Phase string
 
 // Phases of the get operation
 const (
-	GetPhaseFetch    GetPhase = "fetch"    // Fetching branches from remote
-	GetPhaseSync     GetPhase = "sync"     // Syncing branches (create/update)
-	GetPhaseMetadata GetPhase = "metadata" // Fetching and applying metadata
-	GetPhaseCheckout GetPhase = "checkout" // Checking out target branch
+	PhaseFetch    Phase = "fetch"    // Fetching branches from remote
+	PhaseSync     Phase = "sync"     // Syncing branches (create/update)
+	PhaseMetadata Phase = "metadata" // Fetching and applying metadata
+	PhaseCheckout Phase = "checkout" // Checking out target branch
 )
 
-// GetEventType represents the type of get event
-type GetEventType string
+// EventType represents the type of get event
+type EventType string
 
 // Event types for get operations
 const (
-	GetEventStarted   GetEventType = "started"
-	GetEventProgress  GetEventType = "progress"
-	GetEventCompleted GetEventType = "completed"
-	GetEventSkipped   GetEventType = "skipped"
+	EventStarted   EventType = "started"
+	EventProgress  EventType = "progress"
+	EventCompleted EventType = "completed"
+	EventSkipped   EventType = "skipped"
 )
 
-// GetEvent represents a progress update during get
-type GetEvent struct {
-	Phase       GetPhase      // Current phase
-	Type        GetEventType  // Event type
+// Event represents a progress update during get
+type Event struct {
+	Phase       Phase         // Current phase
+	Type        EventType     // Event type
 	Branch      string        // Branch name (if applicable)
 	PRNumber    *git.PRNumber // PR number (if applicable)
 	Message     string        // Human-readable description
@@ -52,8 +106,8 @@ type GetEvent struct {
 	Error       error         // If non-nil, this step had an error
 }
 
-// GetSummary holds aggregate results from a get operation
-type GetSummary struct {
+// Summary holds aggregate results from a get operation
+type Summary struct {
 	TargetBranch    string // The branch that was retrieved
 	BranchesCreated int    // Number of branches created
 	BranchesUpdated int    // Number of branches updated
@@ -148,14 +202,14 @@ const (
 	UnfreezeAndRestack
 )
 
-// GetHandler abstracts TTY vs non-TTY output for get operations
-// It embeds RestackHandler to provide consistent output for restack phase
-type GetHandler interface {
+// Handler abstracts TTY vs non-TTY output for get operations
+// It embeds actions.RestackHandler to provide consistent output for restack phase
+type Handler interface {
 	// Start is called at the beginning of get with target info
 	Start(targetBranch string, prNumber *git.PRNumber)
 
 	// EmitEvent is called for each progress update
-	EmitEvent(event GetEvent)
+	EmitEvent(event Event)
 
 	// ReportLandedAncestors explains that branches were re-anchored past an
 	// ancestor that landed and left the remote, and asks whether to unfreeze
@@ -164,35 +218,35 @@ type GetHandler interface {
 	ReportLandedAncestors(report LandedAncestorReport) (LandedAncestorDecision, error)
 
 	// Complete is called when get finishes with the summary
-	Complete(summary GetSummary)
+	Complete(summary Summary)
 
 	// RestackHandler methods are available for restack phase output
 	// This ensures consistent restack output between get, sync, and restack commands
-	RestackHandler
+	actions.RestackHandler
 }
 
-// GetNullHandler is a no-op handler for testing or when output is not needed
-type GetNullHandler struct {
-	NullRestackHandler
+// NullHandler is a no-op handler for testing or when output is not needed
+type NullHandler struct {
+	actions.NullRestackHandler
 }
 
-// Start implements GetHandler.
-func (h *GetNullHandler) Start(_ string, _ *git.PRNumber) {}
+// Start implements Handler.
+func (h *NullHandler) Start(_ string, _ *git.PRNumber) {}
 
-// EmitEvent implements GetHandler.
-func (h *GetNullHandler) EmitEvent(_ GetEvent) {}
+// EmitEvent implements Handler.
+func (h *NullHandler) EmitEvent(_ Event) {}
 
-// ReportLandedAncestors implements GetHandler. Declines to unfreeze, which
+// ReportLandedAncestors implements Handler. Declines to unfreeze, which
 // leaves the fetched branches mirroring the remote.
-func (h *GetNullHandler) ReportLandedAncestors(_ LandedAncestorReport) (LandedAncestorDecision, error) {
+func (h *NullHandler) ReportLandedAncestors(_ LandedAncestorReport) (LandedAncestorDecision, error) {
 	return LeaveFrozen, nil
 }
 
-// Complete implements GetHandler.
-func (h *GetNullHandler) Complete(_ GetSummary) {}
+// Complete implements Handler.
+func (h *NullHandler) Complete(_ Summary) {}
 
-// GetOptions contains options for the get command
-type GetOptions struct {
+// Options contains options for the get command
+type Options struct {
 	Downstack bool // Don't sync upstack branches if branch exists locally
 	Force     bool // Overwrite all fetched branches with remote source of truth
 	Restack   bool // Restack after syncing (default true)
@@ -202,7 +256,7 @@ type GetOptions struct {
 // syncTargets is the evolving set of branches fetched by get, along with the
 // parent and PR metadata discovered while walking their ancestry.
 //
-// It is the single source of truth for a run. GetAction reads through it rather
+// It is the single source of truth for a run. Action reads through it rather
 // than aliasing its fields into locals, so that a rewrite — reanchorPastLanded
 // replacing a landed parent — is visible everywhere at once.
 type syncTargets struct {
@@ -274,23 +328,22 @@ func (targets *syncTargets) harvestAnchors(view remoteMetadataLookup) {
 	}
 }
 
-// GetAction performs the get operation
-func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler GetHandler) error {
-	eng := ctx.Engine
-	out := ctx.Output
-	gctx := ctx.Context
+// Action performs the get operation
+func Action(ctx context.Context, deps Deps, branchOrPR string, opts Options, handler Handler) error {
+	eng := deps.Engine
+	out := deps.Out
 
-	if err := validation.MustNotHaveUncommittedChanges(gctx, eng).Validate(); err != nil {
+	if err := validation.MustNotHaveUncommittedChanges(ctx, eng).Validate(); err != nil {
 		return err
 	}
 
-	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+	remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
 	defer cancelRemote()
 
 	targetBranch := ""
 	var targetPRNumber *git.PRNumber
 	if branchOrPR == "" {
-		current := eng.CurrentBranch(ctx.Context)
+		current := eng.CurrentBranch(ctx)
 		if current == nil {
 			return errors.New("not on a branch and no branch/PR specified")
 		}
@@ -299,10 +352,10 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		// Check if it's a PR number
 		if n, err := strconv.Atoi(branchOrPR); err == nil {
 			prNum := git.PRNumber(n)
-			if _, err := ctx.RequireGitHub(); err != nil {
+			if _, err := deps.requireGitHub(); err != nil {
 				return fmt.Errorf("cannot resolve PR #%d: %w", prNum, err)
 			}
-			pr, err := ctx.GitHub().GetPullRequest(remoteCtx, prNum)
+			pr, err := deps.GitHub().GetPullRequest(remoteCtx, prNum)
 			if err != nil {
 				return fmt.Errorf("failed to get PR #%d: %w", prNum, err)
 			}
@@ -317,12 +370,12 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	handler.Start(targetBranch, targetPRNumber)
 
 	// Emit fetch phase started
-	handler.EmitEvent(GetEvent{
-		Phase: GetPhaseFetch,
-		Type:  GetEventStarted,
+	handler.EmitEvent(Event{
+		Phase: PhaseFetch,
+		Type:  EventStarted,
 	})
 
-	remote := eng.GetRemote(ctx.Context)
+	remote := eng.GetRemote(ctx)
 	trunkName := eng.Trunk().Name()
 
 	// Identify branches to sync (ancestors + descendants)
@@ -344,13 +397,13 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	// crawl only when the target has no stackit metadata (e.g. a branch never submitted
 	// via stackit, or when the metadata cache fails to load).
 	usedMetadata := false
-	if err := eng.LoadRemoteMetadataCache(ctx.Context); err != nil {
+	if err := eng.LoadRemoteMetadataCache(ctx); err != nil {
 		out.Debug("failed to load remote metadata cache: %v", err)
 	} else {
 		usedMetadata = targets.crawlAncestorsViaMetadata(eng, targetBranch)
 	}
 	if !usedMetadata {
-		targets.crawlAncestorsViaGitHub(remoteCtx, ctx.GitHub(), eng.Trunk().Name(), targetBranch)
+		targets.crawlAncestorsViaGitHub(remoteCtx, deps.GitHub(), eng.Trunk().Name(), targetBranch)
 	}
 	// Either crawl can leave a branch without its divergence anchor: the GitHub
 	// one never reads them, and the metadata one abandons a partial chain. Fill
@@ -360,7 +413,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	// If target branch exists locally, identify local descendants
 	targetBranchObj := eng.GetBranch(targetBranch)
 	if !opts.Downstack && targetBranchObj.IsTracked() {
-		graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+		graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 		upstack := graph.Range(targetBranchObj, engine.StackRange{RecursiveChildren: true})
 		for _, b := range upstack {
 			targets.appendBranches(b.Name())
@@ -426,16 +479,16 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	}
 
 	// Emit trunk status (main/master)
-	handler.EmitEvent(GetEvent{
-		Phase:  GetPhaseFetch,
-		Type:   GetEventCompleted,
+	handler.EmitEvent(Event{
+		Phase:  PhaseFetch,
+		Type:   EventCompleted,
 		Branch: trunkName,
 	})
 
 	// Emit sync phase started
-	handler.EmitEvent(GetEvent{
-		Phase: GetPhaseSync,
-		Type:  GetEventStarted,
+	handler.EmitEvent(Event{
+		Phase: PhaseSync,
+		Type:  EventStarted,
 	})
 
 	// Track statistics for summary
@@ -443,7 +496,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	branchesToFreeze := engine.NewBranchesBuilder(len(targets.branches))
 
 	// Fetch PR info for branches in parallel if possible
-	if ctx.GitHub() != nil {
+	if deps.GitHub() != nil {
 		trunkName := eng.Trunk().Name()
 
 		// Filter out trunk before parallel fetch
@@ -459,7 +512,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 
 		var mu sync.Mutex
 		workpool.Run(branchesToFetch, func(branchName string) {
-			if pr, err := ctx.GitHub().GetPullRequestByBranch(remoteCtx, branchName); err == nil && pr != nil {
+			if pr, err := deps.GitHub().GetPullRequestByBranch(remoteCtx, branchName); err == nil && pr != nil {
 				prNum := pr.Number
 				// Keep the whole record, not just the number: get already paid
 				// for this round trip, and without it the branch lands with no
@@ -478,7 +531,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	// out a branch another worktree holds. Resolve the holders once up front so
 	// those branches are reported and skipped, rather than aborting the run
 	// partway through with the earlier branches already updated.
-	heldElsewhere, err := branchesHeldByOtherWorktrees(gctx, eng)
+	heldElsewhere, err := branchesHeldByOtherWorktrees(ctx, eng)
 	if err != nil {
 		out.Debug("Could not inspect worktrees; no branch will be skipped: %v", err)
 	}
@@ -493,7 +546,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		isNew := !branch.IsTracked()
 
 		if isNew {
-			if err := eng.CreateBranch(gctx, branchName, fmt.Sprintf("%s/%s", remote, branchName)); err != nil {
+			if err := eng.CreateBranch(ctx, branchName, fmt.Sprintf("%s/%s", remote, branchName)); err != nil {
 				return fmt.Errorf("failed to create local branch %s: %w", branchName, err)
 			}
 			// Set initial metadata. A branch re-anchored past a landed parent is
@@ -504,12 +557,12 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 			if parent, ok := targets.parentByBranch[branchName]; ok {
 				var err error
 				if landed, ok := reanchored[branchName]; ok {
-					err = eng.TrackBranchPastLandedParent(gctx, branchName, parent, engine.PriorParent{
+					err = eng.TrackBranchPastLandedParent(ctx, branchName, parent, engine.PriorParent{
 						Branch:   landed.LandedParent,
 						Revision: landed.Anchor,
 					})
 				} else {
-					err = eng.TrackBranch(gctx, branchName, parent)
+					err = eng.TrackBranch(ctx, branchName, parent)
 				}
 				if err != nil {
 					out.Debug("Failed to track branch %s with parent %s: %v", branchName, parent, err)
@@ -522,9 +575,9 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 			branchesCreated++
 
 			// Emit sync event
-			handler.EmitEvent(GetEvent{
-				Phase:    GetPhaseSync,
-				Type:     GetEventCompleted,
+			handler.EmitEvent(Event{
+				Phase:    PhaseSync,
+				Type:     EventCompleted,
 				Branch:   branchName,
 				PRNumber: targets.prByBranch[branchName],
 				IsNew:    true,
@@ -535,9 +588,9 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 			// recorded parent for content we could not fetch is exactly the
 			// ref/worktree divergence the worktree rules exist to prevent.
 			if path, held := heldElsewhere[branchName]; held {
-				handler.EmitEvent(GetEvent{
-					Phase:   GetPhaseSync,
-					Type:    GetEventSkipped,
+				handler.EmitEvent(Event{
+					Phase:   PhaseSync,
+					Type:    EventSkipped,
 					Branch:  branchName,
 					Message: fmt.Sprintf("checked out in worktree %s", path),
 				})
@@ -548,32 +601,32 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 			// HEAD's branch. Without this checkout, running get while trunk is
 			// checked out rewrites trunk to the fetched branch instead of
 			// updating that branch, which silently destroys the local trunk.
-			if err := eng.CheckoutBranch(gctx, branch); err != nil {
+			if err := eng.CheckoutBranch(ctx, branch); err != nil {
 				return fmt.Errorf("failed to check out branch %s: %w", branchName, err)
 			}
 			if opts.Force {
-				if err := eng.ResetHard(gctx, fmt.Sprintf("%s/%s", remote, branchName)); err != nil {
+				if err := eng.ResetHard(ctx, fmt.Sprintf("%s/%s", remote, branchName)); err != nil {
 					return fmt.Errorf("failed to reset branch %s: %w", branchName, err)
 				}
 			} else {
 				// Try to merge. If conflicts, this will error and we'll stop.
-				if err := eng.Merge(gctx, fmt.Sprintf("%s/%s", remote, branchName), engine.MergeOptions{}); err != nil {
+				if err := eng.Merge(ctx, fmt.Sprintf("%s/%s", remote, branchName), engine.MergeOptions{}); err != nil {
 					return fmt.Errorf("conflict during sync of %s. Resolve conflicts and try again: %w", branchName, err)
 				}
 			}
 			// Update parent if known, preserving the divergence point so that
 			// restacking doesn't carry commits from the old parent.
 			if parent, ok := targets.parentByBranch[branchName]; ok {
-				if err := eng.ReparentBranch(gctx, branch, eng.GetBranch(parent)); err != nil {
+				if err := eng.ReparentBranch(ctx, branch, eng.GetBranch(parent)); err != nil {
 					out.Debug("Failed to update parent for %s: %v", branchName, err)
 				}
 			}
 			branchesUpdated++
 
 			// Emit sync event
-			handler.EmitEvent(GetEvent{
-				Phase:    GetPhaseSync,
-				Type:     GetEventCompleted,
+			handler.EmitEvent(Event{
+				Phase:    PhaseSync,
+				Type:     EventCompleted,
 				Branch:   branchName,
 				PRNumber: targets.prByBranch[branchName],
 				IsNew:    false,
@@ -598,7 +651,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	if len(reanchored) > 0 {
 		report := LandedAncestorReport{
 			Reanchored: targets.reanchoredInSyncOrder(reanchored),
-			Stale:      targets.staleAfterReanchor(ctx.Context, eng, reanchored, freezeSet),
+			Stale:      targets.staleAfterReanchor(ctx, eng, reanchored, freezeSet),
 			CanRestack: opts.Restack,
 		}
 		for _, name := range report.Unanchored() {
@@ -612,7 +665,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		// on it. Without that phase it would drop the protection and rebase
 		// nothing, so act on the decision only when there is a restack to feed.
 		if decision == UnfreezeAndRestack && opts.Restack {
-			freezeSet = unfreezeForRestack(ctx, report.Unfreezable(), freezeSet)
+			freezeSet = unfreezeForRestack(ctx, deps, report.Unfreezable(), freezeSet)
 		}
 	}
 
@@ -626,19 +679,19 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	// metadata locally, and every consumer that filters on it — `tree full`
 	// most visibly — shows nothing until a later sync refetches the same data.
 	if len(targets.prInfoByBranch) > 0 {
-		if err := eng.BatchUpsertPrInfo(gctx, targets.prInfoByBranch); err != nil {
+		if err := eng.BatchUpsertPrInfo(ctx, targets.prInfoByBranch); err != nil {
 			out.Debug("Failed to record PR info: %v", err)
 		}
 	}
 
 	// FetchRemote above already brought metadata refs local; apply any matching
 	// remote metadata to the branches we synced.
-	if err := eng.ApplyRemoteMetadataForBranches(ctx.Context, targets.branches); err != nil {
+	if err := eng.ApplyRemoteMetadataForBranches(ctx, targets.branches); err != nil {
 		out.Debug("Failed to apply remote metadata: %v", err)
 	}
 
 	// Checkout target branch
-	if err := eng.CheckoutBranch(gctx, eng.GetBranch(targetBranch)); err != nil {
+	if err := eng.CheckoutBranch(ctx, eng.GetBranch(targetBranch)); err != nil {
 		return fmt.Errorf("failed to checkout target branch %s: %w", targetBranch, err)
 	}
 
@@ -659,7 +712,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 				}
 			}
 		}
-		sorted := eng.SortBranchesTopologically(ctx.Context, uniqueBranches.Build())
+		sorted := eng.SortBranchesTopologically(ctx, uniqueBranches.Build())
 		// Prefer the PR number discovered during sync (which may have come
 		// from remote metadata not copied into local metadata); fall back to
 		// local metadata otherwise.
@@ -667,11 +720,11 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 			if pr := targets.prByBranch[branch]; pr != nil {
 				return pr
 			}
-			return PRNumberForBranch(eng, branch)
+			return actions.PRNumberForBranch(eng, branch)
 		}
-		outcome, err := RunRestack(ctx, RestackRequest{
+		outcome, err := actions.RunRestack(ctx, deps.Restack, actions.RestackRequest{
 			Branches:       sorted,
-			ConflictPolicy: RestackConflictEnterWorkflow,
+			ConflictPolicy: actions.RestackConflictEnterWorkflow,
 			PRNumber:       prNumber,
 		}, handler)
 		restacked = outcome.Summary.Restacked
@@ -687,7 +740,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	targetBranchObj = eng.GetBranch(targetBranch)
 	isFrozenFinal := targetBranchObj.IsFrozen()
 	upToDate := branchesCreated == 0 && branchesUpdated == 0 && restacked == 0
-	handler.Complete(GetSummary{
+	handler.Complete(Summary{
 		TargetBranch:    targetBranch,
 		BranchesCreated: branchesCreated,
 		BranchesUpdated: branchesUpdated,
@@ -708,7 +761,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 //
 // A worktree listing that cannot be read holds nothing back — get then behaves
 // as it did before, failing on the checkout if a branch really is held.
-func branchesHeldByOtherWorktrees(ctx context.Context, eng engine.Engine) (map[string]engine.WorktreePath, error) {
+func branchesHeldByOtherWorktrees(ctx context.Context, eng Engine) (map[string]engine.WorktreePath, error) {
 	worktrees, err := eng.ListWorktrees(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
@@ -830,7 +883,7 @@ func (targets *syncTargets) nearestAvailableAncestor(branchName string, unavaila
 // pendingFreeze is the set queued to be frozen once the sync loop finishes, so
 // that a branch created moments ago counts as frozen alongside one that already
 // was.
-func (targets *syncTargets) staleAfterReanchor(ctx context.Context, eng engine.Engine, reanchored map[string]Reanchored, pendingFreeze engine.Branches) []StaleBranch {
+func (targets *syncTargets) staleAfterReanchor(ctx context.Context, eng Engine, reanchored map[string]Reanchored, pendingFreeze engine.Branches) []StaleBranch {
 	inSync := make(map[string]bool, len(targets.branches))
 	for _, name := range targets.branches {
 		inSync[name] = true
@@ -878,7 +931,7 @@ func (targets *syncTargets) staleAfterReanchor(ctx context.Context, eng engine.E
 // unfreezeForRestack thaws the named branches so the restack phase can rebase
 // them, and returns pendingFreeze with those branches removed so the freeze
 // that follows does not put them straight back.
-func unfreezeForRestack(ctx *app.Context, names []string, pendingFreeze engine.Branches) engine.Branches {
+func unfreezeForRestack(ctx context.Context, deps Deps, names []string, pendingFreeze engine.Branches) engine.Branches {
 	if len(names) == 0 {
 		return pendingFreeze
 	}
@@ -888,7 +941,7 @@ func unfreezeForRestack(ctx *app.Context, names []string, pendingFreeze engine.B
 		unfreezing[name] = true
 	}
 
-	eng := ctx.Engine
+	eng := deps.Engine
 	thaw := engine.NewBranchesBuilder(len(names))
 	for _, name := range names {
 		if branch := eng.GetBranch(name); branch.IsFrozen() {
@@ -897,7 +950,7 @@ func unfreezeForRestack(ctx *app.Context, names []string, pendingFreeze engine.B
 	}
 	if thawSet := thaw.Build(); len(thawSet) > 0 {
 		if _, err := eng.SetFrozen(ctx, thawSet, engine.BranchThawed); err != nil {
-			ctx.Output.Debug("Failed to unfreeze branches re-anchored past landed work: %v", err)
+			deps.Out.Debug("Failed to unfreeze branches re-anchored past landed work: %v", err)
 		}
 	}
 
@@ -910,7 +963,7 @@ func unfreezeForRestack(ctx *app.Context, names []string, pendingFreeze engine.B
 // parent, divergence anchor, and any known PR number on targets. The return value
 // reports whether the target had usable metadata; when false the caller should fall back
 // to a GitHub crawl. Callers must have populated the cache via LoadRemoteMetadataCache.
-func (targets *syncTargets) crawlAncestorsViaMetadata(eng engine.Engine, targetBranch string) bool {
+func (targets *syncTargets) crawlAncestorsViaMetadata(eng Engine, targetBranch string) bool {
 	view := eng.RemoteMetadataCache()
 	trunkName := eng.Trunk().Name()
 

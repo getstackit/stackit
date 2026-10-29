@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/get"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 )
@@ -52,7 +53,7 @@ Examples:
 					defer runner.Cleanup()
 				}
 
-				return actions.GetAction(ctx, branchOrPR, actions.GetOptions{
+				return get.Action(ctx.Context, getDeps(ctx), branchOrPR, get.Options{
 					Downstack: downstack,
 					Force:     force,
 					Restack:   restack,
@@ -78,4 +79,15 @@ Examples:
 	}
 
 	return cmd
+}
+
+// getDeps builds get's collaborators from the command's runtime context.
+func getDeps(ctx *app.Context) get.Deps {
+	return get.Deps{
+		Engine:      ctx.Engine,
+		Out:         ctx.Output,
+		GitHub:      ctx.GitHub,
+		GitHubError: ctx.GitHubError,
+		Restack:     actions.RestackDepsFrom(ctx),
+	}
 }

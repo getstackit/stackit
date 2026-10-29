@@ -620,7 +620,7 @@ func TestMoveAction(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.ResolveMergeConflicts())
 		require.NoError(t, s.Scene.Repo.MarkMergeConflictsAsResolved())
 
-		require.NoError(t, actions.ContinueAction(s.Context, actions.ContinueOptions{}))
+		require.NoError(t, actions.ContinueAction(t.Context(), actions.ContinueDepsFrom(s.Context), actions.ContinueOptions{}))
 		require.False(t, s.Git.IsRebaseInProgress(s.Context.Context),
 			"rebase should be complete after stackit continue")
 	})

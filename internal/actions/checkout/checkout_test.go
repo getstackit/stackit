@@ -1,4 +1,4 @@
-package actions_test
+package checkout_test
 
 import (
 	"path/filepath"
@@ -7,12 +7,23 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/checkout"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
-func TestCheckoutActionWorktreeSwitchIncludesTargetBranch(t *testing.T) {
+func deps(s *scenario.Scenario) checkout.Deps {
+	return checkout.Deps{
+		Engine: s.Context.Engine,
+		Out:    s.Context.Output,
+		Log:    s.Context.Logger,
+		Quiet:  s.Context.Quiet,
+		Here:   actions.HereFrom(s.Context),
+	}
+}
+
+func TestActionWorktreeSwitchIncludesTargetBranch(t *testing.T) {
 	t.Parallel()
 
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
@@ -26,7 +37,7 @@ func TestCheckoutActionWorktreeSwitchIncludesTargetBranch(t *testing.T) {
 
 	s.Checkout("main")
 
-	result, err := actions.CheckoutAction(s.Context, actions.CheckoutOptions{BranchName: "feature"}, nil)
+	result, err := checkout.Action(t.Context(), deps(s), checkout.Options{BranchName: "feature"}, nil)
 	require.NoError(t, err)
 	canonicalRepoRoot, err := filepath.EvalSymlinks(s.Context.RepoRoot)
 	require.NoError(t, err)

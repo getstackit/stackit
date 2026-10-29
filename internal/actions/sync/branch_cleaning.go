@@ -37,7 +37,7 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet,
 	cleanStart := time.Now()
 
 	// Phase 1: Plan which branches to delete
-	plan, err := actions.PlanBranchDeletions(ctx, actions.CleanBranchesOptions{
+	plan, err := actions.PlanBranchDeletions(ctx, actions.CleanBranchesDepsFrom(ctx), actions.CleanBranchesOptions{
 		Force:             opts.Force,
 		InManagedWorktree: ctx.InManagedWorktree,
 		CurrentBranch:     currentBranchName,
@@ -111,7 +111,7 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet,
 	}
 
 	// Phase 3: Execute deletions
-	result, err := actions.ExecuteBranchDeletions(ctx, plan, branchesToDelete)
+	result, err := actions.ExecuteBranchDeletions(ctx, actions.CleanBranchesDepsFrom(ctx), plan, branchesToDelete)
 	if err != nil {
 		return nil, err
 	}

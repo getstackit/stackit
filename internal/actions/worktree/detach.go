@@ -1,10 +1,10 @@
 package worktree
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 	worktreeutil "github.com/getstackit/stackit/internal/worktree"
@@ -17,8 +17,8 @@ type DetachOptions struct {
 }
 
 // DetachAction removes a worktree while preserving all branches.
-func DetachAction(ctx *app.Context, opts DetachOptions) error {
-	entry, err := getWorktreeEntry(ctx, opts.Selector)
+func DetachAction(ctx context.Context, deps Deps, opts DetachOptions) error {
+	entry, err := getWorktreeEntry(ctx, deps, opts.Selector)
 	if err != nil {
 		return err
 	}
@@ -26,27 +26,27 @@ func DetachAction(ctx *app.Context, opts DetachOptions) error {
 		return errors.New(refusal)
 	}
 
-	snapshot, err := snapshotWorktree(ctx, entry)
+	snapshot, err := snapshotWorktree(ctx, deps, entry)
 	if err != nil {
 		return err
 	}
 	if entry.Lifecycle.NeedsRepair() {
 		if entry.Lifecycle.Exists() {
-			if _, err := worktreeutil.RemovePath(ctx.Context, ctx.Engine, entry.Path, opts.Policy); err != nil {
+			if _, err := worktreeutil.RemovePath(ctx, deps.Engine, entry.Path, opts.Policy); err != nil {
 				return fmt.Errorf("failed to remove worktree at %s: %w", entry.Path, err)
 			}
-		} else if err := ctx.Engine.PruneWorktrees(ctx.Context); err != nil {
+		} else if err := deps.Engine.PruneWorktrees(ctx); err != nil {
 			return fmt.Errorf("failed to prune stale worktree entries: %w", err)
 		}
-		if err := ctx.Engine.UnregisterWorktree(ctx.Context, entry.AnchorBranch); err != nil {
+		if err := deps.Engine.UnregisterWorktree(ctx, entry.AnchorBranch); err != nil {
 			return fmt.Errorf("failed to unregister invalid worktree: %w", err)
 		}
-		ctx.Output.Success("Detached invalid worktree %s", output.BranchName(entry.displayName()))
+		deps.Out.Success("Detached invalid worktree %s", output.BranchName(entry.displayName()))
 		return nil
 	}
 
 	mutation := worktreeMutation{snapshot: snapshot}
-	mutation.pathRemoved, err = removeWorktreeOrPruneMissing(ctx, snapshot.Info.Path, opts.Policy)
+	mutation.pathRemoved, err = removeWorktreeOrPruneMissing(ctx, deps, snapshot.Info.Path, opts.Policy)
 	if err != nil {
 		if opts.Policy.DiscardsChanges() {
 			return fmt.Errorf("failed to force remove worktree at %s: %w", snapshot.Info.Path, err)
@@ -54,22 +54,22 @@ func DetachAction(ctx *app.Context, opts DetachOptions) error {
 		return fmt.Errorf("failed to remove worktree at %s: %w (use --force to discard uncommitted changes)", snapshot.Info.Path, err)
 	}
 	if snapshot.AnchorExists && len(snapshot.ChildNames) > 0 {
-		if err := ctx.Engine.ReparentBranchesToParents(ctx.Context, engine.MovesTo(snapshot.ChildNames, snapshot.AnchorParent), engine.ReparentOpts{}); err != nil {
-			return mutation.rollback(ctx, fmt.Errorf("failed to reparent children to %s: %w", snapshot.AnchorParent, err), RestoreChildren)
+		if err := deps.Engine.ReparentBranchesToParents(ctx, engine.MovesTo(snapshot.ChildNames, snapshot.AnchorParent), engine.ReparentOpts{}); err != nil {
+			return mutation.rollback(ctx, deps, fmt.Errorf("failed to reparent children to %s: %w", snapshot.AnchorParent, err), RestoreChildren)
 		}
 		mutation.reparented = true
 	}
 	if snapshot.AnchorExists {
-		if err := ctx.Engine.DeleteBranch(ctx.Context, ctx.Engine.GetBranch(snapshot.Info.AnchorBranch)); err != nil {
-			return mutation.rollback(ctx, fmt.Errorf("failed to delete anchor branch %s: %w", snapshot.Info.AnchorBranch, err), RestoreChildren)
+		if err := deps.Engine.DeleteBranch(ctx, deps.Engine.GetBranch(snapshot.Info.AnchorBranch)); err != nil {
+			return mutation.rollback(ctx, deps, fmt.Errorf("failed to delete anchor branch %s: %w", snapshot.Info.AnchorBranch, err), RestoreChildren)
 		}
 		mutation.anchorDeleted = true
-		ctx.Output.Debug("Deleted anchor branch %s", snapshot.Info.AnchorBranch)
+		deps.Out.Debug("Deleted anchor branch %s", snapshot.Info.AnchorBranch)
 	}
-	if err := ctx.Engine.UnregisterWorktree(ctx.Context, snapshot.Info.AnchorBranch); err != nil {
-		return mutation.rollback(ctx, fmt.Errorf("failed to unregister worktree: %w", err), RestoreChildren)
+	if err := deps.Engine.UnregisterWorktree(ctx, snapshot.Info.AnchorBranch); err != nil {
+		return mutation.rollback(ctx, deps, fmt.Errorf("failed to unregister worktree: %w", err), RestoreChildren)
 	}
 	mutation.unregistered = true
-	ctx.Output.Success("Detached worktree %s", output.BranchName(snapshot.Info.Name.String()))
+	deps.Out.Success("Detached worktree %s", output.BranchName(snapshot.Info.Name.String()))
 	return nil
 }

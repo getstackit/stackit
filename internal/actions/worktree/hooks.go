@@ -5,31 +5,30 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/actions/hooks"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/output"
 )
 
 // ResolveApprovedHooks reads the post-worktree-create hook list from the
-// project config already attached to ctx and returns the approved subset,
+// project config in deps.Config and returns the approved subset,
 // prompting for any unapproved entries. Must be called from the main thread
 // (may prompt interactively).
-func ResolveApprovedHooks(ctx *app.Context) ([]string, error) {
-	if ctx.Config == nil {
+func ResolveApprovedHooks(deps Deps) ([]string, error) {
+	if deps.Config == nil {
 		return nil, nil
 	}
-	projectCfg := ctx.Config.ProjectConfig()
+	projectCfg := deps.Config.ProjectConfig()
 	if projectCfg == nil {
 		return nil, nil
 	}
 	return hooks.ResolveApproved(hooks.ResolveRequest{
 		Phase:    config.PhasePostWorktreeCreate,
 		Commands: projectCfg.Hooks.For(config.PhasePostWorktreeCreate),
-		Config:   ctx.Config,
+		Config:   deps.Config,
 		// Default-no so an accidental Enter doesn't approve arbitrary
 		// post-worktree-create commands.
-		Prompter: handler.ConfirmPromptHandler{Confirmer: ctx.Prompts(), DefaultYes: false},
-		Output:   ctx.Output,
+		Prompter: handler.ConfirmPromptHandler{Confirmer: deps.Prompts, DefaultYes: false},
+		Output:   deps.Out,
 	})
 }
 
@@ -56,13 +55,13 @@ func RunResolvedHooks(ctx context.Context, hookCmds []string, worktreePath Workt
 }
 
 // RunPostCreateHooks runs any configured post-worktree-create hooks. It reads
-// the project config from ctx, resolves approvals, and executes approved
+// the project config from deps.Config, resolves approvals, and executes approved
 // hooks in the worktree directory.
-func RunPostCreateHooks(ctx *app.Context, worktreePath WorktreePath) error {
-	approved, err := ResolveApprovedHooks(ctx)
+func RunPostCreateHooks(ctx context.Context, deps Deps, worktreePath WorktreePath) error {
+	approved, err := ResolveApprovedHooks(deps)
 	if err != nil {
 		return err
 	}
-	RunResolvedHooks(ctx.Context, approved, worktreePath, ctx.Output)
+	RunResolvedHooks(ctx, approved, worktreePath, deps.Out)
 	return nil
 }

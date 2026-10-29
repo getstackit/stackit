@@ -2,8 +2,6 @@
 package branch
 
 import (
-	"context"
-
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -11,24 +9,9 @@ import (
 	wtactions "github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
+	wtcli "github.com/getstackit/stackit/internal/cli/worktree"
 	"github.com/getstackit/stackit/internal/config"
-	"github.com/getstackit/stackit/internal/engine"
 )
-
-// createWorktrees backs create --worktree with the worktree actions.
-type createWorktrees struct{ ctx *app.Context }
-
-func (w createWorktrees) CreateAnchored(_ context.Context, branchName, name, scope string) (engine.WorktreePath, error) {
-	created, err := wtactions.CreateAnchoredWorktreeForBranch(w.ctx, branchName, name, scope)
-	if err != nil {
-		return "", err
-	}
-	return created.Path, nil
-}
-
-func (w createWorktrees) RunPostCreateHooks(_ context.Context, path engine.WorktreePath) error {
-	return wtactions.RunPostCreateHooks(w.ctx, path)
-}
 
 // NewCreateCmd creates the create command
 func NewCreateCmd() *cobra.Command {
@@ -113,7 +96,7 @@ Examples:
 					MutationDeps: actions.MutationDepsFrom(ctx),
 					Log:          ctx.Logger,
 					Verify:       ctx.Verify,
-					Worktrees:    createWorktrees{ctx: ctx},
+					Worktrees:    wtactions.BranchWorktrees{Deps: wtcli.DepsFrom(ctx)},
 				}, opts, handler)
 				if err != nil {
 					return err

@@ -11,6 +11,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
+	wtcli "github.com/getstackit/stackit/internal/cli/worktree"
 	"github.com/getstackit/stackit/internal/engine"
 )
 
@@ -85,7 +86,7 @@ Examples:
 					Out:      ctx.Output,
 					RepoRoot: ctx.RepoRoot,
 					ResolveWorktreeHooks: func() ([]string, error) {
-						return worktree.ResolveApprovedHooks(ctx)
+						return worktree.ResolveApprovedHooks(wtcli.DepsFrom(ctx))
 					},
 				}
 

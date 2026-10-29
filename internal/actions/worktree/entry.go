@@ -1,13 +1,13 @@
 package worktree
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"slices"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
@@ -202,7 +202,7 @@ func (e Entry) detachRefusal(policy RemovalPolicy) string {
 	return ""
 }
 
-func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engine.StackGraph, currentAnchor string, branchesByPath map[WorktreePath]string) Entry {
+func inspectWorktreeEntry(ctx context.Context, eng engine.Engine, wt engine.WorktreeInfo, graph *engine.StackGraph, currentAnchor string, branchesByPath map[WorktreePath]string) Entry {
 	entry := Entry{
 		Name:         wt.Name,
 		AnchorBranch: wt.AnchorBranch,
@@ -232,7 +232,7 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 			entry.CurrentBranch = branchesByPath[canonicalPath]
 		}
 
-		isDirty, err := ctx.Engine.WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
+		isDirty, err := eng.WorktreeHasUncommittedChanges(ctx, wt.Path)
 		if err == nil {
 			if isDirty {
 				entry.Lifecycle.Changes = WorktreeChangesDirty
@@ -240,11 +240,11 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 		}
 	}
 
-	anchorBranch := ctx.Engine.GetBranch(wt.AnchorBranch)
-	anchorExists := ctx.Engine.BranchNames().Contains(wt.AnchorBranch)
+	anchorBranch := eng.GetBranch(wt.AnchorBranch)
+	anchorExists := eng.BranchNames().Contains(wt.AnchorBranch)
 
 	switch {
-	case anchorExists && ctx.Engine.IsWorktreeAnchor(anchorBranch):
+	case anchorExists && eng.IsWorktreeAnchor(anchorBranch):
 		entry.Lifecycle.Registration = RegistrationStateOK
 		entry.StatusMessage = "healthy"
 		children := graph.Children(anchorBranch)
@@ -297,9 +297,9 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 		}
 
 		if entry.CurrentBranch != "" {
-			currentBranch := ctx.Engine.GetBranch(entry.CurrentBranch)
+			currentBranch := eng.GetBranch(entry.CurrentBranch)
 			if currentBranch.IsTracked() {
-				stackRoot := ctx.Engine.GetStackRootForBranch(currentBranch)
+				stackRoot := eng.GetStackRootForBranch(currentBranch)
 				if stackRoot != "" {
 					entry.RootBranches = []string{stackRoot}
 				} else {
@@ -330,8 +330,8 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 	return entry
 }
 
-func listEntries(ctx *app.Context, opts ListOptions) (*ListResult, error) {
-	worktrees, err := ctx.Engine.ListManagedWorktrees(ctx.Context)
+func listEntries(ctx context.Context, deps Deps, opts ListOptions) (*ListResult, error) {
+	worktrees, err := deps.Engine.ListManagedWorktrees(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list managed worktrees: %w", err)
 	}
@@ -340,12 +340,12 @@ func listEntries(ctx *app.Context, opts ListOptions) (*ListResult, error) {
 		Worktrees: make([]Entry, 0, len(worktrees)),
 	}
 
-	if ctx.InManagedWorktree && ctx.WorktreeInfo != nil {
-		result.CurrentAnchor = ctx.WorktreeInfo.AnchorBranch
+	if deps.Here.InManagedWorktree && deps.Here.Worktree != nil {
+		result.CurrentAnchor = deps.Here.Worktree.AnchorBranch
 	}
 
-	graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
-	gitWorktrees, gitErr := ctx.Engine.ListWorktrees(ctx.Context)
+	graph := deps.Engine.Graph(ctx, engine.SortStrategyAlphabetical)
+	gitWorktrees, gitErr := deps.Engine.ListWorktrees(ctx)
 	branchesByPath := make(map[WorktreePath]string, len(gitWorktrees))
 	if gitErr == nil {
 		for _, worktree := range gitWorktrees {
@@ -357,7 +357,7 @@ func listEntries(ctx *app.Context, opts ListOptions) (*ListResult, error) {
 	}
 
 	for _, wt := range worktrees {
-		entry := inspectWorktreeEntry(ctx, wt, graph, result.CurrentAnchor, branchesByPath)
+		entry := inspectWorktreeEntry(ctx, deps.Engine, wt, graph, result.CurrentAnchor, branchesByPath)
 		if opts.Selector != "" && entry.AnchorBranch != opts.Selector.String() && entry.Name != engine.WorktreeName(opts.Selector) {
 			continue
 		}
@@ -367,25 +367,32 @@ func listEntries(ctx *app.Context, opts ListOptions) (*ListResult, error) {
 	if gitErr != nil {
 		result.OwnershipWarnings = []string{fmt.Sprintf("could not inspect Git worktrees for ownership conflicts: %v", gitErr)}
 	} else {
-		result.OwnershipWarnings = ownershipWarnings(ctx, gitWorktrees)
+		result.OwnershipWarnings = ownershipWarnings(ctx, deps.Engine, gitWorktrees)
 	}
 
 	return result, nil
+}
+
+// OwnershipWarningsEngine is the engine surface ownership warnings read.
+type OwnershipWarningsEngine interface {
+	ListWorktrees(ctx context.Context) (git.WorktreeList, error)
+	OwningWorktree(ctx context.Context, branch engine.Branch) (*engine.WorktreeInfo, error)
+	GetBranch(name string) engine.Branch
 }
 
 // OwnershipWarnings reports branches whose physical checkout location does not
 // match the worktree that owns their stack. Exported so commands that mutate
 // across the whole repository — sync in particular — can surface divergence at
 // the time it matters, not only when someone happens to run `worktree list`.
-func OwnershipWarnings(ctx *app.Context) []string {
-	gitWorktrees, err := ctx.Engine.ListWorktrees(ctx.Context)
+func OwnershipWarnings(ctx context.Context, eng OwnershipWarningsEngine) []string {
+	gitWorktrees, err := eng.ListWorktrees(ctx)
 	if err != nil {
 		return []string{fmt.Sprintf("could not inspect Git worktrees for ownership conflicts: %v", err)}
 	}
-	return ownershipWarnings(ctx, gitWorktrees)
+	return ownershipWarnings(ctx, eng, gitWorktrees)
 }
 
-func ownershipWarnings(ctx *app.Context, gitWorktrees git.WorktreeList) []string {
+func ownershipWarnings(ctx context.Context, eng OwnershipWarningsEngine, gitWorktrees git.WorktreeList) []string {
 	// Ask git which checkout is the main one rather than trusting the engine's
 	// repo root: an engine constructed inside a managed worktree reports that
 	// worktree as its root, so the real main repository never matches and every
@@ -411,7 +418,7 @@ func ownershipWarnings(ctx *app.Context, gitWorktrees git.WorktreeList) []string
 			continue
 		}
 
-		owner, ownerErr := ctx.Engine.OwningWorktree(ctx.Context, ctx.Engine.GetBranch(gitWorktree.Branch))
+		owner, ownerErr := eng.OwningWorktree(ctx, eng.GetBranch(gitWorktree.Branch))
 		if ownerErr != nil {
 			warnings = append(warnings, fmt.Sprintf("could not determine owner for branch %s checked out at %s: %v", gitWorktree.Branch, gitWorktree.Path, ownerErr))
 			continue
@@ -437,15 +444,15 @@ func ownershipWarnings(ctx *app.Context, gitWorktrees git.WorktreeList) []string
 }
 
 // ListAction lists all managed worktrees
-func ListAction(ctx *app.Context, opts ListOptions) (*ListResult, error) {
-	return listEntries(ctx, opts)
+func ListAction(ctx context.Context, deps Deps, opts ListOptions) (*ListResult, error) {
+	return listEntries(ctx, deps, opts)
 }
 
 // findWorktreeByNameOrBranch looks up a worktree by name or anchor branch
-func findWorktreeByNameOrBranch(ctx *app.Context, selector WorktreeSelector) (*engine.WorktreeInfo, error) {
+func findWorktreeByNameOrBranch(ctx context.Context, deps Deps, selector WorktreeSelector) (*engine.WorktreeInfo, error) {
 	nameOrBranch := selector.String()
 	// First try by anchor branch (original behavior)
-	wtInfo, err := ctx.Engine.GetWorktreeForStack(ctx.Context, nameOrBranch)
+	wtInfo, err := deps.Engine.GetWorktreeForStack(ctx, nameOrBranch)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get worktree info: %w", err)
 	}
@@ -454,7 +461,7 @@ func findWorktreeByNameOrBranch(ctx *app.Context, selector WorktreeSelector) (*e
 	}
 
 	// If not found, try to find by worktree name
-	worktrees, err := ctx.Engine.ListManagedWorktrees(ctx.Context)
+	worktrees, err := deps.Engine.ListManagedWorktrees(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
 	}
@@ -467,8 +474,8 @@ func findWorktreeByNameOrBranch(ctx *app.Context, selector WorktreeSelector) (*e
 	return nil, fmt.Errorf("no worktree found for %s", output.BranchName(nameOrBranch))
 }
 
-func getWorktreeEntry(ctx *app.Context, selector WorktreeSelector) (*Entry, error) {
-	result, err := listEntries(ctx, ListOptions{Selector: selector})
+func getWorktreeEntry(ctx context.Context, deps Deps, selector WorktreeSelector) (*Entry, error) {
+	result, err := listEntries(ctx, deps, ListOptions{Selector: selector})
 	if err != nil {
 		return nil, err
 	}

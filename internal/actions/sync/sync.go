@@ -83,7 +83,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// the one place divergence reliably gets seen — previously it surfaced only
 	// if someone happened to run `worktree list`, while the guards that refuse
 	// mutations because of it said nothing about where to look.
-	for _, warning := range worktree.OwnershipWarnings(ctx) {
+	for _, warning := range worktree.OwnershipWarnings(gctx, eng) {
 		out.Warn("%s", warning)
 	}
 

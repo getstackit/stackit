@@ -3,6 +3,8 @@ package integration
 import (
 	"testing"
 
+	wtcli "github.com/getstackit/stackit/internal/cli/worktree"
+
 	"github.com/getstackit/stackit/internal/actions/get"
 
 	"github.com/stretchr/testify/require"
@@ -113,7 +115,7 @@ func plainWorktreeHolder(t *testing.T, sh *scenario.Scenario) string {
 func managedWorktreeHolder(t *testing.T, sh *scenario.Scenario) string {
 	t.Helper()
 	require.NoError(t, sh.Scene.Repo.RunGitCommand("config", "--local", "stackit.worktree.basePath", t.TempDir()))
-	result, err := worktreeaction.AttachAction(sh.Context, worktreeaction.AttachOptions{Branch: "a"})
+	result, err := worktreeaction.AttachAction(sh.Context.Context, wtcli.DepsFrom(sh.Context), worktreeaction.AttachOptions{Branch: "a"})
 	require.NoError(t, err)
 	return result.Path.String()
 }

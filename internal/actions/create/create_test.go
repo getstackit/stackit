@@ -1,7 +1,6 @@
 package create
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -9,27 +8,10 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/worktree"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
-
-// appWorktrees backs Deps.Worktrees with the worktree actions, as the CLI
-// adapter does.
-type appWorktrees struct{ ctx *app.Context }
-
-func (w appWorktrees) CreateAnchored(_ context.Context, branchName, name, scope string) (engine.WorktreePath, error) {
-	created, err := worktree.CreateAnchoredWorktreeForBranch(w.ctx, branchName, name, scope)
-	if err != nil {
-		return "", err
-	}
-	return created.Path, nil
-}
-
-func (w appWorktrees) RunPostCreateHooks(_ context.Context, path engine.WorktreePath) error {
-	return worktree.RunPostCreateHooks(w.ctx, path)
-}
 
 func deps(s *scenario.Scenario) Deps {
 	return Deps{
@@ -37,7 +19,15 @@ func deps(s *scenario.Scenario) Deps {
 		MutationDeps: actions.MutationDepsFrom(s.Context),
 		Log:          s.Context.Logger,
 		Verify:       s.Context.Verify,
-		Worktrees:    appWorktrees{ctx: s.Context},
+		Worktrees: worktree.BranchWorktrees{Deps: worktree.Deps{
+			Engine:   s.Context.Engine,
+			Out:      s.Context.Output,
+			Log:      s.Context.Logger,
+			RepoRoot: s.Context.RepoRoot,
+			Here:     actions.HereFrom(s.Context),
+			Config:   s.Context.Config,
+			Prompts:  s.Context.Prompts(),
+		}},
 	}
 }
 

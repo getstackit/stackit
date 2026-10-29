@@ -93,6 +93,7 @@ linters:
             - "**/internal/actions/track/**"
             - "**/internal/actions/undo/**"
             - "**/internal/actions/untrack/**"
+            - "**/internal/actions/worktree/**"
           deny:
             - pkg: github.com/getstackit/stackit/internal/app
               desc: >-

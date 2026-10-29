@@ -35,7 +35,7 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 	// Resolve metadata and revisions for the branches, their tracked ancestors,
 	// and trunk in two batched reads instead of per-branch git calls. Planning
 	// is read-only, so the snapshot stays valid for the whole loop.
-	metaMap, revMap := e.collectRestackData(branches.Names())
+	metaMap, revMap := e.collectRestackData(ctx, branches.Names())
 	ancestryRanges := make([]git.RevRange, 0, len(branches))
 	remoteRefs := make([]string, 0)
 	for _, branch := range branches {
@@ -67,7 +67,7 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 		if !ok {
 			continue
 		}
-		planner.add(item)
+		planner.add(ctx, item)
 	}
 
 	return plan, nil
@@ -85,7 +85,7 @@ type restackPlanner struct {
 	landed          func(string, string) bool
 }
 
-func (p *restackPlanner) add(item RestackPlanItem) {
+func (p *restackPlanner) add(ctx context.Context, item RestackPlanItem) {
 	p.plan.Items[item.Branch] = item
 	if item.Action == RestackPlanSkip {
 		p.plan.PlannedResults[item.Branch] = item.SkipResult
@@ -110,7 +110,7 @@ func (p *restackPlanner) add(item RestackPlanItem) {
 		if parentItem, ok := p.plan.Items[item.NewParent]; ok && parentItem.TargetRev != "" {
 			specNewParent = parentItem.TargetRev
 		} else if p.engine.IsWorktreeAnchor(p.engine.GetBranch(item.NewParent)) && item.ParentRev != "" {
-			if parentRev, ok := p.engine.planRev(p.revisions, item.NewParent); ok && parentRev != item.ParentRev {
+			if parentRev, ok := p.engine.planRev(ctx, p.revisions, item.NewParent); ok && parentRev != item.ParentRev {
 				specNewParent = item.ParentRev
 			}
 		}
@@ -161,7 +161,7 @@ func (p *restackPlanner) branch(ctx context.Context, branch Branch) (RestackPlan
 	}
 	if parent != nil {
 		parentName = parent.Name()
-		if _, ok := e.planRev(p.revisions, parentName); !ok {
+		if _, ok := e.planRev(ctx, p.revisions, parentName); !ok {
 			if ancestors, ancestorErr := e.FindMostRecentTrackedAncestors(ctx, branchName); ancestorErr == nil && len(ancestors) > 0 {
 				parentName = ancestors[0]
 			} else {
@@ -178,11 +178,11 @@ func (p *restackPlanner) branch(ctx context.Context, branch Branch) (RestackPlan
 	// ranges, tree commit counts and diffs) drifts further from reality with
 	// each trunk advance.
 	if branch.IsWorktreeAnchor() {
-		trunkRev, ok := e.planRev(p.revisions, e.trunk)
+		trunkRev, ok := e.planRev(ctx, p.revisions, e.trunk)
 		if !ok {
 			return item, false
 		}
-		anchorRev, ok := e.planRev(p.revisions, branchName)
+		anchorRev, ok := e.planRev(ctx, p.revisions, branchName)
 		if !ok {
 			return item, false
 		}
@@ -201,7 +201,7 @@ func (p *restackPlanner) branch(ctx context.Context, branch Branch) (RestackPlan
 	}
 
 	if branch.IsFrozen() {
-		parentRev, ok := e.planRev(p.revisions, parentName)
+		parentRev, ok := e.planRev(ctx, p.revisions, parentName)
 		if !ok {
 			return item, false
 		}
@@ -209,7 +209,7 @@ func (p *restackPlanner) branch(ctx context.Context, branch Branch) (RestackPlan
 		if err != nil || remoteSha == "" {
 			return skippedRestack(branchName, RestackBranchResult{Result: RestackUnneeded, Frozen: true}), true
 		}
-		localSha, ok := e.planRev(p.revisions, branchName)
+		localSha, ok := e.planRev(ctx, p.revisions, branchName)
 		if !ok {
 			return item, false
 		}
@@ -282,12 +282,12 @@ func (p *restackPlanner) branch(ctx context.Context, branch Branch) (RestackPlan
 	}
 	item.OldUpstream = oldParentRev
 
-	parentRev, ok := e.planRev(p.revisions, parentName)
+	parentRev, ok := e.planRev(ctx, p.revisions, parentName)
 	if !ok {
 		return item, false
 	}
 	if e.IsWorktreeAnchor(e.GetBranch(parentName)) {
-		trunkRev, ok := e.planRev(p.revisions, e.trunk)
+		trunkRev, ok := e.planRev(ctx, p.revisions, e.trunk)
 		if !ok {
 			return item, false
 		}
@@ -335,11 +335,11 @@ func (p *restackPlanner) branch(ctx context.Context, branch Branch) (RestackPlan
 // planRev returns a branch's revision from the batch-resolved snapshot,
 // falling back to an individual read on a miss. ok is false when the revision
 // cannot be resolved at all (e.g. the branch was deleted).
-func (e *engineImpl) planRev(revMap RevisionMap, name string) (string, bool) {
+func (e *engineImpl) planRev(ctx context.Context, revMap RevisionMap, name string) (string, bool) {
 	if rev, ok := revMap.Rev(name); ok {
 		return rev, true
 	}
-	rev, err := e.GetBranch(name).GetRevision()
+	rev, err := e.GetBranch(name).Revision(ctx)
 	if err != nil {
 		return "", false
 	}

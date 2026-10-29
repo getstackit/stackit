@@ -21,10 +21,10 @@ type pluckEngine interface {
 	Trunk() engine.Branch
 	IsTrunk(branch engine.Branch) bool
 	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
-	GetAllCommits(branch engine.Branch) (git.Commits, error)
-	BatchRevisions(branches engine.Branches) engine.RevisionMap
-	GetDivergencePoint(branchName string) (string, error)
-	BatchDivergencePoints(branches engine.Branches) engine.RevisionMap
+	GetAllCommits(ctx context.Context, branch engine.Branch) (git.Commits, error)
+	BatchRevisions(ctx context.Context, branches engine.Branches) engine.RevisionMap
+	GetDivergencePoint(ctx context.Context, branchName string) (string, error)
+	BatchDivergencePoints(ctx context.Context, branches engine.Branches) engine.RevisionMap
 	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec) (*engine.RebaseValidation, error)
 	ReparentBranchesToParents(ctx context.Context, moves []engine.BranchParentMove, opts engine.ReparentOpts) error
 	AssignBranchesToNewStack(ctx context.Context, root engine.Branch, branches engine.Branches) (string, error)
@@ -111,7 +111,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Prompt for confirmation in interactive mode
 	if handler.IsInteractive() && !opts.SkipConfirm {
-		commitsData, _ := eng.GetAllCommits(sourceBranch)
+		commitsData, _ := eng.GetAllCommits(ctx.Context, sourceBranch)
 		commits := commitsData.Subjects()
 
 		preview := Preview{
@@ -140,7 +140,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Get revisions needed for rebase specs in a single batched call instead
 	// of one git process per branch.
 	grandparentName := grandparentBranch.Name()
-	revisions := eng.BatchRevisions(engine.BranchesOf(ontoBranch, grandparentBranch, sourceBranch))
+	revisions := eng.BatchRevisions(ctx.Context, engine.BranchesOf(ontoBranch, grandparentBranch, sourceBranch))
 
 	ontoRev, ok := revisions.Rev(onto)
 	if !ok {
@@ -159,13 +159,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Capture old divergence point for source branch, falling back to the
 	// grandparent's revision (source's old parent) when unavailable.
-	sourceOldParentRev, divErr := eng.GetDivergencePoint(source)
+	sourceOldParentRev, divErr := eng.GetDivergencePoint(ctx.Context, source)
 	if divErr != nil || sourceOldParentRev == "" {
 		sourceOldParentRev = grandparentRev
 	}
 
 	// Children: rebase onto grandparent (source's old parent)
-	childDivPoints := eng.BatchDivergencePoints(children)
+	childDivPoints := eng.BatchDivergencePoints(ctx.Context, children)
 	for _, child := range children {
 		// Get the old upstream (divergence point)
 		childOldUpstream, ok := childDivPoints.Rev(child.Name())

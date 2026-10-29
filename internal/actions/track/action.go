@@ -29,8 +29,8 @@ type trackEngine interface {
 	Trunk() engine.Branch
 	AllBranches() engine.Branches
 	BranchNames() *engine.BranchSet
-	GetRevision(branch engine.Branch) (string, error)
-	BatchRevisions(branches engine.Branches) engine.RevisionMap
+	GetRevision(ctx context.Context, branch engine.Branch) (string, error)
+	BatchRevisions(ctx context.Context, branches engine.Branches) engine.RevisionMap
 	GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error)
 	IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error)
 	FindMostRecentTrackedAncestors(ctx context.Context, branchName string) ([]string, error)
@@ -88,7 +88,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		// Validate parent is an ancestor (unless force is used)
 		if !opts.Force {
-			revisions := eng.BatchRevisions(engine.BranchesOf(parentBranch, eng.GetBranch(branchName)))
+			revisions := eng.BatchRevisions(ctx.Context, engine.BranchesOf(parentBranch, eng.GetBranch(branchName)))
 			parentRev, ok := revisions.Rev(parent)
 			if !ok {
 				return errors.New("failed to get parent revision")
@@ -204,7 +204,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 	untrackedChildren := []string{}
 
 	// branchRev is loop-invariant; a failed lookup just disables child detection.
-	branchRev, revErr := eng.GetRevision(eng.GetBranch(branchName))
+	branchRev, revErr := eng.GetRevision(ctx.Context, eng.GetBranch(branchName))
 	if revErr == nil {
 		// GetMergeBase spawns a git subprocess per call with no batch/cached
 		// equivalent, so candidates are checked concurrently with a bounded

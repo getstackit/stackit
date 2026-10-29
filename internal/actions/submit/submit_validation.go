@@ -126,7 +126,7 @@ func validateBaseRevisions(branches []string, eng engine.BranchReader, ctx *app.
 	for _, branchName := range branches {
 		branchObjs = append(branchObjs, eng.GetBranch(branchName))
 	}
-	statuses := eng.ReadBranchStatuses(branchObjs)
+	statuses := eng.ReadBranchStatuses(ctx.Context, branchObjs)
 
 	kept := make([]string, 0, len(branches))
 	for _, branchName := range branches {

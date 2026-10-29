@@ -26,7 +26,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	for _, branch := range branches {
 		revBranches = append(revBranches, branch, resolveSubmitParent(nav, branch))
 	}
-	revisions := ctx.Engine.BatchRevisions(revBranches)
+	revisions := ctx.Engine.BatchRevisions(ctx.Context, revBranches)
 
 	// PR-info writes are collected here and persisted in one batched ref write
 	// after planning, instead of a git ref write per branch.

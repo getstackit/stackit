@@ -52,7 +52,7 @@ func (a *Analyzer) AnalyzeAll(ctx context.Context) (*AnalysisResult, error) {
 	}
 
 	for _, stack := range stacks {
-		analyzed := a.analyzeStack(stack, statusMap, remoteStatuses)
+		analyzed := a.analyzeStack(ctx, stack, statusMap, remoteStatuses)
 		result.Stacks = append(result.Stacks, analyzed)
 
 		// Update counts
@@ -88,7 +88,7 @@ func (a *Analyzer) AnalyzeStack(ctx context.Context, stack stackview.StackInfo) 
 	}
 
 	remoteStatuses := a.remoteStatusProviderFor(ctx, []stackview.StackInfo{stack})
-	analyzed := a.analyzeStack(stack, statusMap, remoteStatuses)
+	analyzed := a.analyzeStack(ctx, stack, statusMap, remoteStatuses)
 	return &analyzed, nil
 }
 
@@ -116,7 +116,7 @@ func (a *Analyzer) remoteStatusProviderFor(ctx context.Context, stacks []stackvi
 }
 
 // analyzeStack performs the actual analysis of a single stack.
-func (a *Analyzer) analyzeStack(stack stackview.StackInfo, statusMap github.ChecksByBranch, remoteStatuses *branchRemoteStatusProvider) Stack {
+func (a *Analyzer) analyzeStack(ctx context.Context, stack stackview.StackInfo, statusMap github.ChecksByBranch, remoteStatuses *branchRemoteStatusProvider) Stack {
 	result := Stack{
 		Stack:       stack,
 		ApprovalOK:  true,
@@ -131,7 +131,7 @@ func (a *Analyzer) analyzeStack(stack stackview.StackInfo, statusMap github.Chec
 			result.PRTitle = prInfo.Title()
 		} else {
 			// Fall back to commit subject (DefaultPRTitle returns commit subject or branch name)
-			result.PRTitle = rootBranch.DefaultPRTitle()
+			result.PRTitle = rootBranch.DefaultPRTitle(ctx)
 		}
 	}
 

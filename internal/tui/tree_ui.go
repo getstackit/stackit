@@ -49,7 +49,7 @@ type TreeEngine interface {
 	engine.StackView
 	stackview.WorktreeSource
 	stackview.AnnotationReader
-	BatchBranchStats(branches engine.Branches) map[string]engine.BranchStat
+	BatchBranchStats(ctx context.Context, branches engine.Branches) map[string]engine.BranchStat
 }
 
 // TreeModel is the bubbletea model for the interactive log
@@ -319,7 +319,7 @@ func (m *TreeModel) enrichData() tea.Cmd {
 		// stats) for all branches as one batched value, instead of warming the
 		// engine-global caches. Forge status (CI) and worktree data above are
 		// separate concerns, joined into the annotation below.
-		stats := eng.BatchBranchStats(allBranches)
+		stats := eng.BatchBranchStats(ctx, allBranches)
 
 		// Collect full annotations
 		start := time.Now()
@@ -331,7 +331,7 @@ func (m *TreeModel) enrichData() tea.Cmd {
 		// shared map, then assemble the map serially.
 		built := make([]tree.BranchAnnotation, len(allBranches))
 		workpool.Run(indexedBranches(allBranches), func(item indexedBranch) {
-			built[item.index] = TreeAnnotation(stackview.FullAnnotation(eng, item.branch, stats[item.branch.Name()], enrichment, stackview.AnnotationOptions{
+			built[item.index] = TreeAnnotation(stackview.FullAnnotation(ctx, eng, item.branch, stats[item.branch.Name()], enrichment, stackview.AnnotationOptions{
 				SkipCommitMessages: true,
 			}))
 		})

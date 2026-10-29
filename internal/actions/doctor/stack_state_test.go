@@ -19,7 +19,7 @@ func TestCheckEmptyBranches(t *testing.T) {
 		CreateBranch("nochanges").
 		Checkout("main")
 
-	empty := checkEmptyBranches(s.Engine)
+	empty := checkEmptyBranches(t.Context(), s.Engine)
 
 	require.ElementsMatch(t, []string{"nochanges"}, empty)
 }

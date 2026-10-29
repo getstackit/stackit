@@ -526,7 +526,7 @@ func (e *engineImpl) UntrackedCollision(ctx context.Context, branchName string, 
 	if state != nil && state.Parent != "" {
 		parent = state.Parent
 	}
-	baseRev, err := e.GetBranch(parent).GetRevision()
+	baseRev, err := e.GetBranch(parent).Revision(ctx)
 	if err != nil || baseRev == "" {
 		return false, false
 	}

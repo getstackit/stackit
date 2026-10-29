@@ -121,7 +121,7 @@ func benchmarkWideStack(b *testing.B, numBranches int) {
 	// Setup before timing
 	setupBenchmark()
 
-	mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
+	mainRev, _ := s.Engine.GetRevision(b.Context(), s.Engine.Trunk())
 	oldBase, _ := s.Git.GetMergeBase(b.Context(), mainBranch, branchName(0))
 
 	// Build specs
@@ -165,7 +165,7 @@ func benchmarkLinearStack(b *testing.B, depth int) {
 
 	setupBenchmark()
 
-	mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
+	mainRev, _ := s.Engine.GetRevision(b.Context(), s.Engine.Trunk())
 	oldBase, _ := s.Git.GetMergeBase(b.Context(), mainBranch, branchName(0))
 
 	// Build specs for chained rebases
@@ -177,7 +177,7 @@ func benchmarkLinearStack(b *testing.B, depth int) {
 	}
 
 	for i := 1; i < depth; i++ {
-		parentRev, _ := s.Engine.GetRevision(s.Engine.GetBranch(branchName(i - 1)))
+		parentRev, _ := s.Engine.GetRevision(b.Context(), s.Engine.GetBranch(branchName(i-1)))
 		specs[i] = engine.RebaseSpec{
 			Branch:      branchName(i),
 			NewParent:   parentRev,
@@ -217,13 +217,13 @@ func benchmarkMixedStack(b *testing.B) {
 
 	setupBenchmark()
 
-	mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
+	mainRev, _ := s.Engine.GetRevision(b.Context(), s.Engine.Trunk())
 	oldBase, _ := s.Git.GetMergeBase(b.Context(), mainBranch, "feature-a")
 
 	// Get revisions for chaining
-	featureARev, _ := s.Engine.GetRevision(s.Engine.GetBranch("feature-a"))
-	featureBRev, _ := s.Engine.GetRevision(s.Engine.GetBranch("feature-b"))
-	featureA1Rev, _ := s.Engine.GetRevision(s.Engine.GetBranch("feature-a1"))
+	featureARev, _ := s.Engine.GetRevision(b.Context(), s.Engine.GetBranch("feature-a"))
+	featureBRev, _ := s.Engine.GetRevision(b.Context(), s.Engine.GetBranch("feature-b"))
+	featureA1Rev, _ := s.Engine.GetRevision(b.Context(), s.Engine.GetBranch("feature-a1"))
 
 	specs := []engine.RebaseSpec{
 		// Depth 1

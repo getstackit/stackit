@@ -1,6 +1,8 @@
 package stackview
 
 import (
+	"context"
+
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
@@ -107,8 +109,8 @@ func MinimalAnnotation(eng AnnotationReader, branch engine.Branch, worktrees *Wo
 
 // FullAnnotation returns BaseAnnotation joined with the enrichment's CI and
 // review status and worktree info. A nil enrichment yields the base annotation.
-func FullAnnotation(eng AnnotationReader, branch engine.Branch, stat engine.BranchStat, enrichment *Enrichment, opts AnnotationOptions) BranchAnnotation {
-	ann := BaseAnnotation(eng, branch, stat, opts)
+func FullAnnotation(ctx context.Context, eng AnnotationReader, branch engine.Branch, stat engine.BranchStat, enrichment *Enrichment, opts AnnotationOptions) BranchAnnotation {
+	ann := BaseAnnotation(ctx, eng, branch, stat, opts)
 	if enrichment == nil {
 		return ann
 	}
@@ -129,7 +131,7 @@ func FullAnnotation(eng AnnotationReader, branch engine.Branch, stat engine.Bran
 // come from stat, a batched value the caller resolves with BatchBranchStats —
 // code annotating a set of branches must build that batch rather than reading
 // per branch.
-func BaseAnnotation(eng ScopeReader, branch engine.Branch, stat engine.BranchStat, opts AnnotationOptions) BranchAnnotation {
+func BaseAnnotation(ctx context.Context, eng ScopeReader, branch engine.Branch, stat engine.BranchStat, opts AnnotationOptions) BranchAnnotation {
 	ann := BranchAnnotation{
 		IsLocked:      branch.IsLocked(),
 		IsFrozen:      branch.IsFrozen(),
@@ -151,7 +153,7 @@ func BaseAnnotation(eng ScopeReader, branch engine.Branch, stat engine.BranchSta
 
 	// Commit messages for the detailed view; otherwise the batched count.
 	if !opts.SkipCommitMessages {
-		if commits, err := branch.GetAllCommits(); err == nil {
+		if commits, err := branch.AllCommits(ctx); err == nil {
 			ann.CommitMessages = commits.Onelines()
 			ann.CommitCount = len(commits)
 		}

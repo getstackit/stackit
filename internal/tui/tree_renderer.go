@@ -171,7 +171,7 @@ func newStackTreeRendererInternal(ctx context.Context, eng engine.StackView, str
 	// Resolve restack status for every branch in one batched parent-revision
 	// read instead of a per-branch IsUpToDate() call during tree traversal
 	// (each of which would shell a separate `git rev-parse` for the parent).
-	statuses := eng.ReadBranchStatuses(eng.AllBranches())
+	statuses := eng.ReadBranchStatuses(ctx, eng.AllBranches())
 
 	// Use the Data interface instead of callback functions
 	data := &graphData{

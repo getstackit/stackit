@@ -49,7 +49,7 @@ func Action(ctx context.Context, deps Deps) error {
 
 	// Get parent branch revision
 	parentBranch := eng.GetBranch(parentName)
-	parentRev, err := parentBranch.GetRevision()
+	parentRev, err := parentBranch.Revision(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get parent revision: %w", err)
 	}

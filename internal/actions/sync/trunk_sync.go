@@ -49,7 +49,7 @@ func handleTrunkPullResult(ctx *app.Context, opts *Options, handler Handler, sum
 	switch pullResult {
 	case engine.PullDone:
 		trunk := nav.Trunk()
-		rev, _ := trunk.GetRevision()
+		rev, _ := trunk.Revision(ctx.Context)
 		revShort := git.ShortRevision(rev, 0)
 		summary.TrunkUpdated = true
 		summary.TrunkRevision = revShort
@@ -81,7 +81,7 @@ func handleTrunkPullResult(ctx *app.Context, opts *Options, handler Handler, sum
 			}
 			ctx.Logger.Info("reset trunk to remote completed durationMs=%d", time.Since(resetStart).Milliseconds())
 			trunk := nav.Trunk()
-			rev, _ := trunk.GetRevision()
+			rev, _ := trunk.Revision(ctx.Context)
 			revShort := git.ShortRevision(rev, 0)
 			summary.TrunkUpdated = true
 			summary.TrunkRevision = revShort

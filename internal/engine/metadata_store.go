@@ -6,6 +6,11 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 )
 
+// The four readers below fill the engine's lazily loaded metadata cache. A
+// fill populates state every later caller shares, so it is not tied to (or
+// canceled with) whichever caller happened to trigger it; they run under
+// context.Background by design.
+
 // readMetadata loads branch metadata from the configured metadata store.
 func (e *engineImpl) readMetadata(branch string) (*git.Meta, error) {
 	return e.metadata.ReadMetadata(context.Background(), branch).One()

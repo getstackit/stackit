@@ -49,7 +49,7 @@ func (h *StacksHandler) listStacks(ctx context.Context, w http.ResponseWriter, e
 
 	// One restack-status pass over every branch in every stack, not one per
 	// stack — see stackview.BranchData.
-	statuses := entry.Engine.ReadBranchStatuses(stackview.BranchesFromGraph(graph, stacks.AllBranchNames()))
+	statuses := entry.Engine.ReadBranchStatuses(ctx, stackview.BranchesFromGraph(graph, stacks.AllBranchNames()))
 
 	summaries := make([]httpcontract.StackSummary, 0, len(stacks))
 	for _, stack := range stacks {

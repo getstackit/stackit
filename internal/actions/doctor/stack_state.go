@@ -18,9 +18,9 @@ type stackStateEngine interface {
 	Trunk() engine.Branch
 	AllBranches() engine.Branches
 	GetAllBranchNames(ctx context.Context) ([]string, error)
-	BatchIsBranchEmpty(branchNames []string) engine.BranchNameSet
+	BatchIsBranchEmpty(ctx context.Context, branchNames []string) engine.BranchNameSet
 	ListMetadataRefs(ctx context.Context) (map[string]string, error)
-	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
+	BatchReadMetadataRaw(ctx context.Context, branchNames []string) (engine.MetaMap, map[string]error)
 	DeleteMetadataRefsBatch(ctx context.Context, branchNames []string) error
 }
 
@@ -92,7 +92,7 @@ func checkStackState(ctx context.Context, eng stackStateEngine, handler Handler,
 
 	// Check for corrupted metadata
 	metadataRefNames := slices.Collect(maps.Keys(metadataRefs))
-	allMeta, allMetaErrs := eng.BatchReadMetadataRaw(metadataRefNames)
+	allMeta, allMetaErrs := eng.BatchReadMetadataRaw(ctx, metadataRefNames)
 
 	corruptedCount := 0
 	for _, branchName := range metadataRefNames {
@@ -135,7 +135,7 @@ func checkStackState(ctx context.Context, eng stackStateEngine, handler Handler,
 	}
 
 	// Check for empty branches (branches with no commits vs their parent)
-	emptyBranches := checkEmptyBranches(eng)
+	emptyBranches := checkEmptyBranches(ctx, eng)
 	if len(emptyBranches) > 0 {
 		warnings += len(emptyBranches)
 		branchList := strings.Join(emptyBranches, ", ")
@@ -148,7 +148,7 @@ func checkStackState(ctx context.Context, eng stackStateEngine, handler Handler,
 }
 
 // checkEmptyBranches finds branches that have no commits compared to their parent
-func checkEmptyBranches(eng stackStateEngine) []string {
+func checkEmptyBranches(ctx context.Context, eng stackStateEngine) []string {
 	trunk := eng.Trunk()
 	trunkName := trunk.Name()
 
@@ -160,7 +160,7 @@ func checkEmptyBranches(eng stackStateEngine) []string {
 		}
 	}
 
-	emptyStatuses := eng.BatchIsBranchEmpty(branchNames)
+	emptyStatuses := eng.BatchIsBranchEmpty(ctx, branchNames)
 
 	var emptyBranches []string
 	for _, branchName := range branchNames {

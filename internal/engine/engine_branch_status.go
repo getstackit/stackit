@@ -157,7 +157,7 @@ func (e *engineImpl) GetExplicitScope(branch Branch) Scope {
 
 // IsUpToDate checks if a branch is up to date with its parent
 // A branch is up to date if its parent revision matches the stored parent revision
-func (e *engineImpl) IsUpToDate(branch Branch) bool {
+func (e *engineImpl) IsUpToDate(ctx context.Context, branch Branch) bool {
 	if e.IsTrunk(branch) {
 		return true
 	}
@@ -175,7 +175,7 @@ func (e *engineImpl) IsUpToDate(branch Branch) bool {
 	}
 
 	// Get current parent revision.
-	parentRev, err := e.git.ReadRevisions(context.Background(), state.Parent).One()
+	parentRev, err := e.git.ReadRevisions(ctx, state.Parent).One()
 	if err != nil {
 		return false // Can't determine, assume needs restack
 	}
@@ -187,7 +187,7 @@ func (e *engineImpl) IsUpToDate(branch Branch) bool {
 // ReadBranchStatuses reads status facts for a group of branches.
 // Parent revisions are fetched in one batch. Missing metadata follows
 // IsUpToDate semantics.
-func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
+func (e *engineImpl) ReadBranchStatuses(ctx context.Context, branches Branches) BranchStatuses {
 	results := make(map[string]bool, branches.Len())
 	type pendingCheck struct {
 		parent      string
@@ -230,7 +230,7 @@ func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
 
 	parents := slices.Sorted(maps.Keys(parentSet))
 
-	parentRevs, _ := e.git.ReadRevisions(context.Background(), parents...).ValuesAndErrors()
+	parentRevs, _ := e.git.ReadRevisions(ctx, parents...).ValuesAndErrors()
 	for name, check := range pending {
 		parentRev, ok := parentRevs[check.parent]
 		results[name] = ok && check.expectedRev == parentRev
@@ -394,7 +394,7 @@ func (e *engineImpl) IsBranchEmpty(ctx context.Context, branchName string) (bool
 // are content-addressed, so equal SHA ⇔ no diff). All branch and parent tree
 // SHAs are resolved in a single batched rev-parse rather than a `git diff` per
 // branch. Branches whose trees cannot be resolved are omitted from the result.
-func (e *engineImpl) BatchIsBranchEmpty(branchNames []string) BranchNameSet {
+func (e *engineImpl) BatchIsBranchEmpty(ctx context.Context, branchNames []string) BranchNameSet {
 	result := make(BranchNameSet, len(branchNames))
 	if len(branchNames) == 0 {
 		return result
@@ -428,7 +428,7 @@ func (e *engineImpl) BatchIsBranchEmpty(branchNames []string) BranchNameSet {
 		addRef(parents.Parent(name))
 	}
 
-	trees, _ := e.git.ReadRevisions(context.Background(), treeRefs...).ValuesAndErrors()
+	trees, _ := e.git.ReadRevisions(ctx, treeRefs...).ValuesAndErrors()
 
 	for _, name := range branchNames {
 		branchTree, ok1 := trees[name+"^{tree}"]
@@ -601,7 +601,7 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 		parentName = parent.Name()
 	}
 
-	if parentRev, ok := e.planRev(revisions, parentName); ok && parentRev != "" {
+	if parentRev, ok := e.planRev(ctx, revisions, parentName); ok && parentRev != "" {
 		if empty, err := e.isDiffEmpty(ctx, parentRev, branchName); err == nil && empty {
 			return DeletionStatus{SafeToDelete: true, Reason: "empty", Kind: DeletionReasonEmptyWithPR}
 		}

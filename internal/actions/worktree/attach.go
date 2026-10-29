@@ -28,7 +28,7 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*WorktreeResult, error)
 
 	branch := eng.GetBranch(opts.Branch)
 	if !branch.IsTracked() {
-		if _, err := eng.GetRevision(branch); err != nil {
+		if _, err := eng.GetRevision(ctx.Context, branch); err != nil {
 			return nil, fmt.Errorf("branch %s does not exist", output.BranchName(opts.Branch))
 		}
 		return nil, fmt.Errorf("branch %s is not tracked by stackit", output.BranchName(opts.Branch))

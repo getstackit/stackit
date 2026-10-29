@@ -42,7 +42,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		}
 		parentName := currentBranch.ParentOrTrunk()
 		parentBranch := eng.GetBranch(parentName)
-		parentRev, err := parentBranch.GetRevision()
+		parentRev, err := parentBranch.Revision(ctx.Context)
 		if err != nil {
 			return fmt.Errorf("failed to get parent revision: %w", err)
 		}
@@ -51,7 +51,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 			BranchesToRestack:     []string{},
 			CurrentBranchOverride: currentBranch.Name(),
 		}
-		expectedBranchRevision, err := currentBranch.GetRevision()
+		expectedBranchRevision, err := currentBranch.Revision(ctx.Context)
 		if err != nil {
 			return fmt.Errorf("failed to get current branch revision: %w", err)
 		}

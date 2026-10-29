@@ -2,6 +2,7 @@ package absorb
 
 import (
 	"cmp"
+	"context"
 	"maps"
 	"slices"
 	"strings"
@@ -13,16 +14,16 @@ import (
 )
 
 // printDryRunOutput prints what would be absorbed in dry-run mode
-func printDryRunOutput(hunksByCommit map[string][]git.Hunk, unabsorbedHunks []Unabsorbable, eng engine.Engine, splog output.Output) {
-	printAbsorbPreview("Would absorb:", hunksByCommit, unabsorbedHunks, eng, splog)
+func printDryRunOutput(ctx context.Context, hunksByCommit map[string][]git.Hunk, unabsorbedHunks []Unabsorbable, eng engine.Engine, splog output.Output) {
+	printAbsorbPreview(ctx, "Would absorb:", hunksByCommit, unabsorbedHunks, eng, splog)
 }
 
 // printAbsorbPlan prints the plan for absorbing changes
-func printAbsorbPlan(hunksByCommit map[string][]git.Hunk, unabsorbedHunks []Unabsorbable, eng engine.Engine, splog output.Output) {
-	printAbsorbPreview("Will absorb:", hunksByCommit, unabsorbedHunks, eng, splog)
+func printAbsorbPlan(ctx context.Context, hunksByCommit map[string][]git.Hunk, unabsorbedHunks []Unabsorbable, eng engine.Engine, splog output.Output) {
+	printAbsorbPreview(ctx, "Will absorb:", hunksByCommit, unabsorbedHunks, eng, splog)
 }
 
-func printAbsorbPreview(
+func printAbsorbPreview(ctx context.Context,
 	heading string,
 	hunksByCommit map[string][]git.Hunk,
 	unabsorbedHunks []Unabsorbable,
@@ -47,9 +48,9 @@ func printAbsorbPreview(
 
 	// Resolve owning branches in one batched scan instead of one lookup per commit.
 	commitSHAs := sortedCommitSHAs(hunksByCommit)
-	commitBranches := eng.FindBranchesForCommits(commitSHAs)
+	commitBranches := eng.FindBranchesForCommits(ctx, commitSHAs)
 	// Fetch each owning branch's commit log once instead of once per commit.
-	branchCommits := eng.BatchCommits(branchesFor(eng, commitBranches))
+	branchCommits := eng.BatchCommits(ctx, branchesFor(eng, commitBranches))
 	for _, commitSHA := range commitSHAs {
 		hunks := sortedHunks(hunksByCommit[commitSHA])
 		branchName := commitBranches[commitSHA]

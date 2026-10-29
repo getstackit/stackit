@@ -179,7 +179,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Group hunks by branch, then by commit. Resolve every target commit's
 	// owning branch in one batched scan instead of a git-log sweep per hunk.
-	commitBranches := eng.FindBranchesForCommits(targetCommitSHAs(candidateTargets))
+	commitBranches := eng.FindBranchesForCommits(ctx.Context, targetCommitSHAs(candidateTargets))
 	hunksByBranch := make(map[string]map[string][]git.Hunk)
 	for _, target := range candidateTargets {
 		branchName := commitBranches[target.CommitSHA]
@@ -224,7 +224,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		for _, branchHunks := range hunksByBranch {
 			maps.Copy(flatHunksByCommit, branchHunks)
 		}
-		printDryRunOutput(flatHunksByCommit, unabsorbedHunks, eng, out)
+		printDryRunOutput(ctx.Context, flatHunksByCommit, unabsorbedHunks, eng, out)
 
 		// Output JSON if requested (works with dry-run for preview)
 		if opts.JSON {
@@ -256,7 +256,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	for _, branchHunks := range hunksByBranch {
 		maps.Copy(flatHunksByCommit, branchHunks)
 	}
-	printAbsorbPlan(flatHunksByCommit, unabsorbedHunks, eng, out)
+	printAbsorbPlan(ctx.Context, flatHunksByCommit, unabsorbedHunks, eng, out)
 
 	// Prompt for confirmation if not --force
 	if !opts.Force && handler.IsInteractive() {

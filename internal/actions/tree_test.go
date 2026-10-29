@@ -41,10 +41,10 @@ type treeStatsEngine struct {
 	names []string
 }
 
-func (e *treeStatsEngine) BatchBranchStats(branches engine.Branches) map[string]engine.BranchStat {
+func (e *treeStatsEngine) BatchBranchStats(ctx context.Context, branches engine.Branches) map[string]engine.BranchStat {
 	e.reads++
 	e.names = branches.Names()
-	return e.Engine.BatchBranchStats(branches)
+	return e.Engine.BatchBranchStats(ctx, branches)
 }
 
 type treeChecksClient struct {

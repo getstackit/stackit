@@ -175,9 +175,9 @@ func BuildTreeJSON(ctx context.Context, eng engine.Engine, gh github.Client, req
 	// would shell a separate `git rev-parse` for the parent).
 	var stats map[string]engine.BranchStat
 	if req.Style != TreeStyleShort {
-		stats = eng.BatchBranchStats(processableBranches)
+		stats = eng.BatchBranchStats(ctx, processableBranches)
 	}
-	statuses := eng.ReadBranchStatuses(processableBranches)
+	statuses := eng.ReadBranchStatuses(ctx, processableBranches)
 
 	if len(processableBranches) > 0 {
 		workpool.Run(processableBranches.All(), func(branch engine.Branch) {

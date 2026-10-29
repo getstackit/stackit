@@ -413,7 +413,7 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 	if result.Result == engine.RestackDone {
 		rev := result.NewRev
 		if rev == "" {
-			rev, _ = branch.GetRevision()
+			rev, _ = branch.Revision(ctx.Context)
 		}
 		newRev = git.ShortRevision(rev, 0)
 	}
@@ -535,7 +535,7 @@ func enterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 
 	// Perform rebase to enter conflict state
 	conflictBranch := ctx.Engine.GetBranch(firstConflict)
-	expectedBranchRevision, err := conflictBranch.GetRevision()
+	expectedBranchRevision, err := conflictBranch.Revision(ctx.Context)
 	if err != nil {
 		reattach()
 		return fmt.Errorf("failed to get branch revision before conflict workflow: %w", err)
@@ -623,7 +623,7 @@ func validateBranchAncestry(ctx *app.Context, branches engine.Branches) error {
 			revBranches = append(revBranches, *parent)
 		}
 	}
-	revisions := ctx.Engine.BatchRevisions(revBranches)
+	revisions := ctx.Engine.BatchRevisions(ctx.Context, revBranches)
 
 	for _, branch := range branches {
 		branchName := branch.Name()

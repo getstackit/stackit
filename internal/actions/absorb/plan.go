@@ -63,7 +63,7 @@ func GeneratePlanJSON(ctx context.Context,
 	}
 
 	// Convert absorbed hunks. Resolve all target branches in one batched scan.
-	commitBranches := eng.FindBranchesForCommits(targetCommitSHAs(hunkTargets))
+	commitBranches := eng.FindBranchesForCommits(ctx, targetCommitSHAs(hunkTargets))
 	for _, target := range hunkTargets {
 		branchName := commitBranches[target.CommitSHA]
 		if branchName == "" {

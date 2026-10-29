@@ -24,7 +24,7 @@ type PlanEngine interface {
 	Trunk() engine.Branch
 	AllBranches() engine.Branches
 	ReadBranchRemoteStatuses(ctx context.Context, branches engine.Branches) engine.BranchRemoteStatuses
-	ReadBranchStatuses(branches engine.Branches) engine.BranchStatuses
+	ReadBranchStatuses(ctx context.Context, branches engine.Branches) engine.BranchStatuses
 	GetDeletionStatuses(ctx context.Context, branchNames []string) (engine.DeletionStatuses, error)
 	GetStackRootForBranch(branch engine.Branch) string
 }
@@ -116,7 +116,7 @@ func PlanDryRun(ctx context.Context, eng PlanEngine, req PlanRequest) DryRunPlan
 	// which would shell a separate `git rev-parse` for the parent).
 	var statuses engine.BranchStatuses
 	if req.Restack {
-		statuses = eng.ReadBranchStatuses(allBranches)
+		statuses = eng.ReadBranchStatuses(ctx, allBranches)
 	}
 
 	for _, branch := range allBranches {

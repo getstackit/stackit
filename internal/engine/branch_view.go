@@ -65,9 +65,9 @@ func (e *engineImpl) readBranchRanges(ctx context.Context, branches Branches) gi
 
 // BatchDiffStats returns each non-trunk branch's additions/deletions against its
 // divergence point, keyed by branch name, resolved in one batched pass.
-func (e *engineImpl) BatchDiffStats(branches Branches) map[string]DiffStat {
-	ranges := e.branchDiffRanges(branches)
-	diffs := e.readBranchDiffs(context.Background(), ranges, git.DiffStats)
+func (e *engineImpl) BatchDiffStats(ctx context.Context, branches Branches) map[string]DiffStat {
+	ranges := e.branchDiffRanges(ctx, branches)
+	diffs := e.readBranchDiffs(ctx, ranges, git.DiffStats)
 	result := make(map[string]DiffStat, len(branches))
 	for _, branch := range branches {
 		diff := diffs[branch.Name()]
@@ -76,8 +76,8 @@ func (e *engineImpl) BatchDiffStats(branches Branches) map[string]DiffStat {
 	return result
 }
 
-func (e *engineImpl) branchDiffRanges(branches Branches) map[string]git.RevRange {
-	return e.readBranchRanges(context.Background(), branches).Values()
+func (e *engineImpl) branchDiffRanges(ctx context.Context, branches Branches) map[string]git.RevRange {
+	return e.readBranchRanges(ctx, branches).Values()
 }
 
 // Read only uncached immutable ranges; no per-branch subprocesses are launched.
@@ -108,8 +108,8 @@ func (e *engineImpl) readBranchDiffs(ctx context.Context, ranges map[string]git.
 
 // BatchCommits returns typed display/replay data, omitting failed branches for
 // best-effort display callers. Use ReadBranchCommits when errors must propagate.
-func (e *engineImpl) BatchCommits(branches Branches) map[string]git.Commits {
-	data := e.ReadBranchCommits(context.Background(), branches)
+func (e *engineImpl) BatchCommits(ctx context.Context, branches Branches) map[string]git.Commits {
+	data := e.ReadBranchCommits(ctx, branches)
 	result := make(map[string]git.Commits, len(branches))
 	for name, history := range data.All() {
 		if history.Err == nil {
@@ -175,7 +175,7 @@ func readBranchHistory[C, T any](e *engineImpl, ctx context.Context, branches Br
 // keeps the file count consistent with the additions/deletions for a branch
 // whose parent has advanced since it diverged.
 func (e *engineImpl) BatchChangedFileCounts(ctx context.Context, branches Branches) map[string]int {
-	diffs := e.readBranchDiffs(ctx, e.branchDiffRanges(branches), git.DiffNames)
+	diffs := e.readBranchDiffs(ctx, e.branchDiffRanges(ctx, branches), git.DiffNames)
 	result := make(map[string]int, len(branches))
 	for _, branch := range branches {
 		result[branch.Name()] = len(diffs[branch.Name()].Files)
@@ -187,14 +187,14 @@ func (e *engineImpl) BatchChangedFileCounts(ctx context.Context, branches Branch
 // additions/deletions) for every branch in one batched pass, keyed by branch
 // name. Forge status (CI, reviews) is a separate concern joined at render time,
 // not part of this.
-func (e *engineImpl) BatchBranchStats(branches Branches) map[string]BranchStat {
-	ranges := e.branchDiffRanges(branches)
+func (e *engineImpl) BatchBranchStats(ctx context.Context, branches Branches) map[string]BranchStat {
+	ranges := e.branchDiffRanges(ctx, branches)
 	// Counts and the diff batch are independent. Overlap them so batching does
 	// not add a serial diff phase to the latency of a small stack.
 	var diffs map[string]git.DiffSummary
 	var diffRead sync.WaitGroup
 	diffRead.Go(func() {
-		diffs = e.readBranchDiffs(context.Background(), ranges, git.DiffStats)
+		diffs = e.readBranchDiffs(ctx, ranges, git.DiffStats)
 	})
 	pending := make([]git.RevRange, 0, len(ranges))
 	for _, rr := range ranges {
@@ -204,7 +204,7 @@ func (e *engineImpl) BatchBranchStats(branches Branches) map[string]BranchStat {
 			}
 		}
 	}
-	counts := e.git.ReadCommitCounts(context.Background(), pending...)
+	counts := e.git.ReadCommitCounts(ctx, pending...)
 	for _, rr := range pending {
 		if count, err := counts.Get(rr.String()); err == nil {
 			e.commitCountCache.Store(rr, count)

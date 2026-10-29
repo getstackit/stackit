@@ -504,7 +504,7 @@ func TestCleanBranches(t *testing.T) {
 		s.CommitChange("child.txt", "branch2-change")
 		s.TrackBranch("branch2", "branch1")
 
-		branch1Rev, err := s.Engine.GetBranch("branch1").GetRevision()
+		branch1Rev, err := s.Engine.GetBranch("branch1").Revision(t.Context())
 		require.NoError(t, err)
 
 		// Simulate squash merge of branch1 by adding branch1's final tree state to main in one commit.

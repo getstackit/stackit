@@ -26,8 +26,8 @@ type flattenEngine interface {
 	Trunk() engine.Branch
 	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
 	SortBranchesTopologically(ctx context.Context, branches engine.Branches) engine.Branches
-	BatchRevisions(branches engine.Branches) engine.RevisionMap
-	BatchDivergencePoints(branches engine.Branches) engine.RevisionMap
+	BatchRevisions(ctx context.Context, branches engine.Branches) engine.RevisionMap
+	BatchDivergencePoints(ctx context.Context, branches engine.Branches) engine.RevisionMap
 	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec) (*engine.RebaseValidation, error)
 	ReparentBranchesToParents(ctx context.Context, moves []engine.BranchParentMove, opts engine.ReparentOpts) error
 }
@@ -159,7 +159,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	sortedForValidation := eng.SortBranchesTopologically(ctx.Context, branchObjects)
 
 	// Build rebase specs for all branches in topological order
-	allRebaseSpecs := buildRebaseSpecsForAll(eng, plan, sortedForValidation)
+	allRebaseSpecs := buildRebaseSpecsForAll(ctx.Context, eng, plan, sortedForValidation)
 
 	// Report progress for validation
 	handler.OnValidationProgress(0, len(allRebaseSpecs), "validating...")
@@ -322,7 +322,7 @@ func collectAllBranchesToRestack(eng engine.BranchLookup, graph *engine.StackGra
 
 // buildRebaseSpecsForAll builds rebase specs for all branches that will be affected,
 // accounting for cascading parent changes when ancestors are moved.
-func buildRebaseSpecsForAll(eng flattenEngine, plan *flattenPlan, branches engine.Branches) []engine.RebaseSpec {
+func buildRebaseSpecsForAll(ctx context.Context, eng flattenEngine, plan *flattenPlan, branches engine.Branches) []engine.RebaseSpec {
 	// Build a map of existing rebase specs from the plan
 	existingSpecs := make(map[string]engine.RebaseSpec)
 	for _, spec := range plan.RebaseSpecs {
@@ -331,14 +331,14 @@ func buildRebaseSpecsForAll(eng flattenEngine, plan *flattenPlan, branches engin
 
 	// Resolve divergence points and parent revisions for every branch up front
 	// in batched reads, instead of one git process pair per branch below.
-	divergence := eng.BatchDivergencePoints(branches)
+	divergence := eng.BatchDivergencePoints(ctx, branches)
 	parents := make(engine.Branches, 0, len(branches))
 	for _, b := range branches {
 		if parent := b.Parent(); parent != nil {
 			parents = append(parents, *parent)
 		}
 	}
-	parentRevisions := eng.BatchRevisions(parents)
+	parentRevisions := eng.BatchRevisions(ctx, parents)
 
 	specs := make([]engine.RebaseSpec, 0, len(branches))
 
@@ -468,8 +468,8 @@ func buildFlattenPlan(ctx *app.Context, eng flattenEngine, branches engine.Branc
 	// batched reads up front (passed-around values, no engine-global cache). The
 	// revision map doubles as the parent-revision lookup the planning loop used
 	// to accumulate one entry at a time.
-	revisions := eng.BatchRevisions(engine.Branches{trunk}.Concat(branches))
-	divergence := eng.BatchDivergencePoints(branches)
+	revisions := eng.BatchRevisions(ctx.Context, engine.Branches{trunk}.Concat(branches))
+	divergence := eng.BatchDivergencePoints(ctx.Context, branches)
 
 	if revisions[trunk.Name()] == "" {
 		return nil, errors.New("failed to get trunk revision")

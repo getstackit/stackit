@@ -23,10 +23,10 @@ type BranchData struct {
 // BranchDataReader is the engine surface FetchBranchData reads.
 type BranchDataReader interface {
 	ReadBranchRemoteStatuses(ctx context.Context, branches engine.Branches) engine.BranchRemoteStatuses
-	BatchBranchStats(branches engine.Branches) map[string]engine.BranchStat
-	BatchCommits(branches engine.Branches) map[string]git.Commits
-	BatchCommitInfo(branches engine.Branches) map[string]git.CommitInfo
-	ReadBranchStatuses(branches engine.Branches) engine.BranchStatuses
+	BatchBranchStats(ctx context.Context, branches engine.Branches) map[string]engine.BranchStat
+	BatchCommits(ctx context.Context, branches engine.Branches) map[string]git.Commits
+	BatchCommitInfo(ctx context.Context, branches engine.Branches) map[string]git.CommitInfo
+	ReadBranchStatuses(ctx context.Context, branches engine.Branches) engine.BranchStatuses
 }
 
 // FetchBranchData runs the batch reads backing BranchData: one remote
@@ -35,10 +35,10 @@ type BranchDataReader interface {
 func FetchBranchData(ctx context.Context, eng BranchDataReader, branches engine.Branches) BranchData {
 	return BranchData{
 		RemoteStatuses: eng.ReadBranchRemoteStatuses(ctx, branches),
-		Stats:          eng.BatchBranchStats(branches),
-		Commits:        eng.BatchCommits(branches),
-		CommitInfo:     eng.BatchCommitInfo(branches),
-		Statuses:       eng.ReadBranchStatuses(branches),
+		Stats:          eng.BatchBranchStats(ctx, branches),
+		Commits:        eng.BatchCommits(ctx, branches),
+		CommitInfo:     eng.BatchCommitInfo(ctx, branches),
+		Statuses:       eng.ReadBranchStatuses(ctx, branches),
 	}
 }
 

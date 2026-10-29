@@ -222,7 +222,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Resolve up-to-date status for every branch in one batched parent-revision
 	// read rather than a per-branch IsBranchUpToDate() (each of which shells a
 	// separate `git rev-parse` for the parent).
-	statuses := eng.ReadBranchStatuses(branchObjs)
+	statuses := eng.ReadBranchStatuses(ctx.Context, branchObjs)
 
 	fixedMap := make(map[string]bool)
 	scopeMap := make(map[string]string)
@@ -356,7 +356,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Branches with no commits still submit (an empty PR can be a placeholder),
 	// but the plan flags them and interactive runs confirm first.
-	emptyMap := eng.BatchIsBranchEmpty(branches)
+	emptyMap := eng.BatchIsBranchEmpty(ctx.Context, branches)
 
 	// Prepare branches for submit (show planning phase with current indicator)
 	submissionInfos, err := prepareBranchesForSubmit(ctx, branchObjs, opts, currentBranchName, remoteStatuses, emptyMap, handler)
@@ -916,7 +916,7 @@ func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, handler Handl
 	bodyToCreate := submissionInfo.Metadata.Body
 	if bodyToCreate == "" {
 		branch := nav.GetBranch(submissionInfo.BranchName)
-		generatedBody, genErr := GetPRBody(branch, false, "")
+		generatedBody, genErr := GetPRBody(ctx.Context, branch, false, "")
 		if genErr == nil && generatedBody != "" {
 			bodyToCreate = generatedBody
 		}
@@ -1017,7 +1017,7 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		if submissionInfo.BaseSHA != submissionInfo.HeadSHA {
 			// Check if there are actually commits between base and head
 			branch := nav.GetBranch(submissionInfo.BranchName)
-			commits, err := branch.GetCommitIDs()
+			commits, err := branch.CommitIDs(ctx.Context)
 			if err == nil && len(commits) > 0 {
 				// There are commits, safe to update base
 				updateOpts.Base = &submissionInfo.Base

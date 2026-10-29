@@ -21,12 +21,12 @@ type fakeSource struct {
 	calledRange bool
 }
 
-func (f *fakeSource) GetRecentTrunkCommits(count int) ([]git.RecentCommit, error) {
+func (f *fakeSource) GetRecentTrunkCommits(_ context.Context, count int) ([]git.RecentCommit, error) {
 	f.gotCount = count
 	return f.recent, f.err
 }
 
-func (f *fakeSource) GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit, error) {
+func (f *fakeSource) GetTrunkCommitsInRange(_ context.Context, rr git.RevRange) ([]git.RecentCommit, error) {
 	f.calledRange = true
 	f.gotFrom, f.gotTo = rr.Base, rr.Head
 	return f.ranged, f.err

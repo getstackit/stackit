@@ -101,7 +101,7 @@ func executeUpdatePRBase(ctx *app.Context, eng mergeExecuteEngine, step PlanStep
 
 	// Get the old parent revision
 	parentBranch := eng.GetBranch(parentName)
-	oldParentRev, err := parentBranch.GetRevision()
+	oldParentRev, err := parentBranch.Revision(ctx.Context)
 	if err != nil {
 		return fmt.Errorf("failed to get parent revision: %w", err)
 	}

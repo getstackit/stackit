@@ -45,7 +45,7 @@ func (e *engineImpl) RestackBranches(ctx context.Context, branches Branches, opt
 // and trunk itself — in two batched reads instead of per-branch git calls.
 // Consumers treat the maps as a point-in-time snapshot and fall back to
 // individual reads on a miss.
-func (e *engineImpl) collectRestackData(branchNames []string) (MetaMap, RevisionMap) {
+func (e *engineImpl) collectRestackData(ctx context.Context, branchNames []string) (MetaMap, RevisionMap) {
 	// Identify all potential parents and ancestors to fetch their metadata and revisions too
 	e.mu.RLock()
 	allInvolvedBranches := make(map[string]bool)
@@ -67,7 +67,7 @@ func (e *engineImpl) collectRestackData(branchNames []string) (MetaMap, Revision
 	e.mu.RUnlock()
 
 	metaMap, _ := e.batchReadMetadata(involvedBranchNames)
-	revMap, _ := e.git.ReadRevisions(context.Background(), involvedBranchNames...).ValuesAndErrors()
+	revMap, _ := e.git.ReadRevisions(ctx, involvedBranchNames...).ValuesAndErrors()
 	return metaMap, revMap
 }
 
@@ -104,7 +104,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	}()
 
 	// 1. Collect all the data required for the restack (in bulk)
-	allMeta, allRevisions := e.collectRestackData(branches.Names())
+	allMeta, allRevisions := e.collectRestackData(ctx, branches.Names())
 
 	// Snapshot the worktree list once. Restacking N branches used to call
 	// `git worktree list` N times for the "reset other worktree's working dir"

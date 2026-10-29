@@ -71,7 +71,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	}
 
 	// Get commit count to determine available options
-	commits, err := currentBranch.GetCommitIDs()
+	commits, err := currentBranch.CommitIDs(ctx.Context)
 	if err != nil {
 		return fmt.Errorf("failed to get commits: %w", err)
 	}
@@ -178,7 +178,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		// Get the original commit message from the first commit on this branch
 		// GetAllCommits returns newest to oldest, so the first commit is the last element
 		var originalCommitMessage string
-		commitMessagesData, err := currentBranch.GetAllCommits()
+		commitMessagesData, err := currentBranch.AllCommits(ctx.Context)
 		commitMessages := commitMessagesData.Messages()
 		if err == nil && len(commitMessages) > 0 {
 			// Use the first (oldest) commit's message

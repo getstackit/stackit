@@ -1,6 +1,8 @@
 package pr
 
 import (
+	"context"
+
 	"github.com/getstackit/stackit/internal/engine"
 )
 
@@ -8,10 +10,10 @@ import (
 // If existingTitle is provided and non-empty, it's used as the base.
 // Otherwise, the branch's default PR title is used.
 // The scope is applied to the title.
-func GenerateTitle(branch engine.Branch, existingTitle string, scope engine.Scope) string {
+func GenerateTitle(ctx context.Context, branch engine.Branch, existingTitle string, scope engine.Scope) string {
 	title := existingTitle
 	if title == "" {
-		title = branch.DefaultPRTitle()
+		title = branch.DefaultPRTitle(ctx)
 	}
 	return scope.ApplyToTitle(title)
 }

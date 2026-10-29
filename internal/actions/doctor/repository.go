@@ -13,7 +13,7 @@ type repositoryEngine interface {
 	engine.BranchLookup
 	IsInsideRepo() bool
 	GetRemoteURL(ctx context.Context) (string, error)
-	GetRevision(branch engine.Branch) (string, error)
+	GetRevision(ctx context.Context, branch engine.Branch) (string, error)
 }
 
 // checkRepository performs repository-related checks
@@ -50,7 +50,7 @@ func checkRepository(ctx context.Context, eng repositoryEngine, repoRoot string,
 		handler.OnCheck("trunk", CheckError, "trunk branch not configured")
 	} else {
 		// Check if trunk branch exists
-		_, err := eng.GetRevision(eng.GetBranch(trunk))
+		_, err := eng.GetRevision(ctx, eng.GetBranch(trunk))
 		if err != nil {
 			errors++
 			handler.OnCheck("trunk", CheckError, fmt.Sprintf("trunk branch '%s' does not exist", trunk))

@@ -2,6 +2,7 @@
 package submit
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -15,8 +16,8 @@ import (
 )
 
 // GetPRTitle gets the PR title, prompting if needed
-func GetPRTitle(prompter handler.TextInputPrompter, branch engine.Branch, editInline bool, existingTitle string, scope engine.Scope) (string, error) {
-	title := pr.GenerateTitle(branch, existingTitle, scope)
+func GetPRTitle(ctx context.Context, prompter handler.TextInputPrompter, branch engine.Branch, editInline bool, existingTitle string, scope engine.Scope) (string, error) {
+	title := pr.GenerateTitle(ctx, branch, existingTitle, scope)
 
 	if !editInline {
 		return title, nil
@@ -31,8 +32,8 @@ func GetPRTitle(prompter handler.TextInputPrompter, branch engine.Branch, editIn
 }
 
 // GetPRBody gets the PR body, prompting if needed
-func GetPRBody(branch engine.Branch, editInline bool, existingBody string) (string, error) {
-	body := pr.GenerateBody(branch, existingBody)
+func GetPRBody(ctx context.Context, branch engine.Branch, editInline bool, existingBody string) (string, error) {
+	body := pr.GenerateBody(ctx, branch, existingBody)
 
 	if !editInline {
 		return body, nil
@@ -112,13 +113,13 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 	case metadata.Title == "" && metadata.Body == "" && !shouldEditTitle && !shouldEditBody:
 		// Neither field has a value yet and neither needs interactive editing,
 		// so derive both from a single commit read instead of one read per field.
-		title, body := branch.DefaultPRTitleAndBody()
+		title, body := branch.DefaultPRTitleAndBody(ctx.Context)
 		metadata.Title = scope.ApplyToTitle(title)
 		metadata.Body = body
 	default:
 		// Handle Title
 		if shouldEditTitle || metadata.Title == "" {
-			title, err := GetPRTitle(ctx.Prompts(), branch, shouldEditTitle, metadata.Title, scope)
+			title, err := GetPRTitle(ctx.Context, ctx.Prompts(), branch, shouldEditTitle, metadata.Title, scope)
 			if err != nil {
 				return nil, err
 			}
@@ -127,7 +128,7 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 
 		// Handle Body
 		if shouldEditBody || metadata.Body == "" {
-			body, err := GetPRBody(branch, shouldEditBody, metadata.Body)
+			body, err := GetPRBody(ctx.Context, branch, shouldEditBody, metadata.Body)
 			if err != nil {
 				return nil, err
 			}

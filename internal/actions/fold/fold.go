@@ -28,7 +28,7 @@ type foldEngine interface {
 	validation.GitOperationEngine
 	Trunk() engine.Branch
 	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
-	GetRevision(branch engine.Branch) (string, error)
+	GetRevision(ctx context.Context, branch engine.Branch) (string, error)
 	GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error)
 	ShowDiff(ctx context.Context, rr git.RevRange, format git.DiffFormat) (string, error)
 	CheckoutBranch(ctx context.Context, branch engine.Branch) error
@@ -48,7 +48,7 @@ func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch)
 
 	// Show combined commit messages
 	out.Info("%s", output.Cyan("Proposed Commit History:"))
-	parentCommitsData, err := parent.GetAllCommits()
+	parentCommitsData, err := parent.AllCommits(ctx.Context)
 	parentCommits := parentCommitsData.Onelines()
 	if err != nil {
 		out.Debug("Failed to get parent commits for %s: %v", parent.Name(), err)
@@ -57,7 +57,7 @@ func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch)
 		out.Info("  %s", output.Dim(commit))
 	}
 
-	currentCommitsData, err := current.GetAllCommits()
+	currentCommitsData, err := current.AllCommits(ctx.Context)
 	currentCommits := currentCommitsData.Onelines()
 	if err != nil {
 		out.Debug("Failed to get current commits for %s: %v", current.Name(), err)
@@ -71,7 +71,7 @@ func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch)
 	out.Info("%s", output.Cyan("Combined Diff Stat:"))
 	// Base is parent's parent (or trunk)
 	grandparentName := parent.ParentOrTrunk()
-	baseRev, err := eng.GetRevision(eng.GetBranch(grandparentName))
+	baseRev, err := eng.GetRevision(ctx.Context, eng.GetBranch(grandparentName))
 	if err != nil {
 		out.Debug("Failed to get revision for grandparent %s: %v", grandparentName, err)
 		var mbErr error
@@ -81,7 +81,7 @@ func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch)
 		}
 	}
 
-	headRev, err := current.GetRevision()
+	headRev, err := current.Revision(ctx.Context)
 	if err != nil {
 		out.Debug("Failed to get revision for current branch %s: %v", current.Name(), err)
 	}

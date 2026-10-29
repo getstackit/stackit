@@ -274,7 +274,7 @@ func TestSquashMergedSiblingKeepsOwnCommit(t *testing.T) {
 	mainName := sh.Engine.Trunk().Name()
 
 	// Capture A's pre-merge tip — the exact SHA B must never be moved onto.
-	aStaleTip, err := sh.Engine.GetBranch("branch-a").GetRevision()
+	aStaleTip, err := sh.Engine.GetBranch("branch-a").Revision(t.Context())
 	require.NoError(t, err)
 
 	// GitHub squash-merges A: one combined commit lands on main.
@@ -295,7 +295,7 @@ func TestSquashMergedSiblingKeepsOwnCommit(t *testing.T) {
 		"sibling B must remain parented to main, not reparented onto merged A")
 
 	// B's ref must not have been moved onto A's stale tip.
-	bTip, err := sh.Engine.GetBranch("branch-b").GetRevision()
+	bTip, err := sh.Engine.GetBranch("branch-b").Revision(t.Context())
 	require.NoError(t, err)
 	require.NotEqual(t, aStaleTip, bTip,
 		"sibling B must never be reset to A's stale pre-merge tip (issue #1345 data loss)")

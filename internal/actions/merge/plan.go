@@ -186,7 +186,7 @@ type mergePlanEngine interface {
 	GetScope(branch engine.Branch) engine.Scope
 	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
 	SortBranchesTopologically(ctx context.Context, branches engine.Branches) engine.Branches
-	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
+	BatchReadMetadataRaw(ctx context.Context, branchNames []string) (engine.MetaMap, map[string]error)
 	ReadBranchRemoteStatuses(ctx context.Context, branches engine.Branches) engine.BranchRemoteStatuses
 }
 
@@ -298,7 +298,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 
 	// 4. Batch fetch metadata for all involved branches
 	involvedBranches := slices.Concat(allBranches, upstackBranches)
-	allMeta, _ := eng.BatchReadMetadataRaw(involvedBranches)
+	allMeta, _ := eng.BatchReadMetadataRaw(ctx, involvedBranches)
 
 	remoteCtx, cancelRemote := app.WithRemoteOperationTimeout(ctx)
 	defer cancelRemote()

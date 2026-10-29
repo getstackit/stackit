@@ -566,7 +566,7 @@ func TestRestackBranches(t *testing.T) {
 		require.Equal(t, engine.RestackDone, batchResult.Results["branch1"].Result)
 
 		// Verify branch1 is now fixed
-		require.True(t, s.Engine.GetBranch("branch1").IsBranchUpToDate())
+		require.True(t, s.Engine.GetBranch("branch1").IsBranchUpToDate(t.Context()))
 	})
 
 	t.Run("returns unneeded when branch is already fixed", func(t *testing.T) {
@@ -1030,7 +1030,7 @@ func TestBatchIsBranchEmpty(t *testing.T) {
 		CreateBranch("nochanges"). // no commit at all: tree matches parent
 		Checkout("main")
 
-	result := s.Engine.BatchIsBranchEmpty([]string{"withchanges", "emptycommit", "nochanges"})
+	result := s.Engine.BatchIsBranchEmpty(t.Context(), []string{"withchanges", "emptycommit", "nochanges"})
 
 	require.False(t, result["withchanges"], "branch with real changes is not empty")
 	require.True(t, result["emptycommit"], "branch with an empty commit is empty")
@@ -1679,7 +1679,7 @@ func TestSetParentScenarios(t *testing.T) {
 			CommitChange("file1.txt", "v1\nv2\nv3").
 			TrackBranch("branch1", "main")
 
-		branch1SHA, _ := s.Engine.GetBranch("branch1").GetRevision()
+		branch1SHA, _ := s.Engine.GetBranch("branch1").Revision(t.Context())
 
 		s.CreateBranch("branch2").
 			CommitChange("file2.txt", "feat: branch2").
@@ -1720,7 +1720,7 @@ func TestSetParentScenarios(t *testing.T) {
 			CommitChange("file1.txt", "feat: branch1").
 			TrackBranch("branch1", "main")
 
-		branch1OriginalSHA, _ := s.Engine.GetBranch("branch1").GetRevision()
+		branch1OriginalSHA, _ := s.Engine.GetBranch("branch1").Revision(t.Context())
 
 		// 2. Create branch2 on top of branch1
 		s.CreateBranch("branch2").
@@ -1737,7 +1737,7 @@ func TestSetParentScenarios(t *testing.T) {
 		s.Checkout("branch1")
 		branch1 := s.Engine.GetBranch("branch1")
 		_, _ = s.Engine.RestackBranches(t.Context(), engine.BranchesOf(branch1), engine.RestackOpts{})
-		branch1NewSHA, _ := s.Engine.GetBranch("branch1").GetRevision()
+		branch1NewSHA, _ := s.Engine.GetBranch("branch1").Revision(t.Context())
 		require.NotEqual(t, branch1OriginalSHA, branch1NewSHA)
 
 		// 5. Merge branch1 into main
@@ -1780,7 +1780,7 @@ func TestSetParentScenarios(t *testing.T) {
 		// because branch1 was NOT merged into main; it was merged into branch2.
 		// If we kept the old divergence point (before branch1), a restack would
 		// try to re-apply branch1's changes which are already in branch2.
-		mainSHA, _ := s.Engine.Trunk().GetRevision()
+		mainSHA, _ := s.Engine.Trunk().Revision(t.Context())
 		meta, _ := s.Metadata.ReadMetadata(t.Context(), "branch2").One()
 		require.Equal(t, mainSHA, *meta.GetParentBranchRevision(), "Divergence point should be updated to new parent when folding upward")
 	})
@@ -1799,7 +1799,7 @@ func TestSetParentScenarios(t *testing.T) {
 		// 1. Move main forward
 		s.Checkout("main").
 			CommitChange("main.txt", "feat: main")
-		mainNewSHA, _ := s.Engine.Trunk().GetRevision()
+		mainNewSHA, _ := s.Engine.Trunk().Revision(t.Context())
 
 		// 2. Manually rebase branch1 onto main
 		s.Checkout("branch1")

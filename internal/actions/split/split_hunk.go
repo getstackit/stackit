@@ -76,7 +76,7 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 	branchNames := []string{}
 
 	// Get default commit message
-	commitMessagesData, err := branchToSplit.GetAllCommits()
+	commitMessagesData, err := branchToSplit.AllCommits(ctx.Context)
 	commitMessages := commitMessagesData.Messages()
 	if err != nil {
 		return fmt.Errorf("failed to get commit messages: %w", err)
@@ -314,7 +314,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	}
 
 	// Get default commit message
-	commitMessagesData, err := branchToSplit.GetAllCommits()
+	commitMessagesData, err := branchToSplit.AllCommits(ctx.Context)
 	commitMessages := commitMessagesData.Messages()
 	if err != nil {
 		return fmt.Errorf("failed to get commit messages: %w", err)
@@ -508,7 +508,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	defer guard.RestoreUnlessReleased(gitCtx, &err)
 
 	// Get default commit message
-	commitMessagesData, err := branchToSplit.GetAllCommits()
+	commitMessagesData, err := branchToSplit.AllCommits(ctx.Context)
 	commitMessages := commitMessagesData.Messages()
 	if err != nil {
 		return fmt.Errorf("failed to get commit messages: %w", err)

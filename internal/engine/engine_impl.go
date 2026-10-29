@@ -227,11 +227,11 @@ func NewEngine(ctx context.Context, opts Options) (Engine, error) {
 	// commands can validate existence without a metadata read.
 	switch opts.LoadMode {
 	case LoadModeBranchesOnly:
-		if err := e.loadBranchList(); err != nil {
+		if err := e.loadBranchList(ctx); err != nil {
 			return nil, fmt.Errorf("failed to load branch list: %w", err)
 		}
 	case LoadModeShared:
-		if err := e.loadBranchList(); err != nil {
+		if err := e.loadBranchList(ctx); err != nil {
 			return nil, fmt.Errorf("failed to load branch list: %w", err)
 		}
 		e.ensureSharedLoaded()
@@ -249,8 +249,8 @@ func NewEngine(ctx context.Context, opts Options) (Engine, error) {
 
 // loadBranchList populates only e.state.branches via a single GetAllBranchNames
 // call. Used by lighter LoadModes that defer metadata reads.
-func (e *engineImpl) loadBranchList() error {
-	branches, err := e.git.GetAllBranchNames(context.Background())
+func (e *engineImpl) loadBranchList(ctx context.Context) error {
+	branches, err := e.git.GetAllBranchNames(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}

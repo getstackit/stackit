@@ -135,7 +135,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 		}
 		ctx.Logger.Info("update branch from remote completed branch=%v durationMs=%v", branchName, time.Since(pullStart).Milliseconds())
 
-		if applyBranchSyncResult(branch, result, err, handler, summary) {
+		if applyBranchSyncResult(ctx.Context, branch, result, err, handler, summary) {
 			branchesSynced++
 		}
 	}
@@ -148,7 +148,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 // pull/update result and reports whether the branch was fast-forwarded. It is
 // shared by the batched local-update path and the per-branch fetch fallback so
 // both behave identically.
-func applyBranchSyncResult(branch engine.Branch, result engine.PullResult, err error, handler Handler, summary *Summary) (synced bool) {
+func applyBranchSyncResult(ctx context.Context, branch engine.Branch, result engine.PullResult, err error, handler Handler, summary *Summary) (synced bool) {
 	branchName := branch.Name()
 
 	if err != nil {
@@ -168,7 +168,7 @@ func applyBranchSyncResult(branch engine.Branch, result engine.PullResult, err e
 	case engine.PullDone:
 		// Get the new revision (GetRevision reads live git, so it reflects the
 		// just-applied fast-forward without an engine rebuild).
-		rev, _ := branch.GetRevision()
+		rev, _ := branch.Revision(ctx)
 		revShort := git.ShortRevision(rev, 0)
 		handler.EmitEvent(Event{
 			Phase:       PhaseBranches,

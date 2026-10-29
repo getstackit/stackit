@@ -298,7 +298,7 @@ func (c *ConsolidateMergeExecutor) lockAndNotifyIndividualPRs(consolidationBranc
 type consolidatingLockEngine interface {
 	GetBranch(branchName string) engine.Branch
 	SetLocked(ctx context.Context, branches engine.Branches, reason engine.LockReason) (engine.BatchLockResult, error)
-	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
+	BatchReadMetadataRaw(ctx context.Context, branchNames []string) (engine.MetaMap, map[string]error)
 	BatchUpsertPrInfo(ctx context.Context, updates map[string]*engine.PrInfo) error
 }
 
@@ -328,7 +328,7 @@ func lockAndMarkConsolidating(ctx *app.Context, eng consolidatingLockEngine, bra
 	for i, b := range branchesToLock {
 		lockNames[i] = b.Name()
 	}
-	allMeta, metaErrs := eng.BatchReadMetadataRaw(lockNames)
+	allMeta, metaErrs := eng.BatchReadMetadataRaw(ctx.Context, lockNames)
 
 	prUpdates := make(map[string]*engine.PrInfo, len(branchesToLock))
 	for _, name := range lockNames {

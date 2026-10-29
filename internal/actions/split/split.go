@@ -136,7 +136,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	style := opts.Style
 	if style == "" {
 		// Check if there's more than one commit
-		commits, err := currentBranch.GetCommitIDs()
+		commits, err := currentBranch.CommitIDs(ctx.Context)
 		if err != nil {
 			return fmt.Errorf("failed to get commits: %w", err)
 		}

@@ -190,7 +190,7 @@ func (e *engineImpl) SetParent(ctx context.Context, branch Branch, parentBranch 
 
 	switch mode {
 	case DivergencePreserve:
-		div, err := e.GetDivergencePoint(branchName)
+		div, err := e.GetDivergencePoint(ctx, branchName)
 		if err != nil {
 			return fmt.Errorf("failed to determine divergence point for %s: %w", branchName, err)
 		}
@@ -328,7 +328,7 @@ func (e *engineImpl) ReparentBranch(ctx context.Context, branch Branch, newParen
 	if err := e.validateLinearParentMoves(ctx, []BranchParentMove{{Branch: branch.Name(), NewParent: newParent.Name()}}); err != nil {
 		return err
 	}
-	div, err := e.GetDivergencePoint(branch.Name())
+	div, err := e.GetDivergencePoint(ctx, branch.Name())
 	if err != nil {
 		return fmt.Errorf("failed to determine divergence point for %s: %w", branch.Name(), err)
 	}
@@ -398,7 +398,7 @@ func (e *engineImpl) ApplyParentUpdatesAfterRemovals(ctx context.Context, update
 		return err
 	}
 
-	divPoints := e.BatchDivergencePoints(preserveBranches)
+	divPoints := e.BatchDivergencePoints(ctx, preserveBranches)
 	for _, update := range updates {
 		branch := e.GetBranch(update.Branch)
 		parent := e.GetBranch(update.NewParent)
@@ -468,7 +468,7 @@ func (e *engineImpl) reparentPreservingDivergence(ctx context.Context, moves []B
 	for i, m := range moves {
 		branches[i] = e.GetBranch(m.Branch)
 	}
-	divPoints := e.BatchDivergencePoints(branches)
+	divPoints := e.BatchDivergencePoints(ctx, branches)
 	for _, m := range moves {
 		// The batch reader returns "" where the individual lookup would error;
 		// reparenting must not proceed with an unknown divergence point.

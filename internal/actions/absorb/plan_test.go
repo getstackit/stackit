@@ -29,7 +29,7 @@ func TestGeneratePlanJSON(t *testing.T) {
 		s.Scene.Repo.CreateChangeAndCommit("branch-b commit", "file-b")
 
 		// Get commit SHA for branch-a
-		commits, err := s.Engine.GetBranch("branch-a").GetCommitIDs()
+		commits, err := s.Engine.GetBranch("branch-a").CommitIDs(t.Context())
 		require.NoError(t, err)
 		require.NotEmpty(t, commits)
 		commitSHA := commits[0]

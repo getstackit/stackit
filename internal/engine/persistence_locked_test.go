@@ -35,7 +35,7 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 	require.NoError(t, err)
 
 	// Simulate push by updating the local remote-tracking ref.
-	localSha, _ := eng.GetRevision(branch)
+	localSha, _ := eng.GetRevision(t.Context(), branch)
 	s.RunGit("update-ref", "refs/remotes/origin/feature", localSha)
 
 	// 3. Verify it's saved in the PR info

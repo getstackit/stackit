@@ -19,9 +19,9 @@ type Source interface {
 	CurrentBranch(ctx context.Context) *engine.Branch
 	Trunk() engine.Branch
 	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
-	BatchCommits(branches engine.Branches) map[string]git.Commits
+	BatchCommits(ctx context.Context, branches engine.Branches) map[string]git.Commits
 	RefDecorations(ctx context.Context) (map[string][]git.RefDecoration, error)
-	GetRevision(branch engine.Branch) (string, error)
+	GetRevision(ctx context.Context, branch engine.Branch) (string, error)
 }
 
 // Commit is one commit on a stack branch, identified by its full SHA so the
@@ -66,7 +66,7 @@ func Gather(ctx context.Context, src Source) (Result, error) {
 	}
 
 	trunk := src.Trunk()
-	trunkTip, err := src.GetRevision(trunk)
+	trunkTip, err := src.GetRevision(ctx, trunk)
 	if err != nil {
 		return Result{}, err
 	}
@@ -92,7 +92,7 @@ func Gather(ctx context.Context, src Source) (Result, error) {
 
 	// One combined walk per branch yields both SHA and subject on each record,
 	// so the two never desync (an empty subject can't shift the pairing).
-	commitsByBranch := src.BatchCommits(branches)
+	commitsByBranch := src.BatchCommits(ctx, branches)
 
 	currentName := current.Name()
 	for _, b := range branches {

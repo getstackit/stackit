@@ -54,7 +54,7 @@ func TestFoldAction(t *testing.T) {
 				"branch2": "branch1",
 			})
 		s.Checkout("branch2")
-		branch2Before, err := s.Engine.GetBranch("branch2").GetRevision()
+		branch2Before, err := s.Engine.GetBranch("branch2").Revision(t.Context())
 		require.NoError(t, err)
 
 		worktreePath := filepath.Join(t.TempDir(), "parent")
@@ -65,7 +65,7 @@ func TestFoldAction(t *testing.T) {
 		require.Error(t, err)
 		require.ErrorContains(t, err, "failed to checkout parent branch")
 
-		branch2After, err := s.Engine.GetBranch("branch2").GetRevision()
+		branch2After, err := s.Engine.GetBranch("branch2").Revision(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, branch2Before, branch2After, "fold must not delete or rewrite its branch")
 		current, err := s.Scene.Repo.CurrentBranchName()

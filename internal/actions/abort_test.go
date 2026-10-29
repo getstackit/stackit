@@ -75,7 +75,7 @@ func TestAbortAction(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Get initial state
-		initialSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		initialSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 
 		// Take snapshot
@@ -92,7 +92,7 @@ func TestAbortAction(t *testing.T) {
 
 		// Move the branch on, so restoring it is observable.
 		s.Checkout("feature").Commit("work the halted command did")
-		movedSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		movedSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 		require.NotEqual(t, initialSHA, movedSHA)
 
@@ -106,7 +106,7 @@ func TestAbortAction(t *testing.T) {
 
 		// Verify state restored
 		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().Name())
-		restoredSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		restoredSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, initialSHA, restoredSHA)
 	})
@@ -124,7 +124,7 @@ func TestAbortAction(t *testing.T) {
 		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{Command: "create"}))
 
 		s.Checkout("feature").Commit("work the halted command did")
-		haltedSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		haltedSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 
 		// Continuation state naming no snapshot: the halted command left no
@@ -135,7 +135,7 @@ func TestAbortAction(t *testing.T) {
 		require.NoError(t, abort.Action(s.Context, abort.Options{Force: true}, nil))
 
 		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().Name())
-		afterSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		afterSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, haltedSHA, afterSHA,
 			"abort must leave branches as the halted command left them when it recorded no rollback point")
@@ -155,7 +155,7 @@ func TestAbortAction(t *testing.T) {
 		bindContinuation(t, s, false)
 
 		s.Checkout("feature").Commit("work done since")
-		laterSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		laterSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 
 		handler := &testAbortHandler{isInteractive: true, confirmResult: true}
@@ -163,7 +163,7 @@ func TestAbortAction(t *testing.T) {
 		require.False(t, handler.promptConfirmCalled, "nothing to confirm when there is nothing to abort")
 
 		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().Name())
-		afterSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		afterSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, laterSHA, afterSHA, "a stale continuation must not roll back later work")
 		_, err = config.GetContinuationState(s.Scene.Dir)
@@ -181,7 +181,7 @@ func TestAbortAction(t *testing.T) {
 		// An older snapshot abort must not fall back to.
 		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{Command: "create"}))
 		s.Checkout("feature").Commit("work the halted command did")
-		haltedSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		haltedSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 		require.NoError(t, config.PersistContinuationState(s.Scene.Dir, &config.ContinuationState{
 			SnapshotID:      "aged-out-snapshot",
@@ -191,7 +191,7 @@ func TestAbortAction(t *testing.T) {
 		require.NoError(t, abort.Action(s.Context, abort.Options{Force: true}, nil))
 
 		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().Name())
-		afterSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		afterSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, haltedSHA, afterSHA, "abort must not guess at a different snapshot")
 		require.Contains(t, s.Output.String(), "no longer available")

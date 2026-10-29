@@ -60,7 +60,7 @@ func TestPreparePRMetadata_FetchFromGitHub(t *testing.T) {
 		branch := s.Engine.GetBranch("main") // just need a branch object
 
 		existing := "Already have this body"
-		body, err := submit.GetPRBody(branch, false, existing)
+		body, err := submit.GetPRBody(t.Context(), branch, false, existing)
 		require.NoError(t, err)
 		require.Equal(t, existing, body)
 	})

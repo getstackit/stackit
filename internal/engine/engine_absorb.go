@@ -18,7 +18,7 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 	}
 
 	branchName := branch.Name()
-	oldTip, err := branch.GetRevision()
+	oldTip, err := branch.Revision(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get branch revision for %s: %w", branchName, err)
 	}
@@ -59,7 +59,7 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 	}()
 
 	// Get all commits in the branch
-	commitSHAs, err := branch.GetCommitIDs()
+	commitSHAs, err := branch.CommitIDs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get commits for branch %s: %w", branchName, err)
 	}

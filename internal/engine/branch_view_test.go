@@ -19,7 +19,7 @@ func TestBatchBranchStats(t *testing.T) {
 	s.WithLinearStack3()
 
 	branches := s.Engine.AllBranches()
-	stats := s.Engine.BatchBranchStats(branches)
+	stats := s.Engine.BatchBranchStats(t.Context(), branches)
 
 	for _, b := range branches {
 		name := b.Name()
@@ -27,7 +27,7 @@ func TestBatchBranchStats(t *testing.T) {
 		require.True(t, ok, "missing stat for %s", name)
 
 		// Short SHA matches GetRevision for every branch, including trunk.
-		if rev, err := s.Engine.GetRevision(b); err == nil && len(rev) >= 7 {
+		if rev, err := s.Engine.GetRevision(t.Context(), b); err == nil && len(rev) >= 7 {
 			require.Equal(t, rev[:7], stat.ShortSHA, "ShortSHA for %s", name)
 		}
 
@@ -79,9 +79,9 @@ func TestPerConcernBatchReaders(t *testing.T) {
 	s.WithLinearStack3()
 
 	branches := s.Engine.AllBranches()
-	diffs := s.Engine.BatchDiffStats(branches)
-	commits := s.Engine.BatchCommits(branches)
-	divergence := s.Engine.BatchDivergencePoints(branches)
+	diffs := s.Engine.BatchDiffStats(t.Context(), branches)
+	commits := s.Engine.BatchCommits(t.Context(), branches)
+	divergence := s.Engine.BatchDivergencePoints(t.Context(), branches)
 
 	for _, b := range branches {
 		name := b.Name()
@@ -90,7 +90,7 @@ func TestPerConcernBatchReaders(t *testing.T) {
 			continue
 		}
 
-		wantDiv, err := s.Engine.GetDivergencePoint(name)
+		wantDiv, err := s.Engine.GetDivergencePoint(t.Context(), name)
 		require.NoError(t, err)
 		require.Equal(t, wantDiv, divergence[name], "divergence for %s", name)
 
@@ -98,7 +98,7 @@ func TestPerConcernBatchReaders(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, engine.DiffStat{Added: wantAdded, Deleted: wantDeleted, FilesChanged: 1}, diffs[name], "diff for %s", name)
 
-		wantCommitsData, err := s.Engine.GetAllCommits(b)
+		wantCommitsData, err := s.Engine.GetAllCommits(t.Context(), b)
 		wantCommits := wantCommitsData.Onelines()
 		require.NoError(t, err)
 		require.Equal(t, wantCommits, commits[name].Onelines(), "commits for %s", name)
@@ -113,18 +113,18 @@ func TestBatchCommitInfo(t *testing.T) {
 	s.WithLinearStack3()
 
 	branches := s.Engine.AllBranches()
-	info := s.Engine.BatchCommitInfo(branches)
+	info := s.Engine.BatchCommitInfo(t.Context(), branches)
 
 	for _, b := range branches {
 		name := b.Name()
 		got, ok := info[name]
 		require.True(t, ok, "missing commit info for %s", name)
 
-		wantDate, err := s.Engine.GetCommitDate(b)
+		wantDate, err := s.Engine.GetCommitDate(t.Context(), b)
 		require.NoError(t, err)
 		require.True(t, wantDate.Equal(got.Date), "CommitDate for %s", name)
 
-		wantAuthor, err := engine.Impl(s.Engine).GetCommitAuthor(b)
+		wantAuthor, err := engine.Impl(s.Engine).GetCommitAuthor(t.Context(), b)
 		require.NoError(t, err)
 		require.Equal(t, wantAuthor, got.Author, "CommitAuthor for %s", name)
 	}
@@ -149,7 +149,7 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 
 	b := s.Engine.GetBranch("b")
 
-	commitsData, err := s.Engine.GetAllCommits(b)
+	commitsData, err := s.Engine.GetAllCommits(t.Context(), b)
 	commits := commitsData.Onelines()
 	require.NoError(t, err)
 
@@ -161,7 +161,7 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 	require.Len(t, commits, count,
 		"commit messages and count must use the same base when no divergence is stored")
 
-	batched := s.Engine.BatchCommits(engine.BranchesOf(b))["b"]
+	batched := s.Engine.BatchCommits(t.Context(), engine.BranchesOf(b))["b"]
 	require.Equal(t, commits, batched.Onelines(), "batched commits must match the single-branch accessor")
 }
 

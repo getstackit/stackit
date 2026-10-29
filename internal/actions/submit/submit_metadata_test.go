@@ -295,7 +295,7 @@ func TestGetPRBody_MultipleCommits(t *testing.T) {
 
 		// Get PR body
 		branch := s.Engine.GetBranch(branchName)
-		body, err := submit.GetPRBody(branch, false, "")
+		body, err := submit.GetPRBody(t.Context(), branch, false, "")
 		require.NoError(t, err)
 
 		// Note: GetPRBody formats as a list of subjects

@@ -236,7 +236,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	h.OnStep(StepBranchCreate, handler.StatusStarted, fmt.Sprintf("Creating branch %s", branchName))
 	if opts.Onto != "" {
 		ontoBranch := eng.GetBranch(opts.Onto)
-		ontoSHA, err := ontoBranch.GetRevision()
+		ontoSHA, err := ontoBranch.Revision(ctx.Context)
 		if err != nil {
 			h.OnStep(StepBranchCreate, handler.StatusFailed, err.Error())
 			return Result{}, fmt.Errorf("failed to resolve %s: %w", opts.Onto, err)

@@ -38,7 +38,7 @@ func (e *engineImpl) SquashCurrentBranch(ctx context.Context, opts SquashOptions
 
 	// Get current branch revision
 	branch := e.GetBranch(branchName)
-	branchRevision, err := branch.GetRevision()
+	branchRevision, err := branch.Revision(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get branch revision: %w", err)
 	}

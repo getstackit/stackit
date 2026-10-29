@@ -72,13 +72,13 @@ func (h *BranchDiffHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	baseRevision, err := entry.Engine.GetDivergencePoint(branchName)
+	baseRevision, err := entry.Engine.GetDivergencePoint(r.Context(), branchName)
 	if err != nil {
 		http.Error(w, "failed to resolve branch base: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	headRevision, err := branch.GetRevision()
+	headRevision, err := branch.Revision(r.Context())
 	if err != nil {
 		http.Error(w, "failed to resolve branch revision: "+err.Error(), http.StatusInternalServerError)
 		return

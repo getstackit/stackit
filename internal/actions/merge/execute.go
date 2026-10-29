@@ -115,7 +115,7 @@ type mergeExecuteEngine interface {
 	GetStackDescription(ctx context.Context, branch engine.Branch) *git.StackDescription
 	GetRemote(ctx context.Context) string
 	GetCurrentRevision(ctx context.Context) (string, error)
-	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
+	BatchReadMetadataRaw(ctx context.Context, branchNames []string) (engine.MetaMap, map[string]error)
 
 	// Branch and metadata writes
 	CreateBranch(ctx context.Context, branchName string, startPoint string) error
@@ -330,7 +330,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		}
 		switch pullResult {
 		case engine.PullDone:
-			rev, _ := trunk.GetRevision()
+			rev, _ := trunk.Revision(ctx.Context)
 			revShort := git.ShortRevision(rev, 0)
 			out.Debug("Trunk fast-forwarded to %s", revShort)
 		case engine.PullUnneeded:
@@ -344,7 +344,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		// if the parent has been merged/deleted
 		branch := eng.GetBranch(step.BranchName)
 		out.Debug("Executing StepRestack for branch %s", step.BranchName)
-		expectedBranchRevision, err := branch.GetRevision()
+		expectedBranchRevision, err := branch.Revision(ctx.Context)
 		if err != nil {
 			return fmt.Errorf("failed to get branch revision before restack: %w", err)
 		}

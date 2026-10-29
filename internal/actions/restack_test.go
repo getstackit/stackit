@@ -201,7 +201,7 @@ func TestRestackAction(t *testing.T) {
 		s.CreateBranch("b")
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("b change", "conflict"))
 		s.TrackBranch("b", "a")
-		bBefore, err := s.Engine.GetRevision(engine.NewBranch("b", nil))
+		bBefore, err := s.Engine.GetRevision(t.Context(), engine.NewBranch("b", nil))
 		require.NoError(t, err)
 
 		s.Checkout("main")
@@ -231,7 +231,7 @@ func TestRestackAction(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, bBefore, continuation.ExpectedBranchRevision)
 
-		mainRev, err := s.Engine.GetRevision(engine.NewBranch("main", nil))
+		mainRev, err := s.Engine.GetRevision(t.Context(), engine.NewBranch("main", nil))
 		require.NoError(t, err)
 		isAncestor, err := s.Git.IsAncestor(t.Context(), mainRev, "a")
 		require.NoError(t, err)
@@ -248,7 +248,7 @@ func TestRestackAction(t *testing.T) {
 		s.CreateBranch("feature")
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("feature change", "conflict"))
 		s.TrackBranch("feature", "main")
-		featureBefore, err := s.Engine.GetRevision(engine.NewBranch("feature", nil))
+		featureBefore, err := s.Engine.GetRevision(t.Context(), engine.NewBranch("feature", nil))
 		require.NoError(t, err)
 
 		s.Checkout("main")
@@ -269,7 +269,7 @@ func TestRestackAction(t *testing.T) {
 		require.Equal(t, []string{"feature"}, handler.conflicts)
 		require.False(t, s.Git.IsRebaseInProgress(t.Context()))
 
-		featureRev, err := s.Engine.GetRevision(engine.NewBranch("feature", nil))
+		featureRev, err := s.Engine.GetRevision(t.Context(), engine.NewBranch("feature", nil))
 		require.NoError(t, err)
 		require.Equal(t, featureBefore, featureRev)
 	})

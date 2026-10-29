@@ -307,7 +307,7 @@ func buildDeletionPlan(ctx *app.Context, deleteStatuses engine.DeletionStatuses)
 	// trunk-children DFS above misses them entirely. Synthesize deletion
 	// entries for each ghost so the existing reparent + cleanup machinery
 	// runs against them.
-	branchesToProcess = appendStrandedRoots(eng, graph, deleteStatuses, branchesToProcess)
+	branchesToProcess = appendStrandedRoots(ctx.Context, eng, graph, deleteStatuses, branchesToProcess)
 
 	for len(branchesToProcess) > 0 {
 		branchName := branchesToProcess[len(branchesToProcess)-1]
@@ -501,7 +501,7 @@ func getParentName(branch engine.Branch) string {
 // corresponding refs/heads/<name>. The most common cause is the user
 // running `git branch -D <merged-branch>` directly instead of letting
 // stackit clean up.
-func appendStrandedRoots(eng engine.Engine, graph *engine.StackGraph, deleteStatuses engine.DeletionStatuses, queue []string) []string {
+func appendStrandedRoots(ctx context.Context, eng engine.Engine, graph *engine.StackGraph, deleteStatuses engine.DeletionStatuses, queue []string) []string {
 	trunkName := eng.Trunk().Name()
 	branchNames := eng.BranchNames()
 
@@ -525,7 +525,7 @@ func appendStrandedRoots(eng engine.Engine, graph *engine.StackGraph, deleteStat
 			}
 			kind := engine.DeletionReasonGhost
 			reason := "branch no longer exists locally"
-			if meta, err := eng.ReadMetadataRaw(ghostName); err == nil && meta != nil {
+			if meta, err := eng.ReadMetadataRaw(ctx, ghostName); err == nil && meta != nil {
 				if pr := meta.GetPrInfo(); pr != nil && pr.State != nil && *pr.State == git.PRStateMerged {
 					kind = engine.DeletionReasonMergedPR
 					reason = "branch deleted locally; PR was merged"

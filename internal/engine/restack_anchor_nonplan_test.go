@@ -39,11 +39,11 @@ func TestRestackBranchesFastForwardsWorktreeAnchor(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	withWorktreeAnchor(t, s, "anchor")
 
-	oldSHA, err := s.Engine.GetBranch("anchor").GetRevision()
+	oldSHA, err := s.Engine.GetBranch("anchor").Revision(t.Context())
 	require.NoError(t, err)
 
 	s.Checkout("main").Commit("main update").Rebuild()
-	trunkSHA, err := s.Engine.Trunk().GetRevision()
+	trunkSHA, err := s.Engine.Trunk().Revision(t.Context())
 	require.NoError(t, err)
 	require.NotEqual(t, oldSHA, trunkSHA)
 

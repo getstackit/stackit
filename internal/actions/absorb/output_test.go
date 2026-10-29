@@ -23,7 +23,7 @@ func TestPrintAbsorbPreviewMultipleCommitsSameBranch(t *testing.T) {
 	s.Scene.Repo.CreateChangeAndCommit("first commit", "file-a")
 	s.Scene.Repo.CreateChangeAndCommit("second commit", "file-b")
 
-	commits, err := s.Engine.GetBranch("branch-a").GetCommitIDs()
+	commits, err := s.Engine.GetBranch("branch-a").CommitIDs(t.Context())
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(commits), 2)
 	// GetAllCommits returns newest-first; "first commit" was made before
@@ -40,7 +40,7 @@ func TestPrintAbsorbPreviewMultipleCommitsSameBranch(t *testing.T) {
 	}
 
 	out := output.NewTestOutput()
-	printAbsorbPlan(hunksByCommit, nil, s.Engine, out)
+	printAbsorbPlan(t.Context(), hunksByCommit, nil, s.Engine, out)
 
 	printed := out.String()
 	require.Contains(t, printed, "first commit")

@@ -128,7 +128,7 @@ func snapshotWorktree(ctx *app.Context, entry *Entry) (*worktreeSnapshot, error)
 	} else {
 		snapshot.AnchorParent = ctx.Engine.Trunk().Name()
 	}
-	anchorRev, err := anchorBranch.GetRevision()
+	anchorRev, err := anchorBranch.Revision(ctx.Context)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get revision for %s: %w", entry.AnchorBranch, err)
 	}
@@ -457,7 +457,7 @@ func createWorktreeAnchor(ctx *app.Context, eng engine.Engine, anchorName, paren
 	}
 
 	parentBranch := eng.GetBranch(parentName)
-	parentSHA, err := parentBranch.GetRevision()
+	parentSHA, err := parentBranch.Revision(ctx.Context)
 	if err != nil {
 		return engine.Branch{}, nil, fmt.Errorf("failed to get anchor parent revision: %w", err)
 	}

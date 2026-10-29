@@ -139,8 +139,8 @@ func (e *engineImpl) GetUnmergedFiles(ctx context.Context) ([]string, error) {
 }
 
 // GetCommitSHA returns the SHA at a relative position (0 = HEAD, 1 = HEAD~1)
-func (e *engineImpl) GetCommitSHA(branchName string, offset int) (string, error) {
-	return e.git.ReadRevisions(context.Background(), fmt.Sprintf("%s~%d", branchName, offset)).One()
+func (e *engineImpl) GetCommitSHA(ctx context.Context, branchName string, offset int) (string, error) {
+	return e.git.ReadRevisions(ctx, fmt.Sprintf("%s~%d", branchName, offset)).One()
 }
 
 // IsAncestor checks if one commit is an ancestor of another
@@ -212,14 +212,14 @@ func (e *engineImpl) ListMetadataRefs(ctx context.Context) (map[string]string, e
 
 // ReadMetadataRaw reads a single branch's metadata directly from its ref,
 // bypassing the engine's tracked-branch cache.
-func (e *engineImpl) ReadMetadataRaw(branchName string) (*git.Meta, error) {
-	return e.metadata.ReadMetadata(context.Background(), branchName).One()
+func (e *engineImpl) ReadMetadataRaw(ctx context.Context, branchName string) (*git.Meta, error) {
+	return e.metadata.ReadMetadata(ctx, branchName).One()
 }
 
 // BatchReadMetadataRaw reads raw metadata for many branches in one pass,
 // returning per-branch errors so callers can detect corrupted refs.
-func (e *engineImpl) BatchReadMetadataRaw(branchNames []string) (MetaMap, map[string]error) {
-	return e.metadata.ReadMetadata(context.Background(), branchNames...).Split()
+func (e *engineImpl) BatchReadMetadataRaw(ctx context.Context, branchNames []string) (MetaMap, map[string]error) {
+	return e.metadata.ReadMetadata(ctx, branchNames...).Split()
 }
 
 // DeleteMetadataRefsBatch deletes many branches' metadata refs in a single

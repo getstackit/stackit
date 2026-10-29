@@ -122,7 +122,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 
 	// Get commit message
-	commitMessagesData, err := branchToSplit.GetAllCommits()
+	commitMessagesData, err := branchToSplit.AllCommits(ctx)
 	commitMessages := commitMessagesData.Messages()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get commit messages: %w", err)
@@ -222,7 +222,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 
 	// Save original SHA before modifying branch ref (for recovery)
-	originalSHA, err := eng.GetCommitSHA(branchToSplit.Name(), 0)
+	originalSHA, err := eng.GetCommitSHA(ctx, branchToSplit.Name(), 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get original commit SHA: %w", err)
 	}
@@ -394,7 +394,7 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 	}
 
 	// Save original SHA before modifying branch ref (for recovery)
-	originalSHA, err := eng.GetCommitSHA(branchToSplit.Name(), 0)
+	originalSHA, err := eng.GetCommitSHA(ctx, branchToSplit.Name(), 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get original commit SHA: %w", err)
 	}

@@ -39,7 +39,7 @@ func PrepareSelection(ctx *app.Context, source string) (*Selection, error) {
 	oldParent := sourceBranch.Parent()
 
 	// Match move.Action behavior: capture divergence point, allow empty fallback.
-	oldParentRev, _ := eng.GetDivergencePoint(source)
+	oldParentRev, _ := eng.GetDivergencePoint(ctx.Context, source)
 
 	return &Selection{
 		eng:          eng,
@@ -76,7 +76,7 @@ func (s *Selection) ValidateOnto(ctx context.Context, onto string) (*engine.Reba
 		return nil, nil, rebaseSpecs, err
 	}
 
-	commitsData, _ := s.eng.GetAllCommits(s.sourceBranch)
+	commitsData, _ := s.eng.GetAllCommits(ctx, s.sourceBranch)
 	commits := commitsData.Subjects()
 	return validation, commits, rebaseSpecs, nil
 }

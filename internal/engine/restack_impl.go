@@ -173,7 +173,7 @@ func (e *engineImpl) untrackedCollisionHold(ctx context.Context, branch Branch, 
 	if state != nil && state.Parent != "" {
 		parent = state.Parent
 	}
-	baseRev, err := e.GetBranch(parent).GetRevision()
+	baseRev, err := e.GetBranch(parent).Revision(ctx)
 	if err != nil || baseRev == "" {
 		// Cannot see what is about to land, so cannot rule out a collision.
 		return hold(fmt.Sprintf("untracked files in worktree %s could not be checked against the incoming commit", worktreePath))
@@ -268,11 +268,11 @@ func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) string
 // the cached SHA is stale the swap fails, which is noisy but correct. A value
 // being *written* (a RefUpdate's NewSHA) must be read live — see
 // restackWorktreeAnchor.
-func (e *engineImpl) branchRev(snap *restackSnapshot, branch Branch) (string, error) {
+func (e *engineImpl) branchRev(ctx context.Context, snap *restackSnapshot, branch Branch) (string, error) {
 	if rev, ok := snap.revs.Rev(branch.Name()); ok && rev != "" {
 		return rev, nil
 	}
-	return branch.GetRevision()
+	return branch.Revision(ctx)
 }
 
 // restackWorktreeAnchor fast-forwards a worktree anchor to trunk instead of
@@ -296,13 +296,13 @@ func (e *engineImpl) restackWorktreeAnchor(
 	// commit, and the compare-and-swap guards the anchor's own ref rather than
 	// the value going into it, so nothing would catch it. One read per anchor,
 	// and there is one anchor per worktree.
-	trunkRev, err := e.Trunk().GetRevision()
+	trunkRev, err := e.Trunk().Revision(ctx)
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to get trunk revision for anchor %s: %w", branchName, err)
 	}
 
 	// Safe to read cached: only compared against trunkRev and used as OldSHA.
-	anchorRev, err := e.branchRev(snap, branch)
+	anchorRev, err := e.branchRev(ctx, snap, branch)
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to get anchor revision for %s: %w", branchName, err)
 	}
@@ -448,14 +448,14 @@ func (e *engineImpl) restackBranch(
 			return RestackBranchResult{Result: RestackUnneeded, Frozen: true}, nil
 		}
 
-		localSha, err := e.branchRev(snap, branch)
+		localSha, err := e.branchRev(ctx, snap, branch)
 		if err != nil {
 			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get local revision for frozen branch %s: %w", branchName, err)
 		}
 		if localSha != remoteSha {
 			// Get parent revision for metadata update
 			parentBranch := e.GetBranch(parent)
-			parentRev, err := e.branchRev(snap, parentBranch)
+			parentRev, err := e.branchRev(ctx, snap, parentBranch)
 			if err != nil {
 				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get parent revision for %s: %w", branchName, err)
 			}
@@ -556,7 +556,7 @@ func (e *engineImpl) restackBranch(
 
 	// Get parent revision (needed for rebasedBranchBase even if restack is unneeded)
 	parentBranch := e.GetBranch(parent)
-	parentRev, err := e.branchRev(snap, parentBranch)
+	parentRev, err := e.branchRev(ctx, snap, parentBranch)
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to get parent revision: %w", err)
 	}
@@ -582,7 +582,7 @@ func (e *engineImpl) restackBranch(
 	rebaseBase := parent
 	if e.IsWorktreeAnchor(parentBranch) {
 		rebaseBase = e.trunk
-		if trunkRev, trunkErr := e.Trunk().GetRevision(); trunkErr == nil && trunkRev != parentRev {
+		if trunkRev, trunkErr := e.Trunk().Revision(ctx); trunkErr == nil && trunkRev != parentRev {
 			parentRev = trunkRev
 			rebaseOnto = trunkRev
 		}
@@ -669,7 +669,7 @@ func (e *engineImpl) restackBranch(
 	}
 
 	// Get current SHAs for optimistic locking
-	oldBranchSHA, err := branch.GetRevision()
+	oldBranchSHA, err := branch.Revision(ctx)
 	if err != nil {
 		return RestackBranchResult{
 			Result:            RestackConflict,
@@ -812,7 +812,7 @@ func (e *engineImpl) applyValidatedRestack(
 		parentRev = item.ParentRev
 	}
 	if parentRev == "" {
-		rev, err := e.GetBranch(item.NewParent).GetRevision()
+		rev, err := e.GetBranch(item.NewParent).Revision(ctx)
 		if err != nil {
 			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get parent revision: %w", err)
 		}
@@ -842,7 +842,7 @@ func (e *engineImpl) applyPlannedRefUpdate(
 
 	parentRev := item.ParentRev
 	if parentRev == "" {
-		rev, err := e.GetBranch(item.NewParent).GetRevision()
+		rev, err := e.GetBranch(item.NewParent).Revision(ctx)
 		if err != nil {
 			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get parent revision: %w", err)
 		}
@@ -940,7 +940,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 		}
 	}
 
-	oldBranchSHA, err := e.branchRev(snap, branch)
+	oldBranchSHA, err := e.branchRev(ctx, snap, branch)
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to get current branch revision for %s: %w", branchName, err)
 	}

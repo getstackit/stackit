@@ -129,14 +129,14 @@ func buildTreeAnnotations(ctx *app.Context, opts actions.TreeOptions, visibleBra
 	// one batched read; the short style needs none.
 	var stats map[string]engine.BranchStat
 	if opts.Style != actions.TreeStyleShort {
-		stats = eng.BatchBranchStats(visibleBranches)
+		stats = eng.BatchBranchStats(ctx.Context, visibleBranches)
 	}
 
 	// The short style skips BatchBranchStats above, so with --shas it needs its
 	// own batched revision lookup instead of resolving each SHA individually.
 	var revisions engine.RevisionMap
 	if opts.Style == actions.TreeStyleShort && opts.ShowSHAs {
-		revisions = eng.BatchRevisions(visibleBranches)
+		revisions = eng.BatchRevisions(ctx.Context, visibleBranches)
 	}
 
 	// Forge status is fetched separately (FULL style only) and joined below.
@@ -167,7 +167,7 @@ func buildTreeAnnotations(ctx *app.Context, opts actions.TreeOptions, visibleBra
 	workpool.Run(items, func(item indexedBranch) {
 		name := item.branch.Name()
 		if opts.Style != actions.TreeStyleShort {
-			built[item.index] = tui.TreeAnnotation(stackview.FullAnnotation(eng, item.branch, stats[name], enrichment, stackview.AnnotationOptions{
+			built[item.index] = tui.TreeAnnotation(stackview.FullAnnotation(ctx.Context, eng, item.branch, stats[name], enrichment, stackview.AnnotationOptions{
 				SkipCommitMessages: true,
 			}))
 			return

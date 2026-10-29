@@ -22,7 +22,7 @@ type StackNavigator interface {
 	Graph(ctx context.Context, strategy SortStrategy) *StackGraph
 	BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, int]
 	SortBranchesTopologically(ctx context.Context, branches Branches) Branches
-	FindBranchesForCommits(commitSHAs []string) CommitBranchMap
+	FindBranchesForCommits(ctx context.Context, commitSHAs []string) CommitBranchMap
 	// RefDecorations returns local branch and tag refs grouped by the commit SHA
 	// they point at (annotated tags dereferenced), for git-log-style annotations.
 	RefDecorations(ctx context.Context) (map[string][]git.RefDecoration, error)
@@ -49,12 +49,12 @@ type StackNavigator interface {
 type BranchStatus interface {
 	IsTrunk(branch Branch) bool
 	IsTracked(branch Branch) bool
-	IsUpToDate(branch Branch) bool
-	ReadBranchStatuses(branches Branches) BranchStatuses
+	IsUpToDate(ctx context.Context, branch Branch) bool
+	ReadBranchStatuses(ctx context.Context, branches Branches) BranchStatuses
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
 	// BatchIsBranchEmpty reports emptiness for many branches, resolving all tree
 	// SHAs in one batched rev-parse instead of a diff per branch.
-	BatchIsBranchEmpty(branchNames []string) BranchNameSet
+	BatchIsBranchEmpty(ctx context.Context, branchNames []string) BranchNameSet
 	GetDeletionStatuses(ctx context.Context, branchNames []string) (DeletionStatuses, error)
 	// GetStackDescription returns the stack description for a branch's stack.
 	// It first checks the stack ref, then falls back to legacy branch metadata.
@@ -84,39 +84,39 @@ type BranchStatus interface {
 
 // BranchInfo provides commit and diff metadata
 type BranchInfo interface {
-	GetCommitDate(branch Branch) (time.Time, error)
+	GetCommitDate(ctx context.Context, branch Branch) (time.Time, error)
 	// BatchCommitInfo resolves each branch's tip commit date and author in one
 	// batched pass instead of two `git log` processes per branch.
-	BatchCommitInfo(branches Branches) map[string]git.CommitInfo
-	GetRevision(branch Branch) (string, error)
-	GetAllCommits(branch Branch) (git.Commits, error)
-	GetCommitIDs(branch Branch) ([]string, error)
-	GetCommitSHA(branchName string, offset int) (string, error)
+	BatchCommitInfo(ctx context.Context, branches Branches) map[string]git.CommitInfo
+	GetRevision(ctx context.Context, branch Branch) (string, error)
+	GetAllCommits(ctx context.Context, branch Branch) (git.Commits, error)
+	GetCommitIDs(ctx context.Context, branch Branch) ([]string, error)
+	GetCommitSHA(ctx context.Context, branchName string, offset int) (string, error)
 	// BatchRevisions resolves every branch's tip SHA in one batched pass,
 	// keyed by branch name.
-	BatchRevisions(branches Branches) RevisionMap
+	BatchRevisions(ctx context.Context, branches Branches) RevisionMap
 	GetCurrentRevision(ctx context.Context) (string, error)
-	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
-	GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit, error)
+	GetRecentTrunkCommits(ctx context.Context, count int) ([]git.RecentCommit, error)
+	GetTrunkCommitsInRange(ctx context.Context, rr git.RevRange) ([]git.RecentCommit, error)
 	GetReflog(ctx context.Context, count int, format string) (string, error)
 	// GetDivergencePoint returns the divergence point of a branch from its parent.
 	// Returns the ParentBranchRevision from metadata if valid, otherwise the parent's current revision.
-	GetDivergencePoint(branchName string) (string, error)
+	GetDivergencePoint(ctx context.Context, branchName string) (string, error)
 	// BatchDivergencePoints returns the divergence point for every branch in one
 	// batched (git-free when metadata is cached) pass, keyed by branch name.
-	BatchDivergencePoints(branches Branches) RevisionMap
+	BatchDivergencePoints(ctx context.Context, branches Branches) RevisionMap
 	// BatchDiffStats, BatchCommits, and BatchChangedFileCounts each resolve one
 	// per-branch concern across the whole set in a single batched pass, returning
 	// a value map.
-	BatchDiffStats(branches Branches) map[string]DiffStat
-	BatchCommits(branches Branches) map[string]git.Commits
+	BatchDiffStats(ctx context.Context, branches Branches) map[string]DiffStat
+	BatchCommits(ctx context.Context, branches Branches) map[string]git.Commits
 	ReadBranchCommits(ctx context.Context, branches Branches) git.ReadResults[BranchCommitRange]
 	ReadBranchCommitNodes(ctx context.Context, branches Branches) git.ReadResults[[]git.CommitNode]
 	BatchChangedFileCounts(ctx context.Context, branches Branches) map[string]int
 	// BatchBranchStats resolves annotation stats (short SHA, commit count,
 	// additions/deletions) for every branch in one batched pass — a use-case
 	// bundle over the per-concern readers, for annotation builders.
-	BatchBranchStats(branches Branches) map[string]BranchStat
+	BatchBranchStats(ctx context.Context, branches Branches) map[string]BranchStat
 }
 
 // GitDiffer handles diff and merge operations
@@ -170,7 +170,7 @@ type StackView interface {
 	Graph(ctx context.Context, strategy SortStrategy) *StackGraph
 	BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, int]
 	GetScope(branch Branch) Scope
-	ReadBranchStatuses(branches Branches) BranchStatuses
+	ReadBranchStatuses(ctx context.Context, branches Branches) BranchStatuses
 	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses
 }
 
@@ -412,10 +412,10 @@ type MetadataInspector interface {
 	ListMetadataRefs(ctx context.Context) (map[string]string, error)
 	// ReadMetadataRaw reads a single branch's metadata directly from its ref,
 	// bypassing the engine's tracked-branch cache.
-	ReadMetadataRaw(branchName string) (*git.Meta, error)
+	ReadMetadataRaw(ctx context.Context, branchName string) (*git.Meta, error)
 	// BatchReadMetadataRaw reads raw metadata for many branches in one pass,
 	// returning per-branch errors so callers can detect corrupted refs.
-	BatchReadMetadataRaw(branchNames []string) (MetaMap, map[string]error)
+	BatchReadMetadataRaw(ctx context.Context, branchNames []string) (MetaMap, map[string]error)
 	// DeleteMetadataRefsBatch deletes many branches' metadata refs in a single
 	// atomic git call, without the transactional rebuild performed by
 	// DeleteMetadata. Intended for pruning refs whose branches no longer exist.

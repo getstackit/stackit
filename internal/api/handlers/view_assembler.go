@@ -24,7 +24,7 @@ type ViewEngine interface {
 	engine.StackView
 	stackview.BranchDataReader
 	httpcontract.MapperReader
-	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
+	GetRecentTrunkCommits(ctx context.Context, count int) ([]git.RecentCommit, error)
 }
 
 // ViewAssembler builds the combined /view payload.
@@ -129,7 +129,7 @@ func stackInput(stack stackview.StackInfo) httpcontract.StackInput {
 }
 
 func (a *ViewAssembler) fetchRecentlyMerged(ctx context.Context) []httpcontract.TrunkCommitResponse {
-	recentCommits, err := a.eng.GetRecentTrunkCommits(10)
+	recentCommits, err := a.eng.GetRecentTrunkCommits(ctx, 10)
 	if err != nil || len(recentCommits) == 0 {
 		return nil
 	}

@@ -363,20 +363,20 @@ func (s *Scenario) ExpectStackStructure(expected map[string]string) *Scenario {
 func (s *Scenario) BranchCommitCount(branch string) int {
 	s.T.Helper()
 	b := s.Engine.GetBranch(branch)
-	return s.Engine.BatchBranchStats(engine.BranchesOf(b))[branch].CommitCount
+	return s.Engine.BatchBranchStats(s.T.Context(), engine.BranchesOf(b))[branch].CommitCount
 }
 
 // ExpectBranchFixed asserts that a branch is considered "fixed" (no restack needed) by the engine.
 func (s *Scenario) ExpectBranchFixed(branch string) *Scenario {
 	s.T.Helper()
-	require.True(s.T, s.Engine.GetBranch(branch).IsBranchUpToDate(), "Branch %s should be up to date", branch)
+	require.True(s.T, s.Engine.GetBranch(branch).IsBranchUpToDate(s.T.Context()), "Branch %s should be up to date", branch)
 	return s
 }
 
 // ExpectBranchNotFixed asserts that a branch is NOT considered "fixed" by the engine.
 func (s *Scenario) ExpectBranchNotFixed(branch string) *Scenario {
 	s.T.Helper()
-	require.False(s.T, s.Engine.GetBranch(branch).IsBranchUpToDate(), "Branch %s should NOT be up to date", branch)
+	require.False(s.T, s.Engine.GetBranch(branch).IsBranchUpToDate(s.T.Context()), "Branch %s should NOT be up to date", branch)
 	return s
 }
 

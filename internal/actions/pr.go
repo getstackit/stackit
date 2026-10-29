@@ -90,7 +90,7 @@ func resolvePRBranch(ctx context.Context, eng engine.Engine, target string) (str
 		return target, nil
 	}
 
-	branchName, found := findBranchByPRNumber(eng, git.PRNumber(number))
+	branchName, found := findBranchByPRNumber(ctx, eng, git.PRNumber(number))
 	if !found {
 		return "", fmt.Errorf("no tracked branch found for pull request #%d", number)
 	}
@@ -100,9 +100,9 @@ func resolvePRBranch(ctx context.Context, eng engine.Engine, target string) (str
 // findBranchByPRNumber searches tracked branches for the one whose recorded PR
 // number matches number, reading all metadata in a single batched pass rather
 // than once per branch.
-func findBranchByPRNumber(eng engine.Engine, number git.PRNumber) (string, bool) {
+func findBranchByPRNumber(ctx context.Context, eng engine.Engine, number git.PRNumber) (string, bool) {
 	branchNames := eng.AllBranches().Names()
-	metas, _ := eng.BatchReadMetadataRaw(branchNames)
+	metas, _ := eng.BatchReadMetadataRaw(ctx, branchNames)
 	for _, name := range branchNames {
 		meta := metas[name]
 		if meta == nil {

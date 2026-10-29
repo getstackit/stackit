@@ -119,9 +119,9 @@ func TestTakeSnapshot(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Get current branch SHAs
-		mainSHA, err := s.Engine.Trunk().GetRevision()
+		mainSHA, err := s.Engine.Trunk().Revision(t.Context())
 		require.NoError(t, err)
-		featureSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		featureSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 
 		// Take snapshot
@@ -289,9 +289,9 @@ func TestRestoreSnapshot(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Get initial SHAs
-		initialMainSHA, err := s.Engine.Trunk().GetRevision()
+		initialMainSHA, err := s.Engine.Trunk().Revision(t.Context())
 		require.NoError(t, err)
-		initialFeatureSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		initialFeatureSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 
 		// Take snapshot
@@ -305,9 +305,9 @@ func TestRestoreSnapshot(t *testing.T) {
 			Commit("feature change 2")
 
 		// Verify SHAs changed
-		newMainSHA, err := s.Engine.Trunk().GetRevision()
+		newMainSHA, err := s.Engine.Trunk().Revision(t.Context())
 		require.NoError(t, err)
-		newFeatureSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		newFeatureSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 		require.NotEqual(t, initialMainSHA, newMainSHA)
 		require.NotEqual(t, initialFeatureSHA, newFeatureSHA)
@@ -320,9 +320,9 @@ func TestRestoreSnapshot(t *testing.T) {
 
 		// Verify SHAs restored
 		s.Rebuild()
-		restoredMainSHA, err := s.Engine.Trunk().GetRevision()
+		restoredMainSHA, err := s.Engine.Trunk().Revision(t.Context())
 		require.NoError(t, err)
-		restoredFeatureSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		restoredFeatureSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, initialMainSHA, restoredMainSHA)
 		require.Equal(t, initialFeatureSHA, restoredFeatureSHA)

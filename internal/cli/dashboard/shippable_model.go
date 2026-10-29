@@ -373,6 +373,7 @@ func (m *shippableModel) updateSelectionCache() {
 // rebuildCache rebuilds all cached render data.
 // Call this after stacks are updated (on refresh).
 func (m *shippableModel) rebuildCache() {
+	ctx := m.ctx.Context
 	// Initialize maps
 	m.cache.stackTitles = make(map[string]string)
 	m.cache.stackDescriptions = make(map[string]*git.StackDescription)
@@ -411,8 +412,8 @@ func (m *shippableModel) rebuildCache() {
 			}
 		}
 	}
-	stats := m.engine.BatchBranchStats(allBranches)
-	commits := m.engine.BatchCommits(allBranches)
+	stats := m.engine.BatchBranchStats(ctx, allBranches)
+	commits := m.engine.BatchCommits(ctx, allBranches)
 
 	for _, stack := range m.stacks {
 		rootBranch := stack.RootBranch()
@@ -428,7 +429,7 @@ func (m *shippableModel) rebuildCache() {
 				m.cache.stackDescriptions[rootBranch] = desc
 			} else if stack.BranchCount() == 1 {
 				// For single-branch stacks without a description, use commit body
-				if body := branch.DefaultPRBody(); body != "" {
+				if body := branch.DefaultPRBody(ctx); body != "" {
 					m.cache.commitBodies[rootBranch] = strings.TrimSpace(body)
 				}
 			}
@@ -440,7 +441,7 @@ func (m *shippableModel) rebuildCache() {
 				continue
 			}
 			name := branch.Name()
-			ann := tui.TreeAnnotation(stackview.BaseAnnotation(m.engine, branch, stats[name], stackview.AnnotationOptions{SkipCommitMessages: true}))
+			ann := tui.TreeAnnotation(stackview.BaseAnnotation(ctx, m.engine, branch, stats[name], stackview.AnnotationOptions{SkipCommitMessages: true}))
 			if msgs := commits[name].Onelines(); msgs != nil {
 				ann.CommitMessages = msgs
 				ann.CommitCount = len(msgs)

@@ -201,7 +201,7 @@ func (e *engineImpl) FindMostRecentTrackedAncestors(ctx context.Context, branchN
 // resolves every branch's commits in one batched, cache-backed pass
 // (BatchCommits) rather than scanning branches one at a time. Commits not
 // owned by any branch are simply absent from the returned map.
-func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) CommitBranchMap {
+func (e *engineImpl) FindBranchesForCommits(ctx context.Context, commitSHAs []string) CommitBranchMap {
 	result := make(CommitBranchMap, len(commitSHAs))
 	if len(commitSHAs) == 0 {
 		return result
@@ -217,7 +217,7 @@ func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) CommitBranchMap
 	copy(branches, e.state.branches)
 	e.mu.RUnlock()
 
-	commitsByBranch := e.ReadBranchCommitNodes(context.Background(), BranchesFromNames(e, branches))
+	commitsByBranch := e.ReadBranchCommitNodes(ctx, BranchesFromNames(e, branches))
 	for _, branchName := range branches {
 		nodes, _ := commitsByBranch.Get(branchName)
 		for _, node := range nodes {
@@ -310,7 +310,7 @@ func (e *engineImpl) BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, in
 //
 // Returns the ParentBranchRevision from metadata if available and non-empty,
 // otherwise falls back to the parent's current revision.
-func (e *engineImpl) GetDivergencePoint(branchName string) (string, error) {
+func (e *engineImpl) GetDivergencePoint(ctx context.Context, branchName string) (string, error) {
 	// First, try to get from metadata
 	meta, err := e.readMetadata(branchName)
 	if rev := meta.GetParentBranchRevision(); err == nil && rev != nil && *rev != "" {
@@ -335,5 +335,5 @@ func (e *engineImpl) GetDivergencePoint(branchName string) (string, error) {
 	}
 
 	// Fall back to parent's current revision
-	return e.git.ReadRevisions(context.Background(), parentName).One()
+	return e.git.ReadRevisions(ctx, parentName).One()
 }

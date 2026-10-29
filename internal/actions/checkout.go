@@ -166,7 +166,7 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 	// Limit the number of branches we check to avoid slow metadata reads
 	const maxDownstackChecks = 10
 	downstackToCheck := downstack.Last(maxDownstackChecks).Reverse()
-	statuses := ctx.Engine.ReadBranchStatuses(engine.BranchesOf(branch).Append(downstackToCheck...))
+	statuses := ctx.Engine.ReadBranchStatuses(ctx.Context, engine.BranchesOf(branch).Append(downstackToCheck...))
 
 	if !statuses.IsUpToDate(branch) {
 		parent := branch.ParentOrTrunk()

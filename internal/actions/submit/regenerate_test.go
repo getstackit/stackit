@@ -63,12 +63,12 @@ func TestRegeneratePlanningAndEmptyBody(t *testing.T) {
 	s.Context.Engine, s.Context.GitHubClient = eng, client
 	branches := engine.BranchesOf(branch)
 
-	ordinary, err := prepareBranchesForSubmit(s.Context, branches, Options{NoEdit: true}, "feature", nil, nil, NewJSONHandler())
+	ordinary, err := prepareBranchesForSubmit(s.Context.Context, DepsFrom(s.Context), branches, Options{NoEdit: true}, "feature", nil, nil, NewJSONHandler())
 	require.NoError(t, err)
 	require.Empty(t, ordinary, "unchanged PRs are normally skipped")
 
 	handler := NewJSONHandler()
-	preview, err := prepareBranchesForSubmit(s.Context, branches, Options{Text: PRTextRegenerate, NoEdit: true, DryRun: true}, "feature", nil, nil, handler)
+	preview, err := prepareBranchesForSubmit(s.Context.Context, DepsFrom(s.Context), branches, Options{Text: PRTextRegenerate, NoEdit: true, DryRun: true}, "feature", nil, nil, handler)
 	require.NoError(t, err)
 	require.Len(t, preview, 1, "regeneration must include unchanged PRs")
 	require.Equal(t, "feat: replacement", preview[0].Metadata.Title)
@@ -82,22 +82,22 @@ func TestRegeneratePlanningAndEmptyBody(t *testing.T) {
 	require.Equal(t, &PRContentPreview{Title: "feat: replacement", Body: ""}, handler.Result.Branches[0].Regenerated)
 
 	confirmHandler := NewJSONHandler()
-	_, err = prepareBranchesForSubmit(s.Context, branches, Options{Text: PRTextRegenerate, NoEdit: true, Confirm: true}, "feature", nil, nil, confirmHandler)
+	_, err = prepareBranchesForSubmit(s.Context.Context, DepsFrom(s.Context), branches, Options{Text: PRTextRegenerate, NoEdit: true, Confirm: true}, "feature", nil, nil, confirmHandler)
 	require.NoError(t, err)
 	require.NotNil(t, confirmHandler.Result.Branches[0].Regenerated, "--confirm must show the replacement text it asks about")
 
-	planned, err := prepareBranchesForSubmit(s.Context, branches, Options{Text: PRTextRegenerate, NoEdit: true}, "feature", nil, nil, NewJSONHandler())
+	planned, err := prepareBranchesForSubmit(s.Context.Context, DepsFrom(s.Context), branches, Options{Text: PRTextRegenerate, NoEdit: true}, "feature", nil, nil, NewJSONHandler())
 	require.NoError(t, err)
 	require.Len(t, planned, 1)
 	require.Equal(t, 2, eng.writes, "both non-dry-run plans save the prepared text")
-	_, err = updatePullRequestQuiet(s.Context, planned[0], Options{Text: PRTextRegenerate}, NewJSONHandler())
+	_, err = updatePullRequestQuiet(s.Context.Context, DepsFrom(s.Context), planned[0], Options{Text: PRTextRegenerate}, NewJSONHandler())
 	require.NoError(t, err)
 	require.NotNil(t, client.update.Body, "an empty regenerated body must clear the old description")
 	require.Empty(t, *client.update.Body)
 	require.Equal(t, "feat: replacement", *client.update.Title)
 	require.Nil(t, client.update.Draft)
 
-	_, err = updatePullRequestQuiet(s.Context, planned[0], Options{}, NewJSONHandler())
+	_, err = updatePullRequestQuiet(s.Context.Context, DepsFrom(s.Context), planned[0], Options{}, NewJSONHandler())
 	require.NoError(t, err)
 	require.Nil(t, client.update.Body, "ordinary updates still omit an empty body")
 }
@@ -122,7 +122,7 @@ func TestRegenerateUsesCurrentCommitMessages(t *testing.T) {
 			require.NoError(t, s.Engine.UpsertPrInfo(t.Context(), branch, old))
 			// Any attempted GitHub read would panic: existing remote content is irrelevant.
 			s.Context.GitHubClient = &regenerationClient{}
-			metadata, err := PreparePRMetadata(branch, MetadataOptions{Text: PRTextRegenerate}, s.Context, nil)
+			metadata, err := PreparePRMetadata(s.Context.Context, DepsFrom(s.Context), branch, MetadataOptions{Text: PRTextRegenerate}, nil)
 			require.NoError(t, err)
 			require.Equal(t, engine.NewScope("PROJ-1").ApplyToTitle("feat: first"), metadata.Title)
 			if multiple {
@@ -130,7 +130,7 @@ func TestRegenerateUsesCurrentCommitMessages(t *testing.T) {
 			} else {
 				require.Equal(t, "First body", strings.TrimSpace(metadata.Body))
 			}
-			preserved, err := PreparePRMetadata(branch, MetadataOptions{}, s.Context, nil)
+			preserved, err := PreparePRMetadata(s.Context.Context, DepsFrom(s.Context), branch, MetadataOptions{}, nil)
 			require.NoError(t, err)
 			require.Equal(t, old.Title(), preserved.Title)
 			require.Equal(t, old.Body(), preserved.Body)
@@ -158,7 +158,7 @@ func TestRegenerateEditTitlePrefillsRegeneratedText(t *testing.T) {
 	prompter := &recordingPrompter{}
 	s.Context.GitHubClient, s.Context.Prompter = &regenerationClient{}, prompter
 
-	metadata, err := PreparePRMetadata(branch, MetadataOptions{Text: PRTextRegenerate, EditTitle: true}, s.Context, nil)
+	metadata, err := PreparePRMetadata(s.Context.Context, DepsFrom(s.Context), branch, MetadataOptions{Text: PRTextRegenerate, EditTitle: true}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "feat: replacement", prompter.defaultTitle, "the title prompt must start from regenerated text, not the old title")
 	require.Equal(t, "edited title", metadata.Title)
@@ -175,7 +175,7 @@ func TestRegenerateKeepsLockBanner(t *testing.T) {
 
 	for _, footer := range []bool{false, true} {
 		metadata := &PRMetadata{Title: "feat: replacement", Body: "New body"}
-		composeRegeneratedBodies(s.Context, Options{Text: PRTextRegenerate, SubmitFooter: footer}, []Info{
+		composeRegeneratedBodies(s.Context.Context, DepsFrom(s.Context), Options{Text: PRTextRegenerate, SubmitFooter: footer}, []Info{
 			{BranchName: "feature", Action: engine.SubmitActionUpdate, Metadata: metadata},
 		})
 		// The footer pass may not run (submit.footer=false), so the body sent

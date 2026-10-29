@@ -3,8 +3,6 @@ package integration
 import (
 	"testing"
 
-	wtcli "github.com/getstackit/stackit/internal/cli/worktree"
-
 	"github.com/getstackit/stackit/internal/actions/get"
 
 	"github.com/stretchr/testify/require"
@@ -12,6 +10,8 @@ import (
 	"github.com/getstackit/stackit/internal/actions/submit"
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
 	worktreeaction "github.com/getstackit/stackit/internal/actions/worktree"
+	"github.com/getstackit/stackit/internal/cli/common"
+	wtcli "github.com/getstackit/stackit/internal/cli/worktree"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -65,7 +65,7 @@ func TestGetSkipsBranchHeldByAnotherWorktree(t *testing.T) {
 			rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, config)
 			sh.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, config)
 
-			require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
+			require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
 			require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
 
 			// Park a in another worktree. Both a and b already exist locally,

@@ -14,6 +14,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/submit"
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/git"
 	githubpkg "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/testhelpers"
@@ -99,7 +100,7 @@ func TestGetMetadataDiscovery(t *testing.T) {
 		sh.Context.GitHubClient = gh
 
 		// Submit + sync so parent and PR info land in the pushed metadata.
-		require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
+		require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
 		require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
 
 		// Precondition: the remote metadata carries the PR number, so get has no reason
@@ -208,7 +209,7 @@ func TestGetMetadataDiscovery(t *testing.T) {
 		gh := newCountingGitHubClient(t, config)
 		sh.Context.GitHubClient = gh
 
-		require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
+		require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
 		require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
 
 		// Keep b's metadata pointing to a, but remove a's metadata. Metadata discovery
@@ -239,7 +240,7 @@ func TestGetMetadataDiscovery(t *testing.T) {
 		gh := newCountingGitHubClient(t, config)
 		sh.Context.GitHubClient = gh
 
-		require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
+		require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
 		require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
 
 		sh.Checkout("main")

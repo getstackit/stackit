@@ -11,6 +11,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/squash"
 	"github.com/getstackit/stackit/internal/actions/submit"
+	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/shippable"
 )
@@ -516,7 +517,8 @@ func (m *shippableModel) startSubmit() (tea.Model, tea.Cmd) {
 
 		submitted := 0
 		handler := &dashboardSubmitHandler{onSubmit: func() { submitted++ }}
-		if err := submit.Action(m.quietCtx(), opts, handler); err != nil {
+		quietCtx := m.quietCtx()
+		if err := submit.Action(quietCtx.Context, common.SubmitDeps(quietCtx), opts, handler); err != nil {
 			return submitCompleteMsg{err: err}
 		}
 

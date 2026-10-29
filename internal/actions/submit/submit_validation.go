@@ -2,6 +2,7 @@
 package submit
 
 import (
+	"context"
 	"errors"
 
 	"github.com/getstackit/stackit/internal/git"
@@ -9,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
@@ -21,23 +21,22 @@ import (
 // parent remotely) are pruned together with their descendants, with a warning
 // per pruned subtree, so the rest of the stack still submits. An error is
 // returned only when nothing in scope is submittable.
-func ValidateBranchesToSubmit(ctx *app.Context, branches []string) ([]string, error) {
-	pr := ctx.PR()
-	nav := ctx.Navigator()
+func ValidateBranchesToSubmit(ctx context.Context, deps Deps, branches []string) ([]string, error) {
+	eng := deps.Engine
 
 	// Sync PR info first
-	repo, err := ctx.Engine.GetRepoInfo(ctx.Context)
+	repo, err := eng.GetRepoInfo(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if repo.IsHosted() {
 		// Collect updates from the callback (which may be called concurrently in the
 		// REST fallback) then write all PR info in one atomic batch.
-		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+		remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
 		var mu sync.Mutex
 		updates := make(map[string]*engine.PrInfo)
-		if err := github.SyncPrInfo(remoteCtx, ctx.GHRunner, branches, github.Repo{Owner: repo.Owner, Name: repo.Name}, func(name string, prInfo *github.PullRequestInfo) {
-			branch := nav.GetBranch(name)
+		if err := github.SyncPrInfo(remoteCtx, deps.GHRunner, branches, github.Repo{Owner: repo.Owner, Name: repo.Name}, func(name string, prInfo *github.PullRequestInfo) {
+			branch := eng.GetBranch(name)
 
 			lockReason := engine.LockReasonNone
 			if existing, err := branch.PrInfo(); err == nil && existing != nil {
@@ -57,22 +56,22 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) ([]string, er
 			mu.Unlock()
 		}); err != nil {
 			// Non-fatal, continue
-			ctx.Output.Debug("Failed to sync PR info: %v", err)
+			deps.Out.Debug("Failed to sync PR info: %v", err)
 		}
 		cancelRemote()
-		if err := pr.BatchUpsertPrInfo(ctx.Context, updates); err != nil {
-			ctx.Output.Debug("Failed to update PR info: %v", err)
+		if err := eng.BatchUpsertPrInfo(ctx, updates); err != nil {
+			deps.Out.Debug("Failed to update PR info: %v", err)
 		}
 	}
 
 	// Validate base revisions, pruning unsubmittable subtrees
-	submittable, err := validateBaseRevisions(branches, ctx.Engine, ctx)
+	submittable, err := validateBaseRevisions(ctx, branches, eng, deps.Out)
 	if err != nil {
 		return nil, err
 	}
 
 	// Warn about merged/closed branches
-	warnMergedOrClosedBranches(submittable, ctx.Engine, ctx)
+	warnMergedOrClosedBranches(submittable, eng, deps.Out)
 
 	return submittable, nil
 }
@@ -86,10 +85,9 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) ([]string, er
 // descendants (a child cannot be submitted against a parent state that isn't
 // being pushed), so the rest of the stack still submits. Returns the
 // submittable subset in the original order; errors only when it is empty.
-func validateBaseRevisions(branches []string, eng engine.BranchReader, ctx *app.Context) ([]string, error) {
+func validateBaseRevisions(ctx context.Context, branches []string, eng engine.BranchReader, out output.Output) ([]string, error) {
 	validatedBranches := make(map[string]bool)
 	prunedBranches := make(map[string]bool)
-	nav := ctx.Navigator()
 
 	// Read remote status for every parent at most once, and only if a branch
 	// actually needs it, so a stack whose parents are all trunk or in-list stays
@@ -104,14 +102,14 @@ func validateBaseRevisions(branches []string, eng engine.BranchReader, ctx *app.
 			parentBranches := engine.Branches{}
 			seen := make(map[string]bool)
 			for _, branchName := range branches {
-				parent := resolveSubmitParent(nav, eng.GetBranch(branchName))
+				parent := resolveSubmitParent(eng, eng.GetBranch(branchName))
 				if seen[parent.Name()] {
 					continue
 				}
 				seen[parent.Name()] = true
 				parentBranches = parentBranches.Append(parent)
 			}
-			remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+			remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
 			remoteStatuses = eng.ReadBranchRemoteStatuses(remoteCtx, parentBranches)
 			cancelRemote()
 			remoteRead = true
@@ -126,31 +124,31 @@ func validateBaseRevisions(branches []string, eng engine.BranchReader, ctx *app.
 	for _, branchName := range branches {
 		branchObjs = append(branchObjs, eng.GetBranch(branchName))
 	}
-	statuses := eng.ReadBranchStatuses(ctx.Context, branchObjs)
+	statuses := eng.ReadBranchStatuses(ctx, branchObjs)
 
 	kept := make([]string, 0, len(branches))
 	for _, branchName := range branches {
 		branch := eng.GetBranch(branchName)
-		parentBranch := resolveSubmitParent(nav, branch)
+		parentBranch := resolveSubmitParent(eng, branch)
 		parentBranchName := parentBranch.Name()
 		switch {
 		case prunedBranches[parentBranchName]:
 			// Parent was pruned from this submission; the child cannot be
 			// pushed against a base that isn't being submitted.
 			prunedBranches[branchName] = true
-			ctx.Output.Warn("Skipping %s — its parent %s was skipped.",
+			out.Warn("Skipping %s — its parent %s was skipped.",
 				output.BranchName(branchName), output.BranchName(parentBranchName))
 			continue
 		case parentBranch.IsTrunk():
 			if !statuses.IsUpToDate(branch) {
-				ctx.Output.Warn("%s is behind trunk and may conflict on merge — run 'stackit sync' and 'stackit restack' to update it.",
+				out.Warn("%s is behind trunk and may conflict on merge — run 'stackit sync' and 'stackit restack' to update it.",
 					output.BranchName(branchName))
 			}
 		case validatedBranches[parentBranchName]:
 			// Parent is in the submission list
 			if !statuses.IsUpToDate(branch) {
 				prunedBranches[branchName] = true
-				ctx.Output.Warn("Skipping %s — it has not been restacked on its parent %s. Run 'stackit restack', then submit again.",
+				out.Warn("Skipping %s — it has not been restacked on its parent %s. Run 'stackit restack', then submit again.",
 					output.BranchName(branchName), output.BranchName(parentBranchName))
 				continue
 			}
@@ -158,7 +156,7 @@ func validateBaseRevisions(branches []string, eng engine.BranchReader, ctx *app.
 			// Parent is not in submission list
 			if !parentRemoteStatuses().ForBranch(parentBranch).Matches() {
 				prunedBranches[branchName] = true
-				ctx.Output.Warn("Skipping %s — its base does not match its parent %s on the remote. Use 'stackit submit --stack' to include its ancestors.",
+				out.Warn("Skipping %s — its base does not match its parent %s on the remote. Use 'stackit submit --stack' to include its ancestors.",
 					output.BranchName(branchName), output.BranchName(parentBranchName))
 				continue
 			}
@@ -175,7 +173,7 @@ func validateBaseRevisions(branches []string, eng engine.BranchReader, ctx *app.
 }
 
 // warnMergedOrClosedBranches checks for merged/closed PRs and warns about them
-func warnMergedOrClosedBranches(branches []string, eng engine.BranchReader, ctx *app.Context) {
+func warnMergedOrClosedBranches(branches []string, eng engine.BranchReader, out output.Output) {
 	mergedOrClosedBranches := []string{}
 	for _, branchName := range branches {
 		branch := eng.GetBranch(branchName)
@@ -193,17 +191,17 @@ func warnMergedOrClosedBranches(branches []string, eng engine.BranchReader, ctx 
 	}
 
 	hasMultiple := len(mergedOrClosedBranches) > 1
-	ctx.Output.Warn("PR%s for the following branch%s already been merged or closed:", actions.PluralSuffix("PR", hasMultiple), actions.PluralSuffix("branch", hasMultiple))
+	out.Warn("PR%s for the following branch%s already been merged or closed:", actions.PluralSuffix("PR", hasMultiple), actions.PluralSuffix("branch", hasMultiple))
 	for _, b := range mergedOrClosedBranches {
-		ctx.Output.Warn("▸ %s", b)
+		out.Warn("▸ %s", b)
 	}
-	ctx.Output.Tip("Run 'stackit sync' to delete merged/closed branches and rebase their children.")
+	out.Tip("Run 'stackit sync' to delete merged/closed branches and rebase their children.")
 
 	// For now, we'll allow creating new PRs (non-interactive mode)
 	// In interactive mode, we would prompt here
 	// TODO: Add interactive prompt when needed
 	// Note: We used to clear PR info here, but mutation requires mutation interface.
 	for _, branchName := range mergedOrClosedBranches {
-		ctx.Output.Debug("Branch %s already has a merged/closed PR", branchName)
+		out.Debug("Branch %s already has a merged/closed PR", branchName)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/app"
@@ -169,7 +170,7 @@ func syncAfterDrainMerge(ctx *app.Context, mergedPR git.PRNumber, remaining []Br
 // PR — a drain must never open one — and NoEdit keeps it silent about
 // titles and descriptions, which are not drain's business to change.
 func pushDrainedBranches(ctx *app.Context, branchNames []string, handler ProgressHandler) error {
-	return submit.Action(ctx, submit.Options{
+	return submit.Action(ctx.Context, submitDeps(ctx), submit.Options{
 		// branchNames[0] is the next PR to merge and needs pushing itself, so
 		// the range has to include it as well as its descendants.
 		Branch:     branchNames[0],
@@ -224,5 +225,24 @@ func unlockDrainBranches(ctx *app.Context, branches []BranchMergeInfo) {
 	}
 	if len(toUnlock) > 0 {
 		_, _ = ctx.Engine.SetLocked(ctx.Context, toUnlock, engine.LockReasonNone)
+	}
+}
+
+// submitDeps builds the nested submit's collaborators from drain's runtime
+// context.
+func submitDeps(ctx *app.Context) submit.Deps {
+	return submit.Deps{
+		Engine:      ctx.Engine,
+		Out:         ctx.Output,
+		Log:         ctx.Logger,
+		GitHub:      ctx.GitHub,
+		GitHubError: ctx.GitHubError,
+		GHRunner:    ctx.GHRunner,
+		PRSync:      actions.PRSyncFrom(ctx),
+		Restack:     actions.RestackDepsFrom(ctx),
+		Snapshots:   actions.SnapshotsFrom(ctx),
+		Prompts:     ctx.Prompts(),
+		Verify:      ctx.Verify,
+		Config:      ctx.Config,
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/getstackit/stackit/internal/actions/handler"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
@@ -69,9 +68,8 @@ func GetReviewersWithPrompt(prompter handler.TextInputPrompter, reviewersFlag st
 
 // PreparePRMetadata prepares PR metadata for a branch. current holds PR content
 // prefetched in bulk; a PR missing from it (or a nil map) is fetched directly.
-func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Context, current map[git.PRNumber]github.PRContent) (*PRMetadata, error) {
+func PreparePRMetadata(ctx context.Context, deps Deps, branch engine.Branch, opts MetadataOptions, current map[git.PRNumber]github.PRContent) (*PRMetadata, error) {
 	prInfo, _ := branch.PrInfo()
-	nav := ctx.Navigator()
 
 	metadata := &PRMetadata{
 		Title:   getStringValue(prInfo, "Title"),
@@ -88,10 +86,10 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 	shouldEditBody := opts.EditBody
 
 	// If PR exists and local metadata is missing title or body, fetch from GitHub
-	if !regenerate && prInfo != nil && prInfo.Number() != nil && (metadata.Title == "" || metadata.Body == "") && ctx.GitHub() != nil {
+	if !regenerate && prInfo != nil && prInfo.Number() != nil && (metadata.Title == "" || metadata.Body == "") && deps.GitHub() != nil {
 		content, ok := current[*prInfo.Number()]
 		if !ok {
-			currentPR, err := ctx.GitHub().GetPullRequest(ctx.Context, *prInfo.Number())
+			currentPR, err := deps.GitHub().GetPullRequest(ctx, *prInfo.Number())
 			if err == nil && currentPR != nil {
 				content = github.PRContent{Title: currentPR.Title, Body: currentPR.Body}
 				ok = true
@@ -107,19 +105,19 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 		}
 	}
 
-	scope := nav.GetScope(branch)
+	scope := deps.Engine.GetScope(branch)
 
 	switch {
 	case metadata.Title == "" && metadata.Body == "" && !shouldEditTitle && !shouldEditBody:
 		// Neither field has a value yet and neither needs interactive editing,
 		// so derive both from a single commit read instead of one read per field.
-		title, body := branch.DefaultPRTitleAndBody(ctx.Context)
+		title, body := branch.DefaultPRTitleAndBody(ctx)
 		metadata.Title = scope.ApplyToTitle(title)
 		metadata.Body = body
 	default:
 		// Handle Title
 		if shouldEditTitle || metadata.Title == "" {
-			title, err := GetPRTitle(ctx.Context, ctx.Prompts(), branch, shouldEditTitle, metadata.Title, scope)
+			title, err := GetPRTitle(ctx, deps.Prompts, branch, shouldEditTitle, metadata.Title, scope)
 			if err != nil {
 				return nil, err
 			}
@@ -128,7 +126,7 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 
 		// Handle Body
 		if shouldEditBody || metadata.Body == "" {
-			body, err := GetPRBody(ctx.Context, branch, shouldEditBody, metadata.Body)
+			body, err := GetPRBody(ctx, branch, shouldEditBody, metadata.Body)
 			if err != nil {
 				return nil, err
 			}
@@ -149,7 +147,7 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 	}
 
 	if opts.ReviewersPrompt {
-		reviewers, teamReviewers, err := GetReviewersWithPrompt(ctx.Prompts(), opts.Reviewers)
+		reviewers, teamReviewers, err := GetReviewersWithPrompt(deps.Prompts, opts.Reviewers)
 		if err != nil {
 			return nil, err
 		}

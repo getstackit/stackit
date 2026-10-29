@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/api/auth"
 	"github.com/getstackit/stackit/internal/api/registry"
@@ -85,6 +86,20 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx.Config = cfg
+	deps := submit.Deps{
+		Engine:      ctx.Engine,
+		Out:         ctx.Output,
+		Log:         ctx.Logger,
+		GitHub:      ctx.GitHub,
+		GitHubError: ctx.GitHubError,
+		GHRunner:    ctx.GHRunner,
+		PRSync:      actions.PRSyncFrom(ctx),
+		Restack:     actions.RestackDepsFrom(ctx),
+		Snapshots:   actions.SnapshotsFrom(ctx),
+		Prompts:     ctx.Prompts(),
+		Verify:      ctx.Verify,
+		Config:      cfg,
+	}
 
 	opts := submit.Options{
 		Branch:     rootBranch,
@@ -99,7 +114,7 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	done := make(chan error, 1)
 	go func() {
-		err := submit.Action(ctx, opts, handler)
+		err := submit.Action(ctx.Context, deps, opts, handler)
 		handler.Close()
 		done <- err
 	}()

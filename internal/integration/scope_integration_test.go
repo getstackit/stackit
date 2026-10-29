@@ -7,6 +7,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -101,7 +102,7 @@ func TestScopeSubmitSyncFlow(t *testing.T) {
 		NoEdit: true,
 		Draft:  true,
 	}
-	err := submit.Action(sh.Context, opts, &noopHandler{})
+	err := submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), opts, &noopHandler{})
 	require.NoError(t, err)
 
 	// 5. Run sync to fetch remote metadata

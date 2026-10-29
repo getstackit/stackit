@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
@@ -16,17 +15,17 @@ import (
 // snapshot; otherwise it asks the engine for lazily batched status so create-only
 // dry runs do not read remote state. empty flags branches with no commits so
 // plan output can surface them.
-func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts Options, currentBranch string, remoteStatuses engine.BranchRemoteStatuses, empty map[string]bool, handler Handler) ([]Info, error) {
+func prepareBranchesForSubmit(ctx context.Context, deps Deps, branches engine.Branches, opts Options, currentBranch string, remoteStatuses engine.BranchRemoteStatuses, empty map[string]bool, handler Handler) ([]Info, error) {
 	submissionInfos := make([]Info, 0, len(branches))
-	nav := ctx.Navigator()
+	eng := deps.Engine
 
 	// Resolve every branch and parent revision in one batched call so the head
 	// and base SHAs below are map lookups, not a git rev-parse per branch.
 	revBranches := make(engine.Branches, 0, len(branches)*2)
 	for _, branch := range branches {
-		revBranches = append(revBranches, branch, resolveSubmitParent(nav, branch))
+		revBranches = append(revBranches, branch, resolveSubmitParent(eng, branch))
 	}
-	revisions := ctx.Engine.BatchRevisions(ctx.Context, revBranches)
+	revisions := eng.BatchRevisions(ctx, revBranches)
 
 	// PR-info writes are collected here and persisted in one batched ref write
 	// after planning, instead of a git ref write per branch.
@@ -37,11 +36,11 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		err      error
 	)
 	if remoteStatuses == nil {
-		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+		remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
 		defer cancelRemote()
-		statuses, err = ctx.Engine.BatchGetPRSubmissionStatus(remoteCtx, branches, nil)
+		statuses, err = eng.BatchGetPRSubmissionStatus(remoteCtx, branches, nil)
 	} else {
-		statuses, err = ctx.Engine.BatchGetPRSubmissionStatus(ctx.Context, branches, remoteStatuses)
+		statuses, err = eng.BatchGetPRSubmissionStatus(ctx, branches, remoteStatuses)
 	}
 	if err != nil {
 		return nil, err
@@ -62,8 +61,8 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		}
 	}
 	var current map[git.PRNumber]github.PRContent
-	if !opts.regenerate() && len(missingContent) > 0 && ctx.GitHub() != nil {
-		current = actions.FetchPRContentForBranches(ctx, missingContent)
+	if !opts.regenerate() && len(missingContent) > 0 && deps.GitHub() != nil {
+		current = deps.PRSync.FetchContent(ctx, missingContent)
 	}
 
 	for _, branch := range branches {
@@ -101,14 +100,14 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 			ConfigAssignees: opts.ConfigAssignees,
 		}
 
-		metadata, err := PreparePRMetadata(branch, metadataOpts, ctx, current)
+		metadata, err := PreparePRMetadata(ctx, deps, branch, metadataOpts, current)
 		if err != nil {
 			return nil, fmt.Errorf("failed to prepare metadata for %s: %w", branchName, err)
 		}
 		prUpdates[branchName] = pendingPrInfo(branch, metadata)
 
 		// Get SHAs from the batched revisions resolved above.
-		parentBranchName := resolveSubmitParent(nav, branch).Name()
+		parentBranchName := resolveSubmitParent(eng, branch).Name()
 		headSHA := revisions[branchName]
 		baseSHA := revisions[parentBranchName]
 
@@ -146,8 +145,8 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	// failure can recover the titles/bodies. Non-fatal, like the per-branch
 	// write it replaces.
 	if !opts.DryRun && len(prUpdates) > 0 {
-		if err := ctx.Engine.BatchUpsertPrInfo(ctx.Context, prUpdates); err != nil {
-			ctx.Output.Debug("Failed to save PR metadata: %v", err)
+		if err := eng.BatchUpsertPrInfo(ctx, prUpdates); err != nil {
+			deps.Out.Debug("Failed to save PR metadata: %v", err)
 		}
 	}
 
@@ -203,11 +202,9 @@ func pluralPR(count int) string {
 }
 
 // getBranchesToSubmit returns the list of branches to submit based on options
-func getBranchesToSubmit(ctx *app.Context, opts Options) ([]string, error) {
-	nav := ctx.Navigator()
-
+func getBranchesToSubmit(ctx context.Context, nav engine.StackNavigator, opts Options) ([]string, error) {
 	// Get branch scope
-	branchName, err := resolveBranchNameFromNav(ctx.Context, nav, opts.Branch)
+	branchName, err := resolveBranchNameFromNav(ctx, nav, opts.Branch)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +214,7 @@ func getBranchesToSubmit(ctx *app.Context, opts Options) ([]string, error) {
 	if !stackRange.RecursiveParents && !stackRange.IncludeCurrent && !stackRange.RecursiveChildren {
 		stackRange = engine.StackRangeDownstack(engine.IncludeCurrentBranch)
 	}
-	graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := nav.Graph(ctx, engine.SortStrategyAlphabetical)
 	stackBranches := graph.Range(nav.GetBranch(branchName), stackRange)
 	allBranches := stackBranches.Names()
 

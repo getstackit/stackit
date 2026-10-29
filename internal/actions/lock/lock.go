@@ -75,7 +75,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 				Confirm:    false,
 			}
 			submitHandler := handler.SubmitHandler()
-			if err := submit.Action(ctx, submitOpts, submitHandler); err != nil {
+			if err := submit.Action(ctx.Context, submitDeps(ctx), submitOpts, submitHandler); err != nil {
 				return fmt.Errorf("failed to submit before locking: %w", err)
 			}
 		}
@@ -198,4 +198,23 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 	}
 
 	return nil
+}
+
+// submitDeps builds the nested submit's collaborators from lock's runtime
+// context.
+func submitDeps(ctx *app.Context) submit.Deps {
+	return submit.Deps{
+		Engine:      ctx.Engine,
+		Out:         ctx.Output,
+		Log:         ctx.Logger,
+		GitHub:      ctx.GitHub,
+		GitHubError: ctx.GitHubError,
+		GHRunner:    ctx.GHRunner,
+		PRSync:      actions.PRSyncFrom(ctx),
+		Restack:     actions.RestackDepsFrom(ctx),
+		Snapshots:   actions.SnapshotsFrom(ctx),
+		Prompts:     ctx.Prompts(),
+		Verify:      ctx.Verify,
+		Config:      ctx.Config,
+	}
 }

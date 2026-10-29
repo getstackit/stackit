@@ -12,6 +12,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 
 	"github.com/getstackit/stackit/testhelpers"
@@ -124,7 +125,7 @@ func stackWithLandedParent(t *testing.T, land mergeMethod, forget forgottenMetad
 		TrackBranch("b", "a")
 
 	sh.Context.GitHubClient = newCountingGitHubClient(t, testhelpers.NewMockGitHubServerConfig())
-	require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
+	require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
 	require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
 
 	sh.Checkout("main")
@@ -265,7 +266,7 @@ func TestGetPastLandedParentReport(t *testing.T) {
 			TrackBranch("b", "a")
 
 		sh.Context.GitHubClient = newCountingGitHubClient(t, testhelpers.NewMockGitHubServerConfig())
-		require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
+		require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
 		require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
 
 		sh.Checkout("main")

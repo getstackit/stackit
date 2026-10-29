@@ -34,7 +34,7 @@ func TestSubmitRetriesAfterPartialFailure(t *testing.T) {
 	opts := submit.Options{NoEdit: true}
 
 	// First submit creates the PR and pushes the branch.
-	require.NoError(t, submit.Action(s.Context, opts, &noopHandler{}))
+	require.NoError(t, submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, &noopHandler{}))
 	require.NotEmpty(t, config.CreatedPRs, "first submit should create a PR")
 
 	// New work, and a GitHub that accepts the push but rejects the PR update.
@@ -42,7 +42,7 @@ func TestSubmitRetriesAfterPartialFailure(t *testing.T) {
 	s.Rebuild()
 	config.FailRequests("PATCH", errors.New("boom"))
 
-	require.Error(t, submit.Action(s.Context, opts, &noopHandler{}), "PR update failure should fail the submit")
+	require.Error(t, submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, &noopHandler{}), "PR update failure should fail the submit")
 
 	// The push landed, so the branch now matches its remote: every ordinary
 	// signal reads as up to date.
@@ -59,7 +59,7 @@ func TestSubmitRetriesAfterPartialFailure(t *testing.T) {
 
 	// With GitHub healthy again the retry goes through and clears the marker.
 	config.StopFailingRequests("PATCH")
-	require.NoError(t, submit.Action(s.Context, opts, &noopHandler{}))
+	require.NoError(t, submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, &noopHandler{}))
 	require.NotEmpty(t, config.UpdatedPRs, "the retry should have updated the PR")
 
 	remoteStatuses = s.Engine.ReadBranchRemoteStatuses(t.Context(), branches)
@@ -86,7 +86,7 @@ func TestSubmitPendingIsClearedPerBranch(t *testing.T) {
 	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, config)
 
 	opts := submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Restack: true}
-	require.NoError(t, submit.Action(s.Context, opts, &noopHandler{}))
+	require.NoError(t, submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, &noopHandler{}))
 	require.Len(t, config.CreatedPRs, 2)
 
 	prNumbers := map[string]int{}
@@ -101,7 +101,7 @@ func TestSubmitPendingIsClearedPerBranch(t *testing.T) {
 	s.Rebuild()
 	config.FailRequests(fmt.Sprintf("PATCH /repos/%s/%s/pulls/%d", owner, repo, prNumbers["B"]), errors.New("boom"))
 
-	require.Error(t, submit.Action(s.Context, opts, &noopHandler{}))
+	require.Error(t, submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, &noopHandler{}))
 
 	pending := func(branch string) bool {
 		t.Helper()

@@ -90,6 +90,7 @@ linters:
             - "**/internal/actions/split/**"
             - "**/internal/actions/squash/**"
             - "**/internal/actions/state/**"
+            - "**/internal/actions/submit/**"
             - "**/internal/actions/track/**"
             - "**/internal/actions/undo/**"
             - "**/internal/actions/untrack/**"

@@ -7,11 +7,17 @@ import (
 	"strings"
 
 	"github.com/getstackit/stackit/internal/actions/integrations"
+	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/git"
 )
 
 // cmdInstall is the subcommand name shared across all integrations.
 const cmdInstall = "install"
+
+// hookDeps builds the hook-integration Deps from the command's runtime context.
+func hookDeps(ctx *app.Context) integrations.Deps {
+	return integrations.Deps{Engine: ctx.Engine, Out: ctx.Output, RepoRoot: ctx.RepoRoot}
+}
 
 // InstallGitHub installs GitHub Actions workflow for stackit CI checks.
 // This is a convenience wrapper for use during init.

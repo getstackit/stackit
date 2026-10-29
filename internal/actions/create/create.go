@@ -2,6 +2,7 @@
 package create
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -11,8 +12,6 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/actions/validation"
-	"github.com/getstackit/stackit/internal/actions/worktree"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
@@ -45,10 +44,60 @@ type Options struct {
 	AllowEmpty bool
 }
 
+// Engine lists exactly the engine methods create calls.
+type Engine interface {
+	validation.BranchValidationEngine
+	actions.OwnershipEngine
+	CurrentBranch(ctx context.Context) *engine.Branch
+	Trunk() engine.Branch
+	IsTrunk(branch engine.Branch) bool
+	AllBranches() engine.Branches
+	BranchNames() *engine.BranchSet
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+	SortBranchesTopologically(ctx context.Context, branches engine.Branches) engine.Branches
+	GetScope(branch engine.Branch) engine.Scope
+	SetScope(ctx context.Context, branch engine.Branch, scope engine.Scope) error
+	GetUserName(ctx context.Context) (string, error)
+	GetWorkingTreeStatus(ctx context.Context) (git.WorktreeStatus, error)
+	GetCommitTemplate(ctx context.Context) (string, error)
+	StageChanges(ctx context.Context, opts git.StagingOptions) error
+	StageAll(ctx context.Context) error
+	Commit(ctx context.Context, opts git.CommitOptions) error
+	CreateBranch(ctx context.Context, branchName string, startPoint string) error
+	CreateAndCheckoutBranch(ctx context.Context, branch engine.Branch) error
+	CheckoutBranch(ctx context.Context, branch engine.Branch) error
+	DeleteBranch(ctx context.Context, branch engine.Branch) error
+	TrackBranch(ctx context.Context, branchName string, parentBranchName string) error
+	ReparentBranchesToParents(ctx context.Context, moves []engine.BranchParentMove, opts engine.ReparentOpts) error
+	RestackBranches(ctx context.Context, branches engine.Branches, opts engine.RestackOpts) (engine.RestackBatchResult, error)
+	ConfigureRemoteMetadataSync(ctx context.Context) error
+}
+
+// Worktrees creates the dedicated worktree for `create --worktree`.
+// Adapters implement it on top of the worktree actions.
+type Worktrees interface {
+	// CreateAnchored creates a managed worktree anchored on branchName and
+	// returns its path.
+	CreateAnchored(ctx context.Context, branchName, name, scope string) (engine.WorktreePath, error)
+	// RunPostCreateHooks runs the configured post-create hooks in path.
+	RunPostCreateHooks(ctx context.Context, path engine.WorktreePath) error
+}
+
+// Deps are the collaborators create needs. Adapters build them from their own
+// runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	actions.MutationDeps
+	Log output.Logger
+	// Verify runs git commit hooks when set (the inverse of --no-verify).
+	Verify bool
+	// Worktrees backs --worktree; it may be nil when --worktree is not used.
+	Worktrees Worktrees
+}
+
 // Action creates a new branch stacked on top of the current branch.
-func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
-	eng := ctx.Engine
-	out := ctx.Output
+func Action(ctx context.Context, deps Deps, opts Options, h Handler) (Result, error) {
+	eng, out := deps.Engine, deps.Out
 
 	// Use null handler if none provided
 	if h == nil {
@@ -57,18 +106,18 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	defer h.Cleanup()
 
 	// Validate preconditions
-	if err := validation.MustBeOnBranch(ctx.Context, eng).Validate(); err != nil {
+	if err := validation.MustBeOnBranch(ctx, eng).Validate(); err != nil {
 		return Result{}, err
 	}
-	currentBranch := eng.CurrentBranch(ctx.Context).Name()
+	currentBranch := eng.CurrentBranch(ctx).Name()
 	requestedParent := currentBranch
 	if opts.Onto != "" {
 		requestedParent = opts.Onto
 	}
-	if ctx.InManagedWorktree && ctx.WorktreeInfo != nil && requestedParent == eng.Trunk().Name() {
-		return Result{}, fmt.Errorf("cannot create a branch from trunk inside managed worktree %s; first check out a branch owned by this worktree", ctx.WorktreeInfo.Name)
+	if deps.Here.InManagedWorktree && deps.Here.Worktree != nil && requestedParent == eng.Trunk().Name() {
+		return Result{}, fmt.Errorf("cannot create a branch from trunk inside managed worktree %s; first check out a branch owned by this worktree", deps.Here.Worktree.Name)
 	}
-	if err := actions.EnsureCanModifyNamesHere(ctx, currentBranch); err != nil {
+	if err := actions.EnsureCanModifyNames(ctx, eng, deps.Here, currentBranch); err != nil {
 		return Result{}, err
 	}
 
@@ -78,6 +127,9 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	if opts.Worktree {
 		if !eng.IsTrunk(eng.GetBranch(currentBranch)) {
 			return Result{}, errors.New("--worktree/-w flag is only valid when creating a new stack from trunk")
+		}
+		if deps.Worktrees == nil {
+			return Result{}, errors.New("--worktree/-w is not supported here")
 		}
 	}
 
@@ -94,14 +146,14 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		if err := validateOntoTarget(eng, opts.Onto); err != nil {
 			return Result{}, err
 		}
-		if err := actions.EnsureCanModifyNamesHere(ctx, opts.Onto); err != nil {
+		if err := actions.EnsureCanModifyNames(ctx, eng, deps.Here, opts.Onto); err != nil {
 			return Result{}, err
 		}
 	}
 
 	// Read the working tree before the snapshot: it decides how much of the
 	// working tree the snapshot has to capture.
-	status, err := eng.GetWorkingTreeStatus(ctx.Context)
+	status, err := eng.GetWorkingTreeStatus(ctx)
 	if err != nil {
 		return Result{}, fmt.Errorf("failed to read working tree status: %w", err)
 	}
@@ -133,7 +185,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		actions.WithFlag(opts.AllowEmpty, "--allow-empty"),
 		actions.WithWorktreeCapture(capture),
 	)
-	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
+	deps.Snapshots.Take(ctx, snapshotOpts)
 
 	// Handle staging first if we might need the message to name the branch
 	hasStaged := status.Staged
@@ -145,7 +197,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 			Update: opts.Update,
 			Patch:  opts.Patch,
 		}
-		if err := ctx.Engine.StageChanges(ctx.Context, stagingOpts); err != nil {
+		if err := eng.StageChanges(ctx, stagingOpts); err != nil {
 			h.OnStep(StepStaging, handler.StatusFailed, err.Error())
 			return Result{}, err
 		}
@@ -155,7 +207,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		confirmed, err := h.PromptStageChanges()
 		if err == nil && confirmed {
 			h.OnStep(StepStaging, handler.StatusStarted, "Staging changes")
-			if err := eng.StageAll(ctx.Context); err != nil {
+			if err := eng.StageAll(ctx); err != nil {
 				h.OnStep(StepStaging, handler.StatusFailed, err.Error())
 				return Result{}, fmt.Errorf("failed to stage changes: %w", err)
 			}
@@ -177,7 +229,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	// Get commit message
 	commitMessage := opts.Message
 	// Get commit message for branch name generation (if needed)
-	commitMessage, err = getCommitMessageForBranch(ctx, &opts, commitMessage)
+	commitMessage, err = getCommitMessageForBranch(ctx, eng, &opts, commitMessage)
 	if err != nil {
 		return Result{}, err
 	}
@@ -216,7 +268,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		}
 	}
 
-	branch, err := determineBranch(ctx, &opts, commitMessage, scopeToUse)
+	branch, err := determineBranch(ctx, eng, &opts, commitMessage, scopeToUse)
 	if err != nil {
 		return Result{}, err
 	}
@@ -236,26 +288,26 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	h.OnStep(StepBranchCreate, handler.StatusStarted, fmt.Sprintf("Creating branch %s", branchName))
 	if opts.Onto != "" {
 		ontoBranch := eng.GetBranch(opts.Onto)
-		ontoSHA, err := ontoBranch.Revision(ctx.Context)
+		ontoSHA, err := ontoBranch.Revision(ctx)
 		if err != nil {
 			h.OnStep(StepBranchCreate, handler.StatusFailed, err.Error())
 			return Result{}, fmt.Errorf("failed to resolve %s: %w", opts.Onto, err)
 		}
-		if err := eng.CreateBranch(ctx.Context, branchName, ontoSHA); err != nil {
+		if err := eng.CreateBranch(ctx, branchName, ontoSHA); err != nil {
 			h.OnStep(StepBranchCreate, handler.StatusFailed, err.Error())
 			return Result{}, fmt.Errorf("failed to create branch: %w", err)
 		}
-		if err := eng.TrackBranch(ctx.Context, branchName, opts.Onto); err != nil {
-			_ = eng.DeleteBranch(ctx.Context, branch)
+		if err := eng.TrackBranch(ctx, branchName, opts.Onto); err != nil {
+			_ = eng.DeleteBranch(ctx, branch)
 			h.OnStep(StepBranchCreate, handler.StatusFailed, err.Error())
 			return Result{}, fmt.Errorf("failed to track branch: %w", err)
 		}
-		if err := eng.CheckoutBranch(ctx.Context, branch); err != nil {
-			_ = eng.DeleteBranch(ctx.Context, branch)
+		if err := eng.CheckoutBranch(ctx, branch); err != nil {
+			_ = eng.DeleteBranch(ctx, branch)
 			h.OnStep(StepBranchCreate, handler.StatusFailed, err.Error())
 			return Result{}, fmt.Errorf("failed to check out %s onto %s: %w", branchName, opts.Onto, err)
 		}
-	} else if err := eng.CreateAndCheckoutBranch(ctx.Context, branch); err != nil {
+	} else if err := eng.CreateAndCheckoutBranch(ctx, branch); err != nil {
 		h.OnStep(StepBranchCreate, handler.StatusFailed, err.Error())
 		return Result{}, fmt.Errorf("failed to create branch: %w", err)
 	}
@@ -264,12 +316,12 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	// Commit if there are staged changes
 	if hasStaged {
 		h.OnStep(StepCommit, handler.StatusStarted, "Committing changes")
-		if err := eng.Commit(ctx.Context, git.CommitOptions{Message: commitMessage, Verbose: opts.Verbose, NoVerify: !ctx.Verify}); err != nil {
+		if err := eng.Commit(ctx, git.CommitOptions{Message: commitMessage, Verbose: opts.Verbose, NoVerify: !deps.Verify}); err != nil {
 			// Restore the original branch before deleting the new one so that
 			// DeleteBranch doesn't fall back to trunk when cleaning up the
 			// currently-checked-out branch (e.g. a git pre-commit hook failure).
-			_ = eng.CheckoutBranch(ctx.Context, eng.GetBranch(currentBranch))
-			_ = eng.DeleteBranch(ctx.Context, branch)
+			_ = eng.CheckoutBranch(ctx, eng.GetBranch(currentBranch))
+			_ = eng.DeleteBranch(ctx, branch)
 			h.OnStep(StepCommit, handler.StatusFailed, err.Error())
 			return Result{}, fmt.Errorf("failed to commit: %w", err)
 		}
@@ -284,7 +336,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	// started from.
 	if opts.Onto == "" {
 		h.OnStep(StepTracking, handler.StatusStarted, "Setting up branch tracking")
-		if err := eng.TrackBranch(ctx.Context, branchName, currentBranch); err != nil {
+		if err := eng.TrackBranch(ctx, branchName, currentBranch); err != nil {
 			// Log error but don't fail - branch is created, just not tracked
 			h.OnStep(StepTracking, handler.StatusFailed, err.Error())
 			out.Info("Warning: failed to track branch: %v", err)
@@ -297,11 +349,11 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	// `git fetch` keeps pulling branch metadata. Local, idempotent, and a no-op
 	// when no remote is configured — closes the gap left by removing the implicit
 	// bootstrap from engine construction (issue #1330).
-	if err := eng.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
+	if err := eng.ConfigureRemoteMetadataSync(ctx); err != nil {
 		out.Debug("Failed to configure metadata refspec: %v", err)
 	}
 
-	ctx.Logger.Info("branch created name=%v parent=%v hasCommit=%v", branchName, parentBranch, hasStaged)
+	deps.Log.Info("branch created name=%v parent=%v hasCommit=%v", branchName, parentBranch, hasStaged)
 
 	// Create worktree if requested
 	var worktreePath engine.WorktreePath
@@ -309,16 +361,16 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		h.OnStep(StepWorktree, handler.StatusStarted, "Creating worktree")
 		// Checkout back to trunk first so we can create the worktree for the branch
 		trunkBranch := eng.Trunk()
-		if err := eng.CheckoutBranch(ctx.Context, trunkBranch); err != nil {
+		if err := eng.CheckoutBranch(ctx, trunkBranch); err != nil {
 			h.OnStep(StepWorktree, handler.StatusFailed, err.Error())
 			out.Warn("Created %s, but could not create its worktree: %v", output.BranchName(branchName), err)
 		} else {
-			created, err := worktree.CreateAnchoredWorktreeForBranch(ctx, branchName, branchName, opts.Scope)
+			created, err := deps.Worktrees.CreateAnchored(ctx, branchName, branchName, opts.Scope)
 			if err != nil {
 				h.OnStep(StepWorktree, handler.StatusFailed, err.Error())
 				out.Warn("Created %s, but could not create its worktree: %v", output.BranchName(branchName), err)
 			} else {
-				worktreePath = created.Path
+				worktreePath = created
 				h.OnStep(StepWorktree, handler.StatusCompleted, fmt.Sprintf("Created worktree at %s", worktreePath))
 				out.Info("Created worktree at %s", worktreePath)
 
@@ -326,7 +378,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 				// above worktreePath is still empty, which os/exec resolves to
 				// the current directory — the user's main checkout, which the
 				// CheckoutBranch above just moved to trunk.
-				if hookErr := worktree.RunPostCreateHooks(ctx, worktreePath); hookErr != nil {
+				if hookErr := deps.Worktrees.RunPostCreateHooks(ctx, worktreePath); hookErr != nil {
 					out.Warn("Post-create hooks failed: %v", hookErr)
 				}
 			}
@@ -338,7 +390,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		h.OnStep(StepScope, handler.StatusStarted, fmt.Sprintf("Setting scope to %s", opts.Scope))
 		// Set explicit scope if provided
 		newScope := engine.NewScope(opts.Scope)
-		if err := eng.SetScope(ctx.Context, branch, newScope); err != nil {
+		if err := eng.SetScope(ctx, branch, newScope); err != nil {
 			h.OnStep(StepScope, handler.StatusFailed, err.Error())
 			out.Info("Warning: failed to set scope: %v", err)
 		} else {
@@ -350,7 +402,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	// Handle insert logic
 	if opts.Insert {
 		h.OnStep(StepInsert, handler.StatusStarted, "Inserting branch into stack")
-		if err := handleInsert(ctx.Context, branchName, currentBranch, ctx, &opts, h); err != nil {
+		if err := handleInsert(ctx, eng, out, branchName, currentBranch, &opts, h); err != nil {
 			h.OnStep(StepInsert, handler.StatusFailed, err.Error())
 			out.Info("Warning: failed to insert branch: %v", err)
 		} else {
@@ -359,7 +411,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 
 		// DX Improvement: Return to the original branch after insertion
 		originalBranch := eng.GetBranch(currentBranch)
-		if err := eng.CheckoutBranch(ctx.Context, originalBranch); err != nil {
+		if err := eng.CheckoutBranch(ctx, originalBranch); err != nil {
 			out.Info("Warning: failed to return to original branch %s: %v", currentBranch, err)
 		} else {
 			out.Info("Inserted %s and returned to %s.", branchName, currentBranch)
@@ -376,7 +428,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	return result, nil
 }
 
-func determineBranch(ctx *app.Context, opts *Options, commitMessage string, scope string) (engine.Branch, error) {
+func determineBranch(ctx context.Context, eng Engine, opts *Options, commitMessage string, scope string) (engine.Branch, error) {
 	branchName := opts.BranchName
 	if branchName == "" {
 		// Get pattern from options (always valid, default applied in GetBranchPattern)
@@ -384,7 +436,7 @@ func determineBranch(ctx *app.Context, opts *Options, commitMessage string, scop
 
 		// Generate branch name from pattern
 		var err error
-		branchName, err = pattern.GetBranchName(ctx, commitMessage, scope)
+		branchName, err = pattern.GetBranchName(ctx, eng, commitMessage, scope)
 		if err != nil {
 			return engine.Branch{}, err
 		}
@@ -393,14 +445,14 @@ func determineBranch(ctx *app.Context, opts *Options, commitMessage string, scop
 		branchName = branchname.Sanitize(branchName)
 	}
 
-	return ctx.Engine.GetBranch(branchName), nil
+	return eng.GetBranch(branchName), nil
 }
 
 // validateOntoTarget checks that --onto refers to a branch the new branch can
 // be safely parented on: it must exist, be trunk or a stackit-tracked branch
 // (not a plain untracked git branch), not be a worktree anchor, and not be
 // locked or frozen.
-func validateOntoTarget(eng engine.Engine, ontoName string) error {
+func validateOntoTarget(eng Engine, ontoName string) error {
 	ontoBranch := eng.GetBranch(ontoName)
 
 	if ontoBranch.IsWorktreeAnchor() {

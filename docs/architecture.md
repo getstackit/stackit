@@ -151,8 +151,8 @@ When adding or refactoring an operation:
    root). The CLI adapter builds `Deps` from its `app.Context`.
    Branch-rewriting actions embed `actions.MutationDeps` (output, `Here`,
    `Snapshots`, a `restack.Runner`), built with `actions.MutationDepsFrom`.
-   `absorb`, `delete`, `describe`, `doctor`, `flatten`, `fold`, `freeze`,
-   `move`, `pluck`, `pop`, `scope` and `untrack` follow this shape; the
+   Converted packages are listed in the `actions-no-app-context` depguard
+   rule (non-test files); the
    `actions-no-app-context` depguard rule keeps them off `internal/app`, so
    add a package to that rule when you convert it.
 4. Return structured results and typed events instead of writing output directly.

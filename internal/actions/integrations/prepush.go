@@ -7,8 +7,6 @@ import (
 	"io"
 	"os"
 	"strings"
-
-	"github.com/getstackit/stackit/internal/app"
 )
 
 const (
@@ -23,19 +21,19 @@ stackit prepush verify
 `
 
 // PrepushInstallAction installs the pre-push hook
-func PrepushInstallAction(ctx *app.Context) error {
-	return installHook(ctx.RepoRoot, prepushHookName, prepushMarker, prepushHookTemplate, prepushDisplayName, ctx.Output)
+func PrepushInstallAction(deps Deps) error {
+	return installHook(deps.RepoRoot, prepushHookName, prepushMarker, prepushHookTemplate, prepushDisplayName, deps.Out)
 }
 
 // PrepushVerifyAction verifies that branches being pushed are not locked.
 // It reads the refs being pushed from stdin (git pre-push hook protocol).
-func PrepushVerifyAction(ctx *app.Context) error {
-	return PrepushVerifyFromReader(ctx, os.Stdin)
+func PrepushVerifyAction(deps Deps) error {
+	return PrepushVerifyFromReader(deps, os.Stdin)
 }
 
 // PrepushVerifyFromReader verifies branches from a reader (for testing).
-func PrepushVerifyFromReader(ctx *app.Context, reader io.Reader) error {
-	eng := ctx.Engine
+func PrepushVerifyFromReader(deps Deps, reader io.Reader) error {
+	eng := deps.Engine
 
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
@@ -79,6 +77,6 @@ func PrepushVerifyFromReader(ctx *app.Context, reader io.Reader) error {
 }
 
 // PrepushUninstallAction uninstalls the pre-push hook
-func PrepushUninstallAction(ctx *app.Context) error {
-	return uninstallHook(ctx.Output, ctx.RepoRoot, prepushHookName, prepushMarker, prepushDisplayName)
+func PrepushUninstallAction(deps Deps) error {
+	return uninstallHook(deps.Out, deps.RepoRoot, prepushHookName, prepushMarker, prepushDisplayName)
 }

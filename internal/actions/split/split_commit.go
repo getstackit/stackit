@@ -10,7 +10,6 @@ import (
 	"github.com/getstackit/stackit/internal/term"
 
 	handlerBase "github.com/getstackit/stackit/internal/actions/handler"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
@@ -41,7 +40,7 @@ type branchGroup struct {
 //  3. For remaining commits, iteratively group them into new branches.
 //  4. Auto-derive names for single-commit branches, prompt for multi-commit branches.
 //  5. Detach HEAD and return the branch names and points.
-func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngine, splog output.Output, pattern config.BranchPattern) (*Result, error) {
+func splitByCommit(ctx context.Context, deps Deps, branchToSplit string, eng splitByCommitEngine, splog output.Output, pattern config.BranchPattern) (*Result, error) {
 	// Read once so display, subjects, and the eventual detach share one snapshot.
 	branchToSplitObj := eng.GetBranch(branchToSplit)
 	history, err := eng.ReadBranchCommits(ctx, engine.BranchesOf(branchToSplitObj)).One()
@@ -75,7 +74,7 @@ func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngi
 	splog.Info("")
 
 	// Step 1: Select commits to keep in current branch
-	splitPoint, err := selectSplitPoint(ctx.Prompts(), readableCommits, branchToSplit)
+	splitPoint, err := selectSplitPoint(deps.Prompts, readableCommits, branchToSplit)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +88,7 @@ func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngi
 	remainingCommits := readableCommits[splitPoint:]
 	remainingSubjects := subjectCommits[splitPoint:]
 
-	groups, err := groupRemainingCommits(ctx, remainingCommits, remainingSubjects, pattern, eng, branchToSplit, splog)
+	groups, err := groupRemainingCommits(ctx, deps, remainingCommits, remainingSubjects, pattern, eng, branchToSplit, splog)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +195,7 @@ func selectSplitPoint(prompter handlerBase.Selector, readableCommits []string, b
 // For single-commit groups, auto-derives the branch name.
 // For multi-commit groups, prompts for a name.
 func groupRemainingCommits(
-	ctx *app.Context,
+	ctx context.Context, deps Deps,
 	readableCommits []string,
 	subjectCommits []string,
 	pattern config.BranchPattern,
@@ -218,7 +217,7 @@ func groupRemainingCommits(
 
 		if len(remaining) == 1 {
 			// Single commit - auto-derive name
-			name, err := deriveBranchName(ctx, remainingSubjects[0], pattern, existingNames, eng)
+			name, err := deriveBranchName(ctx, deps, remainingSubjects[0], pattern, existingNames, eng)
 			if err != nil {
 				return nil, err
 			}
@@ -236,7 +235,7 @@ func groupRemainingCommits(
 			offset++
 		} else {
 			// Multiple commits - ask user to group or split further
-			groupSize, err := selectGroupSize(ctx.Prompts(), remaining)
+			groupSize, err := selectGroupSize(deps.Prompts, remaining)
 			if err != nil {
 				return nil, err
 			}
@@ -247,7 +246,7 @@ func groupRemainingCommits(
 			var name string
 			if groupSize == 1 {
 				// Single commit after selection - auto-derive
-				name, err = deriveBranchName(ctx, groupSubjects[0], pattern, existingNames, eng)
+				name, err = deriveBranchName(ctx, deps, groupSubjects[0], pattern, existingNames, eng)
 				if err != nil {
 					return nil, err
 				}
@@ -258,7 +257,7 @@ func groupRemainingCommits(
 					splog.Info("  %s", c)
 				}
 				splog.Info("")
-				name, err = promptBranchName(ctx.Prompts(), existingNames, originalBranch, len(groups)+1, eng)
+				name, err = promptBranchName(deps.Prompts, existingNames, originalBranch, len(groups)+1, eng)
 				if err != nil {
 					return nil, err
 				}
@@ -337,8 +336,8 @@ func selectGroupSize(prompter handlerBase.Selector, readableCommits []string) (i
 }
 
 // deriveBranchName generates a branch name from a commit subject using the branch pattern.
-func deriveBranchName(ctx *app.Context, commitSubject string, pattern config.BranchPattern, existingNames []string, eng splitByCommitEngine) (string, error) {
-	name, err := pattern.GetBranchName(ctx, commitSubject, "")
+func deriveBranchName(ctx context.Context, deps Deps, commitSubject string, pattern config.BranchPattern, existingNames []string, eng splitByCommitEngine) (string, error) {
+	name, err := pattern.GetBranchName(ctx, deps.Engine, commitSubject, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to derive branch name: %w", err)
 	}

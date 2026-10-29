@@ -83,7 +83,12 @@ func TestCreateDoesNotFetchAtStartup(t *testing.T) {
 	require.NoError(t, s.Scene.Repo.RunGitCommand("add", "-A"))
 
 	ctx, counting := countingContext(t, s)
-	_, err := create.Action(ctx, create.Options{Message: "feat: new"}, nil)
+	_, err := create.Action(t.Context(), create.Deps{
+		Engine:       ctx.Engine,
+		MutationDeps: actions.MutationDepsFrom(ctx),
+		Log:          ctx.Logger,
+		Verify:       ctx.Verify,
+	}, create.Options{Message: "feat: new"}, nil)
 	require.NoError(t, err)
 
 	require.Zero(t, counting.totalFetches(), "create must not fetch remote metadata at startup")
@@ -95,7 +100,7 @@ func TestTrackDoesNotFetchAtStartup(t *testing.T) {
 	require.NoError(t, s.Scene.Repo.RunGitCommand("branch", "extra", "main"))
 
 	ctx, counting := countingContext(t, s)
-	require.NoError(t, track.Action(ctx, track.Options{BranchName: "extra", Parent: "main"}, nil))
+	require.NoError(t, track.Action(t.Context(), track.Deps{Engine: ctx.Engine, Out: ctx.Output, Here: actions.HereFrom(ctx)}, track.Options{BranchName: "extra", Parent: "main"}, nil))
 
 	require.Zero(t, counting.totalFetches(), "track must not fetch remote metadata at startup")
 }

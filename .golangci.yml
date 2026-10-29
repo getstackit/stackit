@@ -61,18 +61,26 @@ linters:
         # it cannot drift back to the bootstrap bundle.
         actions-no-app-context:
           files:
+            - "!$test"
+            - "**/internal/actions/abort/**"
             - "**/internal/actions/absorb/**"
+            - "**/internal/actions/create/**"
             - "**/internal/actions/delete/**"
             - "**/internal/actions/describe/**"
             - "**/internal/actions/doctor/**"
             - "**/internal/actions/flatten/**"
             - "**/internal/actions/fold/**"
+            - "**/internal/actions/foreach/**"
             - "**/internal/actions/freeze/**"
+            - "**/internal/actions/integrations/**"
             - "**/internal/actions/move/**"
             - "**/internal/actions/pluck/**"
             - "**/internal/actions/pop/**"
             - "**/internal/actions/restack/**"
             - "**/internal/actions/scope/**"
+            - "**/internal/actions/split/**"
+            - "**/internal/actions/track/**"
+            - "**/internal/actions/undo/**"
             - "**/internal/actions/untrack/**"
           deny:
             - pkg: github.com/getstackit/stackit/internal/app

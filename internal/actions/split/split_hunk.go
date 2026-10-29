@@ -1,6 +1,7 @@
 package split
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	handlerBase "github.com/getstackit/stackit/internal/actions/handler"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	sterrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
@@ -53,17 +53,17 @@ type splitByHunkEngine interface {
 //
 // When opts.useGitAddP is true, uses git add -p instead of the TUI hunk selector.
 // When opts.patchFile is set, uses the patch file instead of interactive selection.
-func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, handler InteractiveHandler, direction Direction, opts hunkOptions) (err error) {
+func splitByHunkWithHandler(ctx context.Context, deps Deps, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, handler InteractiveHandler, direction Direction, opts hunkOptions) (err error) {
 	if direction == DirectionAbove {
-		return splitByHunkAbove(ctx, branchToSplit, eng, splog, handler, opts)
+		return splitByHunkAbove(ctx, deps, branchToSplit, eng, splog, handler, opts)
 	}
 
 	// Non-interactive patch mode for --below direction
 	if opts.patchFile != "" {
-		return splitByHunkBelowWithPatch(ctx, branchToSplit, eng, splog, opts)
+		return splitByHunkBelowWithPatch(ctx, deps, branchToSplit, eng, splog, opts)
 	}
 
-	gitCtx := ctx.Context
+	gitCtx := ctx
 
 	// Detach and reset branch changes
 	guard, err := actions.DetachForRewrite(gitCtx, eng, branchToSplit)
@@ -76,7 +76,7 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 	branchNames := []string{}
 
 	// Get default commit message
-	commitMessagesData, err := branchToSplit.AllCommits(ctx.Context)
+	commitMessagesData, err := branchToSplit.AllCommits(ctx)
 	commitMessages := commitMessagesData.Messages()
 	if err != nil {
 		return fmt.Errorf("failed to get commit messages: %w", err)
@@ -237,7 +237,7 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 		IncludeCurrent:    false,
 		RecursiveChildren: true,
 	}
-	upstackGraph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	upstackGraph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	upstackBranches := upstackGraph.Range(branchToSplit, upstackRng)
 
 	// Apply the split to commits
@@ -252,7 +252,7 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 
 	// Restack upstack branches
 	if len(upstackBranches) > 0 {
-		if err := actions.RestackBranches(ctx, upstackBranches); err != nil {
+		if err := deps.Restack.Restack(ctx, upstackBranches); err != nil {
 			return fmt.Errorf("failed to restack upstack branches: %w", err)
 		}
 	}
@@ -304,8 +304,8 @@ func generateDefaultBranchName(originalName string, existingNames []string) stri
 //  10. Track new parent branch with grandparent as its parent
 //  11. Update branchToSplit to have new parent as its parent
 //  12. Restack branchToSplit onto new parent
-func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, opts hunkOptions) (err error) {
-	gitCtx := ctx.Context
+func splitByHunkBelowWithPatch(ctx context.Context, deps Deps, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, opts hunkOptions) (err error) {
+	gitCtx := ctx
 
 	// Get the original parent before we modify anything
 	originalParent := branchToSplit.Parent()
@@ -314,7 +314,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	}
 
 	// Get default commit message
-	commitMessagesData, err := branchToSplit.AllCommits(ctx.Context)
+	commitMessagesData, err := branchToSplit.AllCommits(ctx)
 	commitMessages := commitMessagesData.Messages()
 	if err != nil {
 		return fmt.Errorf("failed to get commit messages: %w", err)
@@ -463,7 +463,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	}
 
 	// Restack branchToSplit onto the new parent
-	if err := actions.RestackBranches(ctx, engine.BranchesOf(branchToSplit)); err != nil {
+	if err := deps.Restack.Restack(ctx, engine.BranchesOf(branchToSplit)); err != nil {
 		return fmt.Errorf("failed to restack %s: %w", branchToSplit.Name(), err)
 	}
 
@@ -492,11 +492,11 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 //
 // When opts.useGitAddP is true, uses git add -p instead of the TUI hunk selector.
 // When opts.patchFile is set, uses the patch file instead of interactive selection.
-func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, handler InteractiveHandler, opts hunkOptions) (err error) {
-	gitCtx := ctx.Context
+func splitByHunkAbove(ctx context.Context, deps Deps, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, handler InteractiveHandler, opts hunkOptions) (err error) {
+	gitCtx := ctx
 
 	// Get existing children before we modify anything
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	existingChildren := graph.Children(branchToSplit)
 
 	// Detach and reset branch changes (all changes become unstaged)
@@ -508,7 +508,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	defer guard.RestoreUnlessReleased(gitCtx, &err)
 
 	// Get default commit message
-	commitMessagesData, err := branchToSplit.AllCommits(ctx.Context)
+	commitMessagesData, err := branchToSplit.AllCommits(ctx)
 	commitMessages := commitMessagesData.Messages()
 	if err != nil {
 		return fmt.Errorf("failed to get commit messages: %w", err)
@@ -768,7 +768,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	// Restack the children that were reparented
 	if len(existingChildren) > 0 {
 		childBranches := engine.BranchesFromNames(eng, existingChildren)
-		if err := actions.RestackBranches(ctx, childBranches); err != nil {
+		if err := deps.Restack.Restack(ctx, childBranches); err != nil {
 			return fmt.Errorf("failed to restack children: %w", err)
 		}
 	}

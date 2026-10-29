@@ -6,10 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/track"
-	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -25,7 +23,7 @@ type testTrackHandler struct {
 	promptTrackChildCalls []string
 }
 
-func (h *testTrackHandler) PromptSelectParent(_ context.Context, _ engine.Engine, _ github.Client, _ output.Logger, _ string) (string, error) {
+func (h *testTrackHandler) PromptSelectParent(_ context.Context, _ string) (string, error) {
 	h.promptSelectCalled = true
 	return h.parentToReturn, h.parentErr
 }
@@ -39,6 +37,10 @@ func (h *testTrackHandler) Cleanup() {}
 
 func (h *testTrackHandler) IsInteractive() bool { return h.isInteractive }
 
+func deps(s *scenario.Scenario) track.Deps {
+	return track.Deps{Engine: s.Context.Engine, Out: s.Context.Output, Here: actions.HereFrom(s.Context)}
+}
+
 func TestTrackAction(t *testing.T) {
 	t.Parallel()
 	t.Run("track with --parent flag validates parent exists", func(t *testing.T) {
@@ -47,7 +49,7 @@ func TestTrackAction(t *testing.T) {
 		s.WithInitialCommit().
 			CreateBranchQuiet("feature")
 
-		err := track.Action(s.Context, track.Options{
+		err := track.Action(t.Context(), deps(s), track.Options{
 			BranchName: "feature",
 			Parent:     "nonexistent",
 		}, nil)
@@ -63,7 +65,7 @@ func TestTrackAction(t *testing.T) {
 			Checkout("main").
 			CreateBranchQuiet("feature")
 
-		err := track.Action(s.Context, track.Options{
+		err := track.Action(t.Context(), deps(s), track.Options{
 			BranchName: "feature",
 			Parent:     "untracked-parent",
 		}, nil)
@@ -78,7 +80,7 @@ func TestTrackAction(t *testing.T) {
 			CreateBranchQuiet("feature")
 
 		// With --force, auto-detects trunk as the ancestor
-		err := track.Action(s.Context, track.Options{
+		err := track.Action(t.Context(), deps(s), track.Options{
 			BranchName: "feature",
 			Force:      true,
 		}, nil)
@@ -94,7 +96,7 @@ func TestTrackAction(t *testing.T) {
 			CreateBranchQuiet("feature")
 
 		handler := &testTrackHandler{isInteractive: false}
-		err := track.Action(s.Context, track.Options{
+		err := track.Action(t.Context(), deps(s), track.Options{
 			BranchName: "feature",
 		}, handler)
 		require.Error(t, err)
@@ -111,7 +113,7 @@ func TestTrackAction(t *testing.T) {
 			isInteractive:  true,
 			parentToReturn: "main",
 		}
-		err := track.Action(s.Context, track.Options{
+		err := track.Action(t.Context(), deps(s), track.Options{
 			BranchName: "feature",
 		}, handler)
 		require.NoError(t, err)
@@ -129,7 +131,7 @@ func TestTrackAction(t *testing.T) {
 			isInteractive:  true,
 			parentToReturn: "", // User cancels
 		}
-		err := track.Action(s.Context, track.Options{
+		err := track.Action(t.Context(), deps(s), track.Options{
 			BranchName: "feature",
 		}, handler)
 		require.NoError(t, err)
@@ -150,7 +152,7 @@ func TestTrackAction(t *testing.T) {
 		handler := &testTrackHandler{
 			isInteractive: true,
 		}
-		err := track.Action(s.Context, track.Options{
+		err := track.Action(t.Context(), deps(s), track.Options{
 			BranchName: "feature",
 		}, handler)
 		require.NoError(t, err)
@@ -179,7 +181,7 @@ func TestTrackAction(t *testing.T) {
 			parentToReturn:   "main",
 			trackChildResult: false, // Decline tracking children
 		}
-		err := track.Action(s.Context, track.Options{
+		err := track.Action(t.Context(), deps(s), track.Options{
 			BranchName: "feature",
 		}, handler)
 		require.NoError(t, err)

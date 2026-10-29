@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions/integrations"
+	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 )
 
@@ -30,7 +31,9 @@ func newPrecommitInstallCmd() *cobra.Command {
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return common.Run(cmd, integrations.PrecommitInstallAction)
+			return common.Run(cmd, func(ctx *app.Context) error {
+				return integrations.PrecommitInstallAction(hookDeps(ctx))
+			})
 		},
 	}
 }
@@ -42,7 +45,9 @@ func newPrecommitUninstallCmd() *cobra.Command {
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return common.Run(cmd, integrations.PrecommitUninstallAction)
+			return common.Run(cmd, func(ctx *app.Context) error {
+				return integrations.PrecommitUninstallAction(hookDeps(ctx))
+			})
 		},
 	}
 }
@@ -56,7 +61,9 @@ Exits with a non-zero exit code if the branch is restricted.`,
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return common.Run(cmd, integrations.PrecommitVerifyAction)
+			return common.Run(cmd, func(ctx *app.Context) error {
+				return integrations.PrecommitVerifyAction(ctx.Context, hookDeps(ctx))
+			})
 		},
 	}
 }

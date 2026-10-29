@@ -610,7 +610,7 @@ func generateAnchorBranchName(ctx *app.Context, patternStr, name, scope string) 
 		return "", fmt.Errorf("invalid branch pattern: %w", err)
 	}
 
-	anchorBranchName, err := pattern.GetBranchName(ctx, name+"-wt", scope)
+	anchorBranchName, err := pattern.GetBranchName(ctx.Context, ctx.Engine, name+"-wt", scope)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate anchor branch name: %w", err)
 	}

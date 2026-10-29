@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/output"
 )
 
-func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeCtx *app.Context, opts *Options, h Handler) error {
+func handleInsert(ctx context.Context, eng Engine, out output.Output, newBranch, currentBranch string, opts *Options, h Handler) error {
 	// Build StackGraph for efficient traversals
-	graph := runtimeCtx.Engine.Graph(ctx, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
-	children := graph.ChildBranches(runtimeCtx.Engine.GetBranch(currentBranch))
+	children := graph.ChildBranches(eng.GetBranch(currentBranch))
 	siblings := []string{}
 	for _, child := range children {
 		if child.Name() != newBranch {
@@ -36,7 +36,7 @@ func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeC
 			}
 		}
 	case len(siblings) > 1 && h.IsInteractive():
-		runtimeCtx.Output.Info("Current branch has multiple children. Select which should be moved onto the new branch:")
+		out.Info("Current branch has multiple children. Select which should be moved onto the new branch:")
 		selected, err := h.PromptChildToMove(siblings)
 		if err != nil {
 			return err
@@ -54,13 +54,13 @@ func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeC
 
 	// Reparent every moving child onto the new branch in one batch, recomputing
 	// each child's divergence against it.
-	if err := runtimeCtx.Engine.ReparentBranchesToParents(ctx, engine.MovesTo(toMove, newBranch), engine.ReparentOpts{Divergence: engine.DivergenceRecompute}); err != nil {
+	if err := eng.ReparentBranchesToParents(ctx, engine.MovesTo(toMove, newBranch), engine.ReparentOpts{Divergence: engine.DivergenceRecompute}); err != nil {
 		return fmt.Errorf("failed to update parents onto %s: %w", newBranch, err)
 	}
 
 	allToRestack := engine.NewBranchesBuilder(len(toMove) * 2)
 	for _, child := range toMove {
-		childBranch := runtimeCtx.Engine.GetBranch(child)
+		childBranch := eng.GetBranch(child)
 		allToRestack.Add(childBranch)
 
 		// Include all descendants in the restack operation
@@ -68,13 +68,13 @@ func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeC
 	}
 
 	// Sort topologically to ensure we restack from bottom to top
-	branchesToRestack := runtimeCtx.Engine.SortBranchesTopologically(ctx, allToRestack.Build())
+	branchesToRestack := eng.SortBranchesTopologically(ctx, allToRestack.Build())
 
 	// Restack children onto the new branch to physically insert it
 	if len(branchesToRestack) > 0 {
-		batchRes, err := runtimeCtx.Engine.RestackBranches(ctx, branchesToRestack, engine.RestackOpts{})
+		batchRes, err := eng.RestackBranches(ctx, branchesToRestack, engine.RestackOpts{})
 		if err != nil {
-			runtimeCtx.Output.Info("Warning: failed to restack branches onto %s: %v", newBranch, err)
+			out.Info("Warning: failed to restack branches onto %s: %v", newBranch, err)
 		}
 
 		for _, branch := range branchesToRestack {
@@ -86,9 +86,9 @@ func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeC
 
 			switch res.Result {
 			case engine.RestackConflict:
-				runtimeCtx.Output.Info("Conflict restacking %s onto %s. Please resolve manually or run 'stackit sync --restack'.", child, newBranch)
+				out.Info("Conflict restacking %s onto %s. Please resolve manually or run 'stackit sync --restack'.", child, newBranch)
 			case engine.RestackDone:
-				runtimeCtx.Output.Info("Restacked %s onto %s.", child, newBranch)
+				out.Info("Restacked %s onto %s.", child, newBranch)
 			}
 		}
 	}

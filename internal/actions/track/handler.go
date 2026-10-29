@@ -5,16 +5,14 @@ import (
 	"context"
 
 	"github.com/getstackit/stackit/internal/actions/handler"
-	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/output"
 )
 
 // Handler receives events from track action
 type Handler interface {
 	// PromptSelectParent prompts user to select a parent for the branch
-	// Returns the selected parent branch name
-	PromptSelectParent(ctx context.Context, eng engine.Engine, ghClient github.Client, logger output.Logger, branchName string) (string, error)
+	// Returns the selected parent branch name. The adapter supplies whatever
+	// the picker needs (engine, GitHub client, logger) when building the handler.
+	PromptSelectParent(ctx context.Context, branchName string) (string, error)
 
 	// PromptTrackChild prompts user to confirm tracking a child branch
 	// Returns true to track the child, false to skip
@@ -33,7 +31,7 @@ type NullHandler struct {
 }
 
 // PromptSelectParent implements Handler. Returns empty string for null handler.
-func (h *NullHandler) PromptSelectParent(_ context.Context, _ engine.Engine, _ github.Client, _ output.Logger, _ string) (string, error) {
+func (h *NullHandler) PromptSelectParent(_ context.Context, _ string) (string, error) {
 	return "", nil
 }
 

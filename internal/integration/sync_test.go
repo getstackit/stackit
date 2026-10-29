@@ -1069,7 +1069,7 @@ func TestSyncSnapshotPrecedesBranchCleanup(t *testing.T) {
 	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").Parent().Name(),
 		"the merged branch's child should be reparented to main")
 
-	require.NoError(t, undo.Action(sh.Context, undo.Options{Force: true}, nil))
+	require.NoError(t, undo.Action(t.Context(), undo.Deps{Engine: sh.Context.Engine, Out: sh.Context.Output, RepoRoot: sh.Context.RepoRoot}, undo.Options{Force: true}, nil))
 
 	branches, err = sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)

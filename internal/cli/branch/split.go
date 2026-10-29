@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/split"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -152,7 +153,7 @@ Examples:
 				useWizard := (style == "" || (style == split.StyleHunk && direction == "")) && patchFile == ""
 
 				// Run split action
-				return split.Action(ctx, split.Options{
+				return split.Action(ctx.Context, split.Deps{Engine: ctx.Engine, MutationDeps: actions.MutationDepsFrom(ctx), Prompts: ctx.Prompts()}, split.Options{
 					Style:         style,
 					Direction:     direction,
 					Pathspecs:     byFile,

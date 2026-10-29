@@ -13,9 +13,9 @@ import (
 	"github.com/getstackit/stackit/internal/workpool"
 
 	"github.com/getstackit/stackit/internal/actions/worktree"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 const executionCompleteMsg = "Execution complete"
@@ -34,14 +34,26 @@ type Options struct {
 	Jobs             int
 }
 
-// foreachEngine lists exactly the engine methods foreach calls: the stack
+// Engine lists exactly the engine methods foreach calls: the stack
 // read surface plus checkout (sequential runs) and temporary worktrees
 // (parallel and find-first-failure runs).
-type foreachEngine interface {
+type Engine interface {
 	engine.StackView
 	CheckoutBranch(ctx context.Context, branch engine.Branch) error
 	PruneWorktrees(ctx context.Context) error
 	CreateTemporaryWorktree(ctx context.Context, branch string, prefix string, prune engine.WorktreePruneMode) (path engine.WorktreePath, cleanup func(), err error)
+}
+
+// Deps are the collaborators foreach needs. Adapters build them from their
+// own runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine   Engine
+	Out      output.Output
+	RepoRoot string
+	// ResolveWorktreeHooks resolves the approved post-worktree-create hooks
+	// (and may prompt). It is called at most once, on the main goroutine,
+	// before parallel and find-first-failure runs. Nil means no hooks.
+	ResolveWorktreeHooks func() ([]string, error)
 }
 
 // HasForeachWork reports whether Action would have at least one non-trunk
@@ -49,18 +61,18 @@ type foreachEngine interface {
 // initialization — when the answer is no, starting the bubbletea runner
 // only flashes startup/teardown escape codes and races with the deferred
 // Cleanup before the "no branches to process" CompletionEvent can render.
-func HasForeachWork(ctx *app.Context, opts Options) (bool, error) {
-	var eng foreachEngine = ctx.Engine
+func HasForeachWork(ctx context.Context, deps Deps, opts Options) (bool, error) {
+	eng := deps.Engine
 	multiStack := opts.AllStacks || len(opts.StackRoots) > 0
 
-	currentBranch := eng.CurrentBranch(ctx.Context)
+	currentBranch := eng.CurrentBranch(ctx)
 	if !multiStack && currentBranch == nil && opts.BranchName == "" {
 		return false, errors.ErrNotOnBranch
 	}
 
 	var branches engine.Branches
 	if multiStack {
-		multiStackBranches, err := collectMultiStackBranches(ctx.Context, eng, opts)
+		multiStackBranches, err := collectMultiStackBranches(ctx, eng, opts)
 		if err != nil {
 			return false, err
 		}
@@ -75,7 +87,7 @@ func HasForeachWork(ctx *app.Context, opts Options) (bool, error) {
 		} else if currentBranch != nil {
 			targetBranch = *currentBranch
 		}
-		graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+		graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 		branches = graph.Range(targetBranch, opts.Scope)
 	}
 
@@ -88,22 +100,22 @@ func HasForeachWork(ctx *app.Context, opts Options) (bool, error) {
 }
 
 // Action executes a command on each branch in the stack with event handling
-func Action(ctx *app.Context, opts Options, handler Handler) error {
-	var eng foreachEngine = ctx.Engine
+func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error {
+	eng := deps.Engine
 
 	multiStack := opts.AllStacks || len(opts.StackRoots) > 0
 
-	currentBranch := eng.CurrentBranch(ctx.Context)
+	currentBranch := eng.CurrentBranch(ctx)
 	if !multiStack && currentBranch == nil && opts.BranchName == "" {
 		return errors.ErrNotOnBranch
 	}
 
 	// Build graph once — needed for scope range and for find-first-failure depth grouping.
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	var branches engine.Branches
 	if multiStack {
-		multiStackBranches, err := collectMultiStackBranches(ctx.Context, eng, opts)
+		multiStackBranches, err := collectMultiStackBranches(ctx, eng, opts)
 		if err != nil {
 			return err
 		}
@@ -167,19 +179,18 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.OnEvent(ExecutionStartEvent{Branches: branchInfos})
 
 	if opts.FindFirstFailure {
-		return foreachFindFirstFailure(ctx, opts, nonTrunkBranches, graph, handler)
+		return foreachFindFirstFailure(ctx, deps, opts, nonTrunkBranches, graph, handler)
 	}
 	if opts.Parallel {
-		return foreachParallel(ctx, opts, nonTrunkBranches, handler)
+		return foreachParallel(ctx, deps, opts, nonTrunkBranches, handler)
 	}
-	return foreachSequential(ctx, opts, nonTrunkBranches, handler)
+	return foreachSequential(ctx, deps, opts, nonTrunkBranches, handler)
 }
 
-func foreachSequential(ctx *app.Context, opts Options, branches engine.Branches, handler Handler) error {
-	var eng foreachEngine = ctx.Engine
-	out := ctx.Output
+func foreachSequential(ctx context.Context, deps Deps, opts Options, branches engine.Branches, handler Handler) error {
+	eng, out := deps.Engine, deps.Out
 
-	currentBranch := eng.CurrentBranch(ctx.Context)
+	currentBranch := eng.CurrentBranch(ctx)
 	originalBranchName := ""
 	if currentBranch != nil {
 		originalBranchName = currentBranch.Name()
@@ -188,7 +199,7 @@ func foreachSequential(ctx *app.Context, opts Options, branches engine.Branches,
 	defer func() {
 		// Always try to return to the original branch
 		if originalBranchName != "" {
-			if err := eng.CheckoutBranch(ctx.Context, eng.GetBranch(originalBranchName)); err != nil {
+			if err := eng.CheckoutBranch(ctx, eng.GetBranch(originalBranchName)); err != nil {
 				out.Error("Failed to return to original branch %s: %v", originalBranchName, err)
 			}
 		}
@@ -211,7 +222,7 @@ func foreachSequential(ctx *app.Context, opts Options, branches engine.Branches,
 		var result BranchResult
 		result.BranchName = branchName
 
-		if err := eng.CheckoutBranch(ctx.Context, branch); err != nil {
+		if err := eng.CheckoutBranch(ctx, branch); err != nil {
 			result.Status = StatusError
 			result.ExitCode = -1
 			result.Error = err
@@ -235,11 +246,11 @@ func foreachSequential(ctx *app.Context, opts Options, branches engine.Branches,
 
 		// Execute the command via shell
 		var output strings.Builder
-		cmd := exec.CommandContext(ctx.Context, "/bin/sh", "-c", fullCommand)
+		cmd := exec.CommandContext(ctx, "/bin/sh", "-c", fullCommand)
 		cmd.Stdout = &output
 		cmd.Stderr = &output
 		cmd.Stdin = os.Stdin
-		cmd.Dir = ctx.RepoRoot
+		cmd.Dir = deps.RepoRoot
 		cmd.Env = os.Environ()
 		cmd.Env = append(cmd.Env, "STACKIT_BRANCH="+branchName)
 
@@ -309,9 +320,9 @@ func foreachSequential(ctx *app.Context, opts Options, branches engine.Branches,
 	return nil
 }
 
-func foreachParallel(ctx *app.Context, opts Options, branches engine.Branches, handler Handler) error {
-	fullCommand, approvedHooks, numJobs := prepareWorktreeRun(ctx, opts)
-	sortedResults := runBranchesInWorktrees(ctx, opts, branches, handler, fullCommand, approvedHooks, numJobs)
+func foreachParallel(ctx context.Context, deps Deps, opts Options, branches engine.Branches, handler Handler) error {
+	fullCommand, approvedHooks, numJobs := prepareWorktreeRun(ctx, deps, opts)
+	sortedResults := runBranchesInWorktrees(ctx, deps, opts, branches, handler, fullCommand, approvedHooks, numJobs)
 
 	if hasFailedResult(sortedResults) {
 		if !opts.FailFast {
@@ -338,7 +349,7 @@ func foreachParallel(ctx *app.Context, opts Options, branches engine.Branches, h
 	return nil
 }
 
-func prepareWorktreeRun(ctx *app.Context, opts Options) (string, []string, int) {
+func prepareWorktreeRun(ctx context.Context, deps Deps, opts Options) (string, []string, int) {
 	numJobs := opts.Jobs
 	if numJobs <= 0 {
 		numJobs = stdruntime.NumCPU()
@@ -347,29 +358,32 @@ func prepareWorktreeRun(ctx *app.Context, opts Options) (string, []string, int) 
 	// Prune stale worktree entries ONCE before starting parallel execution.
 	// This prevents "failed to read commondir" errors caused by incomplete cleanup
 	// from previous operations, without interfering with parallel worktree creation.
-	var eng foreachEngine = ctx.Engine
-	_ = eng.PruneWorktrees(ctx.Context)
+	_ = deps.Engine.PruneWorktrees(ctx)
 
 	// Resolve post-worktree-create hooks once on the main thread (may prompt user).
 	// The resolved list is then executed in each worktree without prompting.
-	approvedHooks, err := worktree.ResolveApprovedHooks(ctx)
-	if err != nil {
-		ctx.Output.Warn("Failed to resolve worktree hooks: %v", err)
+	var approvedHooks []string
+	if deps.ResolveWorktreeHooks != nil {
+		hooks, err := deps.ResolveWorktreeHooks()
+		if err != nil {
+			deps.Out.Warn("Failed to resolve worktree hooks: %v", err)
+		}
+		approvedHooks = hooks
 	}
 
 	fullCommand := strings.Join(append([]string{opts.Command}, opts.Args...), " ")
 	return fullCommand, approvedHooks, numJobs
 }
 
-func foreachFindFirstFailure(ctx *app.Context, opts Options, branches engine.Branches, graph *engine.StackGraph, handler Handler) error {
-	fullCommand, approvedHooks, numJobs := prepareWorktreeRun(ctx, opts)
+func foreachFindFirstFailure(ctx context.Context, deps Deps, opts Options, branches engine.Branches, graph *engine.StackGraph, handler Handler) error {
+	fullCommand, approvedHooks, numJobs := prepareWorktreeRun(ctx, deps, opts)
 	branchesByDepth := groupBranchesByDepth(branches, graph)
 
 	allResults := make([]BranchResult, 0, len(branches))
 	depthOpts := opts
 	depthOpts.FailFast = false
 	for _, depthGroup := range branchesByDepth {
-		groupResults := runBranchesInWorktrees(ctx, depthOpts, depthGroup.branches, handler, fullCommand, approvedHooks, numJobs)
+		groupResults := runBranchesInWorktrees(ctx, deps, depthOpts, depthGroup.branches, handler, fullCommand, approvedHooks, numJobs)
 		allResults = append(allResults, groupResults...)
 
 		if hasFailedResult(groupResults) {
@@ -419,7 +433,7 @@ func groupBranchesByDepth(branches engine.Branches, graph *engine.StackGraph) []
 	return groups
 }
 
-func runBranchesInWorktrees(ctx *app.Context, opts Options, branches engine.Branches, handler Handler, fullCommand string, hooks []string, numJobs int) []BranchResult {
+func runBranchesInWorktrees(ctx context.Context, deps Deps, opts Options, branches engine.Branches, handler Handler, fullCommand string, hooks []string, numJobs int) []BranchResult {
 	type result struct {
 		branchName string
 		output     string
@@ -428,7 +442,7 @@ func runBranchesInWorktrees(ctx *app.Context, opts Options, branches engine.Bran
 	}
 
 	results := make(chan result, len(branches))
-	runCtx, cancel := context.WithCancel(ctx.Context)
+	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	workpool.RunN(branches.All(), numJobs, func(branch engine.Branch) {
@@ -444,7 +458,7 @@ func runBranchesInWorktrees(ctx *app.Context, opts Options, branches engine.Bran
 			Status:     StatusRunning,
 		})
 
-		res := executeCommandOnBranch(runCtx, ctx, branch, fullCommand, hooks)
+		res := executeCommandOnBranch(runCtx, ctx, deps, branch, fullCommand, hooks)
 		if res.err != nil {
 			if opts.FailFast {
 				cancel()
@@ -502,7 +516,7 @@ func hasFailedResult(results []BranchResult) bool {
 	})
 }
 
-func executeCommandOnBranch(ctx context.Context, appCtx *app.Context, branch engine.Branch, fullCommand string, hooks []string) struct {
+func executeCommandOnBranch(ctx, hookCtx context.Context, deps Deps, branch engine.Branch, fullCommand string, hooks []string) struct {
 	branchName string
 	output     string
 	exitCode   int
@@ -517,8 +531,7 @@ func executeCommandOnBranch(ctx context.Context, appCtx *app.Context, branch eng
 
 	// Create a temporary directory for the worktree.
 	// Use SkipPrune variant since worktree execution pruned once before parallel execution.
-	var eng foreachEngine = appCtx.Engine
-	worktreePath, cleanup, err := eng.CreateTemporaryWorktree(ctx, branch.Name(), "stackit-foreach-*", engine.WorktreePruneSkip)
+	worktreePath, cleanup, err := deps.Engine.CreateTemporaryWorktree(ctx, branch.Name(), "stackit-foreach-*", engine.WorktreePruneSkip)
 	if err != nil {
 		res.exitCode = -1
 		res.err = err
@@ -527,7 +540,7 @@ func executeCommandOnBranch(ctx context.Context, appCtx *app.Context, branch eng
 	defer cleanup()
 
 	// Run post-worktree-create hooks (pre-resolved, no prompting)
-	worktree.RunResolvedHooks(appCtx.Context, hooks, worktreePath, appCtx.Output)
+	worktree.RunResolvedHooks(hookCtx, hooks, worktreePath, deps.Out)
 
 	var output strings.Builder
 	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", fullCommand)

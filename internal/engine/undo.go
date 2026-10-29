@@ -2,6 +2,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -407,13 +408,7 @@ func (e *engineImpl) enforceMaxStackDepth(ctx context.Context) error {
 
 	// Sort by filename (which includes timestamp, so chronological)
 	slices.SortFunc(snapshots, func(a, b os.DirEntry) int {
-		if a.Name() < b.Name() {
-			return -1
-		}
-		if a.Name() > b.Name() {
-			return 1
-		}
-		return 0
+		return strings.Compare(a.Name(), b.Name())
 	})
 
 	// Delete oldest snapshots
@@ -508,20 +503,8 @@ func (e *engineImpl) GetSnapshots() ([]SnapshotInfo, error) {
 
 	// Sort by timestamp (newest first)
 	slices.SortFunc(snapshots, func(a, b SnapshotInfo) int {
-		if !a.Timestamp.Equal(b.Timestamp) {
-			if a.Timestamp.After(b.Timestamp) {
-				return -1 // a is newer, should come first
-			}
-			return 1 // b is newer
-		}
-		// Tie-breaker: use ID (filename) descending
-		if a.ID > b.ID {
-			return -1
-		}
-		if a.ID < b.ID {
-			return 1
-		}
-		return 0
+		// Newest first; ties break on ID (filename), also descending.
+		return cmp.Or(b.Timestamp.Compare(a.Timestamp), strings.Compare(b.ID, a.ID))
 	})
 
 	return snapshots, nil

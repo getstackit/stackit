@@ -49,14 +49,16 @@ func (r *runner) CommitWithOptions(opts CommitOptions) error {
 	// If we're in non-interactive mode, or if we have a message and aren't explicitly editing,
 	// use the streaming runner to show hook output while capturing for error handling.
 	if !utils.IsInteractive() || (opts.Message != "" && !opts.Edit) || (opts.Amend && opts.NoEdit) {
-		_, err := r.runGitStreaming(context.Background(), args...)
+		c := gitCommand(args...)
+		c.output = outputStream
+		_, err := r.exec(context.Background(), c)
 		if err != nil {
 			return err
 		}
 		return nil
 	}
 
-	err := r.RunGitCommandInteractive(args...)
+	err := r.RunInteractive(context.Background(), args...)
 	if err != nil {
 		return err
 	}
@@ -72,7 +74,7 @@ func (r *runner) Commit(message string, verbose int, noVerify bool) error {
 }
 
 func (r *runner) CommitAmendNoEdit(ctx context.Context) error {
-	_, err := r.RunGitCommandWithContext(ctx, "commit", "-a", "--amend", "--no-edit", "--no-verify")
+	_, err := r.Run(ctx, "commit", "-a", "--amend", "--no-edit", "--no-verify")
 	if err != nil {
 		return err
 	}

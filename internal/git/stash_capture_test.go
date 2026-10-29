@@ -17,7 +17,7 @@ func TestStashCaptureIntentToAddPreservesIndex(t *testing.T) {
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 	run := func(args ...string) string {
 		t.Helper()
-		out, err := runner.RunGitCommandRawWithContext(t.Context(), args...)
+		out, err := runner.RunRaw(t.Context(), args...)
 		require.NoError(t, err)
 		return out
 	}

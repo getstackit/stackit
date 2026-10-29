@@ -37,7 +37,7 @@ func TestCaptureUntracked_RoundTripsNestedAndAwkwardPaths(t *testing.T) {
 	require.NotEmpty(t, sha)
 
 	// The capture must not have touched the working tree or the index.
-	status, err := runner.RunGitCommandWithContext(ctx, "status", "--porcelain")
+	status, err := runner.Run(ctx, "status", "--porcelain")
 	require.NoError(t, err)
 	require.Contains(t, status, "?? top.txt", "captured files must still be untracked")
 
@@ -56,7 +56,7 @@ func TestCaptureUntracked_RoundTripsNestedAndAwkwardPaths(t *testing.T) {
 	}
 
 	// Restored files stay untracked: the index was never part of the capture.
-	status, err = runner.RunGitCommandWithContext(ctx, "status", "--porcelain")
+	status, err = runner.Run(ctx, "status", "--porcelain")
 	require.NoError(t, err)
 	require.Contains(t, status, "?? top.txt")
 }
@@ -157,7 +157,7 @@ func TestCaptureUntracked_SkipsIgnoredFiles(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, sha)
 
-	captured, err := runner.RunGitCommandWithContext(ctx, "ls-tree", "-r", "--name-only", sha)
+	captured, err := runner.Run(ctx, "ls-tree", "-r", "--name-only", sha)
 	require.NoError(t, err)
 	require.Contains(t, captured, "keep.txt")
 	require.Contains(t, captured, ".gitignore", "an untracked .gitignore is itself work to preserve")
@@ -169,23 +169,23 @@ func TestCaptureUntrackedUsesLiteralPathspecs(t *testing.T) {
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 	require.NoError(t, os.WriteFile(filepath.Join(scene.Dir, "tracked.txt"), []byte("tracked"), 0o600))
-	_, err := runner.RunGitCommandWithContext(t.Context(), "add", "tracked.txt")
+	_, err := runner.Run(t.Context(), "add", "tracked.txt")
 	require.NoError(t, err)
-	_, err = runner.RunGitCommandWithContext(t.Context(), "commit", "-m", "tracked file")
+	_, err = runner.Run(t.Context(), "commit", "-m", "tracked file")
 	require.NoError(t, err)
 	files := []string{" :(glob)*.txt", ":(glob)*.txt", ":(exclude)keep.txt", "line\nbreak.txt", "[ab].txt"}
 	for _, name := range files {
 		require.NoError(t, os.WriteFile(filepath.Join(scene.Dir, name), []byte(name), 0o600))
 	}
-	before, err := runner.RunGitCommandRawWithContext(t.Context(), "status", "--porcelain", "-z")
+	before, err := runner.RunRaw(t.Context(), "status", "--porcelain", "-z")
 	require.NoError(t, err)
 	sha, err := runner.CaptureUntracked(t.Context(), "literal capture")
 	require.NoError(t, err)
-	captured, err := runner.RunGitCommandRawWithContext(t.Context(), "ls-tree", "-r", "--name-only", "-z", sha)
+	captured, err := runner.RunRaw(t.Context(), "ls-tree", "-r", "--name-only", "-z", sha)
 	require.NoError(t, err)
 	require.ElementsMatch(t, files, strings.Split(strings.TrimSuffix(captured, "\x00"), "\x00"),
 		"capture must include every literal untracked name and no tracked paths")
-	after, err := runner.RunGitCommandRawWithContext(t.Context(), "status", "--porcelain", "-z")
+	after, err := runner.RunRaw(t.Context(), "status", "--porcelain", "-z")
 	require.NoError(t, err)
 	require.Equal(t, before, after)
 }
@@ -211,7 +211,7 @@ func TestRestoreUntrackedUsesLiteralPathspecs(t *testing.T) {
 	content, err = os.ReadFile(magic)
 	require.NoError(t, err)
 	require.Equal(t, "captured magic", string(content))
-	staged, err := runner.RunGitCommandWithContext(t.Context(), "diff", "--cached", "--name-only")
+	staged, err := runner.Run(t.Context(), "diff", "--cached", "--name-only")
 	require.NoError(t, err)
 	require.Empty(t, staged, "restoring must leave the real index alone")
 }

@@ -6,12 +6,12 @@ import (
 )
 
 func (r *runner) CherryPick(ctx context.Context, commitSHA, onto string) (string, error) {
-	if _, err := r.RunGitCommandWithContext(ctx, "checkout", "--detach", onto); err != nil {
+	if _, err := r.Run(ctx, "checkout", "--detach", onto); err != nil {
 		return "", fmt.Errorf("failed to checkout %s: %w", onto, err)
 	}
 
-	if _, err := r.RunGitCommandWithContext(ctx, "cherry-pick", commitSHA); err != nil {
-		_, _ = r.RunGitCommandWithContext(ctx, "cherry-pick", "--abort")
+	if _, err := r.Run(ctx, "cherry-pick", commitSHA); err != nil {
+		_, _ = r.Run(ctx, "cherry-pick", "--abort")
 		return "", fmt.Errorf("failed to cherry-pick %s: %w", commitSHA, err)
 	}
 
@@ -24,11 +24,11 @@ func (r *runner) CherryPick(ctx context.Context, commitSHA, onto string) (string
 }
 
 func (r *runner) CherryPickSimple(ctx context.Context, commitSHA string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "cherry-pick", commitSHA)
+	_, err := r.Run(ctx, "cherry-pick", commitSHA)
 	return err
 }
 
 func (r *runner) CherryPickAbort(ctx context.Context) error {
-	_, err := r.RunGitCommandWithContext(ctx, "cherry-pick", "--abort")
+	_, err := r.Run(ctx, "cherry-pick", "--abort")
 	return err
 }

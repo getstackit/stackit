@@ -13,7 +13,7 @@ import (
 )
 
 // TestHardReset_HonorsCanceledContext locks in the cancellation behavior: the
-// reset path is wired to RunGitCommandWithContext so callers passing a canceled
+// reset path is wired to Run so callers passing a canceled
 // or deadline-exceeded ctx can interrupt a long-running reset.
 func TestHardReset_HonorsCanceledContext(t *testing.T) {
 	t.Parallel()

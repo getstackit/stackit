@@ -33,15 +33,15 @@ func BenchmarkWorktreeCreation(b *testing.B) {
 	g := git.NewRunnerWithPath(repoPath, nil)
 	ctx := b.Context()
 
-	if _, err := g.RunGitCommandWithContext(ctx, "init"); err != nil {
+	if _, err := g.Run(ctx, "init"); err != nil {
 		b.Fatalf("failed to init repo: %v", err)
 	}
 
 	// Configure git
-	if _, err := g.RunGitCommandWithContext(ctx, "config", "user.name", "Test User"); err != nil {
+	if _, err := g.Run(ctx, "config", "user.name", "Test User"); err != nil {
 		b.Fatalf("failed to configure git: %v", err)
 	}
-	if _, err := g.RunGitCommandWithContext(ctx, "config", "user.email", "test@example.com"); err != nil {
+	if _, err := g.Run(ctx, "config", "user.email", "test@example.com"); err != nil {
 		b.Fatalf("failed to configure git: %v", err)
 	}
 
@@ -50,7 +50,7 @@ func BenchmarkWorktreeCreation(b *testing.B) {
 	if err := os.WriteFile(testFile, []byte("initial content\n"), 0o644); err != nil {
 		b.Fatalf("failed to write test file: %v", err)
 	}
-	if _, err := g.RunGitCommandWithContext(ctx, "add", "test.txt"); err != nil {
+	if _, err := g.Run(ctx, "add", "test.txt"); err != nil {
 		b.Fatalf("failed to add file: %v", err)
 	}
 	if err := g.CommitWithOptions(git.CommitOptions{Message: "Initial commit"}); err != nil {

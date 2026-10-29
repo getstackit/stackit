@@ -577,23 +577,23 @@ func (d *demoGitRunner) StagePatch(_ context.Context) error {
 	return nil
 }
 
-func (d *demoGitRunner) RunGitCommandWithEnv(_ context.Context, _ []string, _ ...string) (string, error) {
+func (d *demoGitRunner) RunWithEnv(_ context.Context, _ []string, _ ...string) (string, error) {
 	return "", nil
 }
 
-func (d *demoGitRunner) RunGHCommandWithContext(_ context.Context, _ ...string) (string, error) {
+func (d *demoGitRunner) RunGH(_ context.Context, _ ...string) (string, error) {
 	return "", nil
 }
 
-func (d *demoGitRunner) RunGitCommandWithContext(_ context.Context, _ ...string) (string, error) {
+func (d *demoGitRunner) Run(_ context.Context, _ ...string) (string, error) {
 	return "", nil
 }
 
-func (d *demoGitRunner) RunGitCommandRawWithContext(_ context.Context, _ ...string) (string, error) {
+func (d *demoGitRunner) RunRaw(_ context.Context, _ ...string) (string, error) {
 	return "", nil
 }
 
-func (d *demoGitRunner) RunGitCommandInteractive(_ ...string) error {
+func (d *demoGitRunner) RunInteractive(_ context.Context, _ ...string) error {
 	return nil
 }
 

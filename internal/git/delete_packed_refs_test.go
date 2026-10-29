@@ -63,7 +63,7 @@ func TestDeleteBranch_RefusesCheckedOutWorktreeBranch(t *testing.T) {
 
 	require.NoError(t, scene.Repo.CreateBranch("feature"))
 	worktreePath := filepath.Join(t.TempDir(), "feature-worktree")
-	_, err := runner.RunGitCommandWithContext(ctx, "worktree", "add", worktreePath, "feature")
+	_, err := runner.Run(ctx, "worktree", "add", worktreePath, "feature")
 	require.NoError(t, err)
 
 	err = runner.DeleteBranch(ctx, "feature")
@@ -81,7 +81,7 @@ func TestDeleteRefs_RefusesCheckedOutWorktreeBranch(t *testing.T) {
 
 	require.NoError(t, scene.Repo.CreateBranch("feature"))
 	worktreePath := filepath.Join(t.TempDir(), "feature-worktree")
-	_, err := runner.RunGitCommandWithContext(ctx, "worktree", "add", worktreePath, "feature")
+	_, err := runner.Run(ctx, "worktree", "add", worktreePath, "feature")
 	require.NoError(t, err)
 
 	err = runner.DeleteRefs(ctx, []string{"refs/heads/feature"}...)
@@ -135,7 +135,7 @@ func packAllRefs(t *testing.T, repoDir string) {
 	// refs/stackit/metadata/*. `--prune` removes the loose files after packing
 	// so the test reflects the same state seen in user repos that ran git gc.
 	r := git.NewRunnerWithPath(repoDir, nil)
-	out, err := r.RunGitCommandWithContext(t.Context(), "pack-refs", "--all", "--prune")
+	out, err := r.Run(t.Context(), "pack-refs", "--all", "--prune")
 	require.NoError(t, err, "pack-refs failed: %s", out)
 }
 

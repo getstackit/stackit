@@ -71,7 +71,7 @@ func TestReadDiffs(t *testing.T) {
 			if mode == git.DiffCheckOnly {
 				continue
 			}
-			oracle, err := runner.RunGitCommandRawWithContext(ctx, "diff", "--name-only", "-z", "-M", rr.Base, rr.Head, "--")
+			oracle, err := runner.RunRaw(ctx, "diff", "--name-only", "-z", "-M", rr.Base, rr.Head, "--")
 			require.NoError(t, err)
 			want := []string{}
 			if oracle != "" {

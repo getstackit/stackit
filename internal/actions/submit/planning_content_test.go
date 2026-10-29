@@ -34,7 +34,7 @@ type contentPlanRunner struct {
 	queries  []string
 }
 
-func (*contentPlanRunner) RunGHCommandWithContext(context.Context, ...string) (string, error) {
+func (*contentPlanRunner) RunGH(context.Context, ...string) (string, error) {
 	return "test-token", nil
 }
 func (r *contentPlanRunner) GetConfig(key string) (string, error) {

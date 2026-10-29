@@ -470,9 +470,9 @@ func TestTreeContainsAnyPathFileDirectoryCollisions(t *testing.T) {
 		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(scene.Dir, name)), 0o750))
 		require.NoError(t, os.WriteFile(filepath.Join(scene.Dir, name), []byte("tracked"), 0o600))
 	}
-	_, err := runner.RunGitCommandWithContext(t.Context(), "add", "--", "file", "dir")
+	_, err := runner.Run(t.Context(), "add", "--", "file", "dir")
 	require.NoError(t, err)
-	_, err = runner.RunGitCommandWithContext(t.Context(), "commit", "-m", "tracked paths")
+	_, err = runner.Run(t.Context(), "commit", "-m", "tracked paths")
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		path     string

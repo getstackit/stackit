@@ -246,7 +246,7 @@ func (r *runner) AddWorktreeWithOptions(ctx context.Context, path WorktreePath, 
 		args = append(args, branch)
 	}
 
-	_, err := r.RunGitCommandWithContext(ctx, args...)
+	_, err := r.Run(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("failed to add worktree at %s: %w", path, err)
 	}
@@ -254,7 +254,7 @@ func (r *runner) AddWorktreeWithOptions(ctx context.Context, path WorktreePath, 
 }
 
 func (r *runner) RemoveWorktree(ctx context.Context, path WorktreePath) error {
-	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", path.String())
+	_, err := r.Run(ctx, "worktree", "remove", path.String())
 	if err != nil {
 		return fmt.Errorf("failed to remove worktree at %s: %w", path, err)
 	}
@@ -264,7 +264,7 @@ func (r *runner) RemoveWorktree(ctx context.Context, path WorktreePath) error {
 func (r *runner) ForceRemoveWorktree(ctx context.Context, path WorktreePath) error {
 	// Git requires --force twice when the worktree is locked, in addition to
 	// using it to discard local changes.
-	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", "--force", "--force", path.String())
+	_, err := r.Run(ctx, "worktree", "remove", "--force", "--force", path.String())
 	if err != nil {
 		return fmt.Errorf("failed to remove worktree at %s: %w", path, err)
 	}
@@ -283,7 +283,7 @@ func (r *runner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 	if err := r.requireGitVersion(ctx, MinimumGitVersion, "git worktree list -z"); err != nil {
 		return nil, err
 	}
-	output, err := r.RunGitCommandWithContext(ctx, "worktree", "list", "--porcelain", "-z")
+	output, err := r.Run(ctx, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
 	}
@@ -333,7 +333,7 @@ func (r *runner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 // creating new worktrees to prevent "failed to read commondir" errors caused
 // by incomplete cleanup from previous operations.
 func (r *runner) PruneWorktrees(ctx context.Context) error {
-	_, err := r.RunGitCommandWithContext(ctx, "worktree", "prune")
+	_, err := r.Run(ctx, "worktree", "prune")
 	if err != nil {
 		return fmt.Errorf("failed to prune worktrees: %w", err)
 	}
@@ -443,7 +443,7 @@ func (r *runner) GetWorktreePathForBranch(ctx context.Context, branchName string
 // ResetWorktreeWorkingDir resets a worktree's working directory to match HEAD.
 // This is used after updating a branch ref to sync the worktree's working directory.
 func (r *runner) ResetWorktreeWorkingDir(ctx context.Context, worktreePath WorktreePath) error {
-	_, err := r.RunGitCommandWithContext(ctx, "-C", worktreePath.String(), "reset", "--hard", "HEAD")
+	_, err := r.Run(ctx, "-C", worktreePath.String(), "reset", "--hard", "HEAD")
 	if err != nil {
 		return fmt.Errorf("failed to reset worktree at %s: %w", worktreePath, err)
 	}
@@ -454,7 +454,7 @@ func (r *runner) ResetWorktreeWorkingDir(ctx context.Context, worktreePath Workt
 // "Clean" means: no staged, unstaged, or untracked entries — equivalent to
 // `git status --porcelain --untracked-files=normal` returning empty output.
 func (r *runner) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath WorktreePath) (bool, error) {
-	out, err := r.RunGitCommandRawWithContext(ctx,
+	out, err := r.RunRaw(ctx,
 		"-C", worktreePath.String(),
 		"status", "--porcelain", "--untracked-files=normal",
 	)
@@ -473,7 +473,7 @@ func (r *runner) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath
 // against the target tree with WorktreeResetBlocker. Use
 // WorktreeHasUncommittedChanges when any untracked file should count as dirty.
 func (r *runner) WorktreeHasTrackedChanges(ctx context.Context, worktreePath WorktreePath) (bool, error) {
-	out, err := r.RunGitCommandRawWithContext(ctx,
+	out, err := r.RunRaw(ctx,
 		"-C", worktreePath.String(),
 		"status", "--porcelain", "--untracked-files=no",
 	)
@@ -544,7 +544,7 @@ func (r *runner) WorktreeResetBlocker(ctx context.Context, worktreePath Worktree
 // ignore semantics, rather than treating a warm-start include file as another
 // source of ignored paths.
 func (r *runner) ListIgnoredFiles(ctx context.Context, worktreePath WorktreePath) ([]string, error) {
-	out, err := r.RunGitCommandRawWithContext(ctx,
+	out, err := r.RunRaw(ctx,
 		"-C", worktreePath.String(),
 		"ls-files", "--others", "--ignored", "--exclude-standard", "-z",
 	)
@@ -552,8 +552,7 @@ func (r *runner) ListIgnoredFiles(ctx context.Context, worktreePath WorktreePath
 		return nil, fmt.Errorf("list ignored files in worktree %s: %w", worktreePath, err)
 	}
 
-	paths := strings.Split(out, "\x00")
-	paths = slices.DeleteFunc(paths, func(path string) bool { return path == "" })
+	paths := splitNulTerminated(out)
 	slices.Sort(paths)
 	return paths, nil
 }
@@ -564,7 +563,7 @@ func (r *runner) ListIgnoredFiles(ctx context.Context, worktreePath WorktreePath
 // uses exit code 1 specifically for "not a symbolic ref" when `-q` is passed,
 // reserving 128 (and others) for genuine errors.
 func (r *runner) GetWorktreeCurrentBranch(ctx context.Context, worktreePath WorktreePath) (string, error) {
-	out, err := r.RunGitCommandWithContext(ctx, "-C", worktreePath.String(), "symbolic-ref", "-q", "--short", "HEAD")
+	out, err := r.Run(ctx, "-C", worktreePath.String(), "symbolic-ref", "-q", "--short", "HEAD")
 	if err != nil {
 		if isExitCode(err, 1) {
 			return "", nil
@@ -662,7 +661,7 @@ func (r *runner) TreeContainsAnyPath(ctx context.Context, rev string, paths []st
 		}
 	}
 
-	out, err := r.RunGitCommandRawWithContext(ctx, "ls-tree", "-r", "-z", "--name-only", rev)
+	out, err := r.RunRaw(ctx, "ls-tree", "-r", "-z", "--name-only", rev)
 	if err != nil {
 		return false, false
 	}

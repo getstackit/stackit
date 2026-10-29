@@ -128,7 +128,7 @@ func BenchmarkCommitRangeMetadata(b *testing.B) {
 				}
 				for _, sha := range commits {
 					for _, format := range []string{"%P", "%an", "%ae", "%aI", "%B"} {
-						if _, err := br.runner.RunGitCommandWithContext(ctx, "log", "-1", "--format="+format, sha.SHA); err != nil {
+						if _, err := br.runner.Run(ctx, "log", "-1", "--format="+format, sha.SHA); err != nil {
 							b.Fatal(err)
 						}
 					}
@@ -174,7 +174,7 @@ func BenchmarkReadRevisionsMissing(b *testing.B) {
 					}
 					continue
 				}
-				if _, err := br.runner.RunGitCommandWithContext(b.Context(), append([]string{"rev-parse"}, names...)...); err == nil {
+				if _, err := br.runner.Run(b.Context(), append([]string{"rev-parse"}, names...)...); err == nil {
 					b.Fatal("expected missing refs")
 				}
 				for i, name := range names {
@@ -203,11 +203,11 @@ func BenchmarkGetMergeBase(b *testing.B) {
 // commit.IsAncestor with `git merge-base --is-ancestor` (cheap plumbing).
 func BenchmarkIsAncestor(b *testing.B) {
 	br := newBenchRepo(b, 30, 1)
-	ancestorSHA, err := br.runner.RunGitCommandWithContext(b.Context(), "rev-parse", "main~5")
+	ancestorSHA, err := br.runner.Run(b.Context(), "rev-parse", "main~5")
 	if err != nil {
 		b.Fatalf("resolve ancestor sha: %v", err)
 	}
-	descendantSHA, err := br.runner.RunGitCommandWithContext(b.Context(), "rev-parse", "main")
+	descendantSHA, err := br.runner.Run(b.Context(), "rev-parse", "main")
 	if err != nil {
 		b.Fatalf("resolve descendant sha: %v", err)
 	}

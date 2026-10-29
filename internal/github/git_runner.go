@@ -9,5 +9,5 @@ import "context"
 // whole git surface.
 type GitCommandRunner interface {
 	GetConfig(key string) (string, error)
-	RunGHCommandWithContext(ctx context.Context, args ...string) (string, error)
+	RunGH(ctx context.Context, args ...string) (string, error)
 }

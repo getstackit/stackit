@@ -109,9 +109,9 @@ func TestSession_ResetToTrunk(t *testing.T) {
 
 	// Stage and commit using the worktree engine's git
 	runner := git.NewRunnerWithPath(session.Path.String(), nil)
-	_, err = runner.RunGitCommandWithContext(t.Context(), "add", ".")
+	_, err = runner.Run(t.Context(), "add", ".")
 	require.NoError(t, err)
-	_, err = runner.RunGitCommandWithContext(t.Context(), "commit", "-m", "test commit")
+	_, err = runner.Run(t.Context(), "commit", "-m", "test commit")
 	require.NoError(t, err)
 
 	// Verify we're at a different revision
@@ -213,7 +213,7 @@ func TestSession_PullTrunk_StaysDetached(t *testing.T) {
 	// Verify the worktree is at detached HEAD, not on a branch
 	// Get current branch in worktree
 	worktreeGit := git.NewRunnerWithPath(session.Path.String(), nil)
-	currentBranch, err := worktreeGit.RunGitCommandWithContext(t.Context(), "symbolic-ref", "--short", "HEAD")
+	currentBranch, err := worktreeGit.Run(t.Context(), "symbolic-ref", "--short", "HEAD")
 	if err == nil {
 		// If symbolic-ref succeeds, we're on a branch (which is the bug!)
 		t.Errorf("Worktree should be at detached HEAD, but is on branch: %s", currentBranch)
@@ -222,25 +222,25 @@ func TestSession_PullTrunk_StaysDetached(t *testing.T) {
 
 	// Now simulate what would happen if we created a merge commit in the worktree
 	// First, create another branch to merge
-	_, err = worktreeGit.RunGitCommandWithContext(t.Context(), "branch", "to-merge")
+	_, err = worktreeGit.Run(t.Context(), "branch", "to-merge")
 	require.NoError(t, err)
-	_, err = worktreeGit.RunGitCommandWithContext(t.Context(), "checkout", "to-merge")
+	_, err = worktreeGit.Run(t.Context(), "checkout", "to-merge")
 	require.NoError(t, err)
 
 	testFile := filepath.Join(session.Path.String(), "merge-test.txt")
 	err = os.WriteFile(testFile, []byte("merge content"), 0644)
 	require.NoError(t, err)
-	_, err = worktreeGit.RunGitCommandWithContext(t.Context(), "add", ".")
+	_, err = worktreeGit.Run(t.Context(), "add", ".")
 	require.NoError(t, err)
-	_, err = worktreeGit.RunGitCommandWithContext(t.Context(), "commit", "-m", "commit to merge")
+	_, err = worktreeGit.Run(t.Context(), "commit", "-m", "commit to merge")
 	require.NoError(t, err)
 
 	// Go back to detached at main's commit
-	_, err = worktreeGit.RunGitCommandWithContext(t.Context(), "checkout", "--detach", "main")
+	_, err = worktreeGit.Run(t.Context(), "checkout", "--detach", "main")
 	require.NoError(t, err)
 
 	// Merge the branch (this creates a merge commit at detached HEAD)
-	_, err = worktreeGit.RunGitCommandWithContext(t.Context(), "merge", "to-merge", "-m", "Test merge")
+	_, err = worktreeGit.Run(t.Context(), "merge", "to-merge", "-m", "Test merge")
 	require.NoError(t, err)
 
 	// CRITICAL: Verify that main in the MAIN repo was NOT affected

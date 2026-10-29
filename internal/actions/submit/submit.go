@@ -469,32 +469,19 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// submitBranch below.
 	pushResults := pushSubmittedBranches(ctx, opts, submissionInfos, remote, remoteStatuses)
 
-	var submitErr error
-	var errMu sync.Mutex
-
-	runOne := func(info Info) {
+	// New stacks submit one at a time so PR numbers come out in stack order;
+	// updates to existing PRs run in parallel.
+	workers := 0
+	if allCreates {
+		workers = 1
+	}
+	submitErr := utils.RunAll(submissionInfos, workers, func(info Info) error {
 		if err := submitBranch(ctx, info, opts, handler, pushResults); err != nil {
-			errMu.Lock()
-			if submitErr == nil {
-				submitErr = err
-			}
-			errMu.Unlock()
-			return
+			return err
 		}
 		submitted.add(info.BranchName)
-	}
-
-	if len(submissionInfos) > 0 {
-		if allCreates {
-			// Sequential submission for new stacks - ensures sequential PR numbers
-			for _, info := range submissionInfos {
-				runOne(info)
-			}
-		} else {
-			// Parallel submission for updates (faster when PRs already exist)
-			utils.Run(submissionInfos, runOne)
-		}
-	}
+		return nil
+	})
 
 	// Clear the marker only for branches whose PR write landed. Anything left
 	// marked is retried by the next submit.

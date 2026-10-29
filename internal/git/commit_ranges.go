@@ -46,8 +46,7 @@ func readCommitTips[T commitRecord](r *runner, ctx context.Context, codec commit
 	if len(shas) == 0 {
 		return result, nil
 	}
-	out, err := r.runGitInternal(ctx, strings.Join(shas, "\n")+"\n", nil, false,
-		"log", "--no-walk=unsorted", "--stdin", "-z", "--format="+codec.format)
+	out, err := r.runStdinRaw(ctx, strings.Join(shas, "\n")+"\n", "log", "--no-walk=unsorted", "--stdin", "-z", "--format="+codec.format)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +88,7 @@ func (r *runner) ReadCommitCounts(ctx context.Context, ranges ...RevRange) ReadR
 		if rr.Base != "" {
 			rangeArg = rr.String()
 		}
-		out, err := r.RunGitCommandWithContext(ctx, "rev-list", "--count", "--end-of-options", rangeArg, "--")
+		out, err := r.Run(ctx, "rev-list", "--count", "--end-of-options", rangeArg, "--")
 		if err != nil {
 			return 0, err
 		}

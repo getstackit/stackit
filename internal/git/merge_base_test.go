@@ -22,7 +22,7 @@ func TestIsAncestor(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get initial commit SHA
-		initialSha, err := runner.RunGitCommandWithContext(t.Context(), "rev-parse", "HEAD")
+		initialSha, err := runner.Run(t.Context(), "rev-parse", "HEAD")
 		require.NoError(t, err)
 
 		// Create another commit
@@ -46,7 +46,7 @@ func TestIsAncestor(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get initial commit SHA
-		initialSha, err := runner.RunGitCommandWithContext(t.Context(), "rev-parse", "HEAD")
+		initialSha, err := runner.Run(t.Context(), "rev-parse", "HEAD")
 		require.NoError(t, err)
 
 		// Create another commit
@@ -69,7 +69,7 @@ func TestIsAncestor(t *testing.T) {
 		err := runner.InitDefaultRepo()
 		require.NoError(t, err)
 
-		sha, err := runner.RunGitCommandWithContext(t.Context(), "rev-parse", "HEAD")
+		sha, err := runner.Run(t.Context(), "rev-parse", "HEAD")
 		require.NoError(t, err)
 
 		// Same commit should be considered its own ancestor
@@ -123,7 +123,7 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		require.NoError(t, err)
 
 		// 5. Fetch the new commits (but don't pull)
-		_, err = runner.RunGitCommandWithContext(t.Context(),
+		_, err = runner.Run(t.Context(),
 			"fetch", "origin", "refs/heads/main:refs/remotes/origin/main")
 		require.NoError(t, err)
 
@@ -148,7 +148,7 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get initial commit
-		initialSha, err := runner.RunGitCommandWithContext(t.Context(), "rev-parse", "HEAD")
+		initialSha, err := runner.Run(t.Context(), "rev-parse", "HEAD")
 		require.NoError(t, err)
 
 		// Create branch A with one commit

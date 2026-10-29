@@ -19,7 +19,7 @@ func (r remoteRepositoryRunner) GetConfig(string) (string, error) {
 	return r.remoteURL, r.err
 }
 
-func (remoteRepositoryRunner) RunGHCommandWithContext(context.Context, ...string) (string, error) {
+func (remoteRepositoryRunner) RunGH(context.Context, ...string) (string, error) {
 	return "", nil
 }
 

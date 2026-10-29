@@ -513,7 +513,7 @@ func (r *rerereLagRunner) GetUnmergedFiles(context.Context) ([]string, error) {
 	return append([]string(nil), r.unmerged...), nil
 }
 
-func (r *rerereLagRunner) RunGitCommandWithContext(_ context.Context, args ...string) (string, error) {
+func (r *rerereLagRunner) Run(_ context.Context, args ...string) (string, error) {
 	if len(args) > 0 && args[0] == "rerere" {
 		r.rerereCalls++
 		// Explicit rerere applies the recorded resolution and, with autoupdate
@@ -524,7 +524,7 @@ func (r *rerereLagRunner) RunGitCommandWithContext(_ context.Context, args ...st
 	return "", fmt.Errorf("unexpected git command: %v", args)
 }
 
-func (r *rerereLagRunner) RunGitCommandWithEnv(_ context.Context, _ []string, args ...string) (string, error) {
+func (r *rerereLagRunner) RunWithEnv(_ context.Context, _ []string, args ...string) (string, error) {
 	if len(args) == 2 && args[0] == "rebase" && args[1] == "--continue" {
 		r.continueCalls++
 		if r.continueCalls == 1 {

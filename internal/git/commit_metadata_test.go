@@ -26,7 +26,7 @@ func TestGetCommitRangeMetadata(t *testing.T) {
 	// batching, including the final empty field in the oldest commit's record.
 	for i, message := range []string{"", "subject\n\nbody\twith separators \x1e\x1f\n\nfooter\n"} {
 		dates := []string{"2026-06-01T12:00:00-04:00", "2026-06-02T09:30:00+05:30"}
-		_, err := runner.RunGitCommandWithEnv(ctx, []string{
+		_, err := runner.RunWithEnv(ctx, []string{
 			"GIT_AUTHOR_NAME=Author " + dates[i],
 			"GIT_AUTHOR_EMAIL=author@example.com",
 			"GIT_AUTHOR_DATE=" + dates[i],
@@ -43,7 +43,7 @@ func TestGetCommitRangeMetadata(t *testing.T) {
 			"%P": strings.Join(commit.Parents, " "), "%an": commit.AuthorName,
 			"%ae": commit.AuthorEmail, "%aI": commit.AuthorDate, "%B": commit.Message,
 		} {
-			want, err := runner.RunGitCommandWithContext(ctx, "log", "-1", "--format="+format, commit.SHA)
+			want, err := runner.Run(ctx, "log", "-1", "--format="+format, commit.SHA)
 			require.NoError(t, err)
 			require.Equal(t, want, strings.TrimSpace(got), format)
 		}
@@ -85,10 +85,10 @@ func TestCommitReadsIgnoreShowSignature(t *testing.T) {
 		"gpg.ssh.allowedSignersFile": allowedSigners,
 		"log.showSignature":          "true",
 	} {
-		_, err := runner.RunGitCommandWithContext(ctx, "config", key, value)
+		_, err := runner.Run(ctx, "config", key, value)
 		require.NoError(t, err)
 	}
-	_, err = runner.RunGitCommandWithContext(ctx, "commit", "--allow-empty", "-S", "-m", "signed")
+	_, err = runner.Run(ctx, "commit", "--allow-empty", "-S", "-m", "signed")
 	require.NoError(t, err)
 	head, err := runner.ReadRevisions(ctx, "HEAD").One()
 	require.NoError(t, err)

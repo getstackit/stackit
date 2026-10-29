@@ -3,6 +3,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"os"
 	"regexp"
 	"runtime"
@@ -263,10 +264,7 @@ func ShortRevision(rev string, maxLen int) string {
 	if maxLen <= 0 {
 		maxLen = 7
 	}
-	if len(rev) <= maxLen {
-		return rev
-	}
-	return rev[:maxLen]
+	return rev[:min(maxLen, len(rev))]
 }
 
 // SleepContext blocks for d or until ctx is done, whichever comes first. Use it
@@ -290,10 +288,7 @@ func RunWithWorkers[T any](items []T, numWorkers int, worker func(item T)) {
 	if numWorkers <= 0 {
 		numWorkers = runtime.GOMAXPROCS(0)
 	}
-
-	if numWorkers > len(items) {
-		numWorkers = len(items)
-	}
+	numWorkers = min(numWorkers, len(items))
 
 	jobs := make(chan T, len(items))
 	for _, item := range items {
@@ -312,4 +307,21 @@ func RunWithWorkers[T any](items []T, numWorkers int, worker func(item T)) {
 		}()
 	}
 	wg.Wait()
+}
+
+// RunAll runs worker for each item on a pool of numWorkers goroutines (0 means
+// GOMAXPROCS) and returns every worker error joined. A failing item does not
+// stop the others, so callers see all failures, not just the first. With one
+// worker, items run in slice order.
+func RunAll[T any](items []T, numWorkers int, worker func(item T) error) error {
+	var mu sync.Mutex
+	var errs []error
+	RunWithWorkers(items, numWorkers, func(item T) {
+		if err := worker(item); err != nil {
+			mu.Lock()
+			errs = append(errs, err)
+			mu.Unlock()
+		}
+	})
+	return errors.Join(errs...)
 }

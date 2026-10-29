@@ -58,7 +58,7 @@ func (r *runner) GitVersion(ctx context.Context) (Version, error) {
 }
 
 func (r *runner) probeGitVersion(ctx context.Context) (Version, error) {
-	output, err := r.RunGitCommandWithContext(ctx, "--version")
+	output, err := r.Run(ctx, "--version")
 	if err != nil {
 		return Version{}, fmt.Errorf("could not run git --version: %w", err)
 	}

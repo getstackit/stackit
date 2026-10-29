@@ -30,7 +30,7 @@ func (r *runner) MergeBranches(ctx context.Context, branches []string, opts Merg
 	}
 	args = append(args, branches...)
 
-	_, err := r.RunGitCommandWithContext(ctx, args...)
+	_, err := r.Run(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("failed to merge branches: %w", err)
 	}
@@ -47,7 +47,7 @@ func (r *runner) IsMergeInProgress(ctx context.Context) bool {
 }
 
 func (r *runner) MergeAbort(ctx context.Context) error {
-	_, err := r.RunGitCommandWithContext(ctx, "merge", "--abort")
+	_, err := r.Run(ctx, "merge", "--abort")
 	if err != nil {
 		return fmt.Errorf("merge abort failed: %w", err)
 	}
@@ -55,7 +55,7 @@ func (r *runner) MergeAbort(ctx context.Context) error {
 }
 
 func (r *runner) GetUnmergedFiles(ctx context.Context) ([]string, error) {
-	output, err := r.RunGitCommandWithContext(ctx, "diff", "--name-only", "--diff-filter=U")
+	output, err := r.Run(ctx, "diff", "--name-only", "--diff-filter=U")
 	if err != nil {
 		return []string{}, nil //nolint:nilerr
 	}
@@ -96,7 +96,7 @@ func (r *runner) IsMerged(ctx context.Context, branchName, target string) (bool,
 	// Use git cherry to check if all commits are in trunk
 	// git cherry <trunk> <branch> returns commits that are in branch but not in trunk
 	// If empty, all commits are merged
-	cherryOutput, err := r.RunGitCommandWithContext(ctx, "cherry", target, branchName)
+	cherryOutput, err := r.Run(ctx, "cherry", target, branchName)
 	if err != nil {
 		// If cherry fails, fall back to simpler check
 		// Check if branch tip is reachable from trunk
@@ -181,7 +181,7 @@ func (r *runner) isSquashMerged(ctx context.Context, branchRev, mergeBase, targe
 
 	// Enumerate commits on target since the merge-base (up to 200
 	// commits to bound the scan on long-lived trunks).
-	logOutput, err := r.RunGitCommandWithContext(ctx, "log", "--format=%H", "-200", mergeBase+".."+target)
+	logOutput, err := r.Run(ctx, "log", "--format=%H", "-200", mergeBase+".."+target)
 	if err != nil {
 		return false, nil //nolint:nilerr
 	}
@@ -204,7 +204,7 @@ func (r *runner) isSquashMerged(ctx context.Context, branchRev, mergeBase, targe
 
 func (r *runner) diffPatchID(ctx context.Context, rr RevRange) (string, error) {
 	base, head := rr.Base, rr.Head
-	diffOutput, err := r.RunGitCommandRawWithContext(ctx, "diff", "--no-ext-diff", "--full-index", base, head)
+	diffOutput, err := r.RunRaw(ctx, "diff", "--no-ext-diff", "--full-index", base, head)
 	if err != nil {
 		return "", err
 	}
@@ -216,7 +216,7 @@ func (r *runner) commitPatchID(ctx context.Context, commitSHA string, cache *Squ
 		return cached.(string), nil
 	}
 
-	diffOutput, err := r.RunGitCommandRawWithContext(ctx, "show", "--format=", "--no-ext-diff", "--full-index", commitSHA)
+	diffOutput, err := r.RunRaw(ctx, "show", "--format=", "--no-ext-diff", "--full-index", commitSHA)
 	if err != nil {
 		return "", err
 	}
@@ -232,7 +232,7 @@ func (r *runner) patchID(ctx context.Context, diffOutput string) (string, error)
 	if strings.TrimSpace(diffOutput) == "" {
 		return "", nil
 	}
-	output, err := r.runGitInternal(ctx, diffOutput, nil, true, "patch-id", "--stable")
+	output, err := r.runStdin(ctx, diffOutput, "patch-id", "--stable")
 	if err != nil {
 		return "", err
 	}

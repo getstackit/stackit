@@ -83,7 +83,7 @@ func (r *runner) recentCommits(ctx context.Context, revArgs ...string) ([]Recent
 	args := append([]string{"log", "--first-parent"}, revArgs...)
 	args = append(args, "-z", "--format="+format)
 
-	out, err := r.RunGitCommandRawWithContext(ctx, args...)
+	out, err := r.RunRaw(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk recent commits (%v): %w", revArgs, err)
 	}

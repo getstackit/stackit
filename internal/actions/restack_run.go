@@ -1,11 +1,9 @@
 package actions
 
 import (
-	"errors"
 	"fmt"
 	stdruntime "runtime"
 	"slices"
-	"sync"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
@@ -174,24 +172,6 @@ func conflictedStack(eng engine.Engine, groups []restackPlannedGroup, conflictBr
 	return nil
 }
 
-// parallelErrors accumulates worker errors across parallel restack groups.
-type parallelErrors struct {
-	mu   sync.Mutex
-	errs []error
-}
-
-func (p *parallelErrors) add(err error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.errs = append(p.errs, err)
-}
-
-func (p *parallelErrors) joined() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return errors.Join(p.errs...)
-}
-
 // restackGroupsParallel runs each independent stack group in its own temporary
 // worktree. The groups have no shared branches, so rebases + ref updates are
 // safe to interleave. Progress is serialized through the tally.
@@ -214,14 +194,11 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 	// Snapshot the parent engine state once — each worktree engine gets a copy.
 	snapshot := eng.SnapshotForWorktree()
 
-	var errs parallelErrors
-
 	// recordGroupFailure attributes every branch in a failed group to the
 	// handler as a conflict so the final summary reflects what the worker did
 	// not process. Without this a worktree/engine setup failure silently shows
 	// "skipped=0" while an entire stack failed to start.
-	recordGroupFailure := func(group restackPlannedGroup, err error) {
-		errs.add(err)
+	recordGroupFailure := func(group restackPlannedGroup, err error) error {
 		for _, b := range group.sortedBranches {
 			tally.record(RestackProgress{
 				Branch:    b.GetName(),
@@ -230,17 +207,17 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 				StackRoot: group.rootBranch,
 			})
 		}
+		return err
 	}
 
-	utils.RunWithWorkers(groups, numJobs, func(group restackPlannedGroup) {
+	err := utils.RunAll(groups, numJobs, func(group restackPlannedGroup) error {
 		// Create a temporary worktree for this group. PruneSkip because we
 		// pruned once above and don't want N workers racing on prune.
 		wtPath, cleanup, err := eng.CreateTemporaryWorktree(ctx.Context, eng.Trunk().GetName(), "stackit-restack-*", engine.WorktreePruneSkip)
 		if err != nil {
 			wrappedErr := fmt.Errorf("stack %s: create worktree: %w", group.rootBranch, err)
 			ctx.Logger.Warn("failed to create worktree for parallel restack: %v", wrappedErr)
-			recordGroupFailure(group, wrappedErr)
-			return
+			return recordGroupFailure(group, wrappedErr)
 		}
 		defer cleanup()
 
@@ -252,8 +229,7 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 		if err != nil {
 			wrappedErr := fmt.Errorf("stack %s: create worktree engine: %w", group.rootBranch, err)
 			ctx.Logger.Warn("failed to create worktree engine: %v", wrappedErr)
-			recordGroupFailure(group, wrappedErr)
-			return
+			return recordGroupFailure(group, wrappedErr)
 		}
 
 		// Shallow-copy the app context, swapping in the worktree engine.
@@ -275,8 +251,9 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 		if err := RestackBranchesWithHandler(&wtCtx, group.sortedBranches, progress, ConflictModeContinue); err != nil {
 			wrappedErr := fmt.Errorf("stack %s: %w", group.rootBranch, err)
 			ctx.Logger.Warn("parallel restack group failed: %v", wrappedErr)
-			errs.add(wrappedErr)
+			return wrappedErr
 		}
+		return nil
 	})
 
 	// Rebuild the main engine's cache so it sees the ref changes made by the
@@ -285,5 +262,5 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 		ctx.Logger.Warn("failed to rebuild engine after parallel restack: %v", err)
 	}
 
-	return errs.joined()
+	return err
 }

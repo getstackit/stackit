@@ -217,7 +217,7 @@ func (c *StackitGitHubClient) GetCurrentUser(ctx context.Context) (string, error
 		args = append(args, "--hostname", c.host)
 	}
 	args = append(args, "user", "-q", ".login")
-	output, err := c.runner.RunGHCommandWithContext(ctx, args...)
+	output, err := c.runner.RunGH(ctx, args...)
 	if err != nil {
 		return "", fmt.Errorf("failed to get current GitHub user: %w", err)
 	}

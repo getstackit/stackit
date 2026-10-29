@@ -71,7 +71,7 @@ func TestReadRevisionsFallbackPreservesResolution(t *testing.T) {
 	}
 
 	// One and many inputs both peel annotated commit tags.
-	tagSHA, err := runner.RunGitCommandWithContext(t.Context(), "rev-parse", "commit-tag")
+	tagSHA, err := runner.Run(t.Context(), "rev-parse", "commit-tag")
 	require.NoError(t, err)
 	got, errs := runner.ReadRevisions(t.Context(), []string{"commit-tag"}...).ValuesAndErrors()
 	require.Empty(t, errs)

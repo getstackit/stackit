@@ -33,7 +33,7 @@ func TestRunnerTracesGitSubprocesses(t *testing.T) {
 	logger := &traceCaptureLogger{}
 	runner := git.NewRunnerWithPath(t.TempDir(), logger)
 
-	if _, err := runner.RunGitCommandWithContext(t.Context(), "version"); err != nil {
+	if _, err := runner.Run(t.Context(), "version"); err != nil {
 		t.Fatalf("git version: %v", err)
 	}
 

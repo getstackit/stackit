@@ -44,7 +44,7 @@ func (r *runner) ReadDiffs(ctx context.Context, mode DiffReadMode, ranges ...Rev
 		if mode == DiffStats {
 			format = "--numstat"
 		}
-		out, err := r.RunGitCommandRawWithContext(ctx, "diff", "-z", "-M", "--no-ext-diff", "--no-textconv", format,
+		out, err := r.RunRaw(ctx, "diff", "-z", "-M", "--no-ext-diff", "--no-textconv", format,
 			"--end-of-options", rr.Base, rr.Head, "--")
 		if err != nil {
 			result.Fail(rr.String(), err)
@@ -107,8 +107,7 @@ func (r *runner) ReadDiffs(ctx context.Context, mode DiffReadMode, ranges ...Rev
 	}
 	// Explicit rename detection matches porcelain diff's default, whereas
 	// diff-tree defaults to no detection. No textconv/external helpers execute.
-	out, err := r.runGitInternal(ctx, strings.Join(pairs, "\n")+"\n", nil, false,
-		"diff-tree", "--stdin", "-r", "-z", "-M", "--no-ext-diff", "--no-textconv", format)
+	out, err := r.runStdinRaw(ctx, strings.Join(pairs, "\n")+"\n", "diff-tree", "--stdin", "-r", "-z", "-M", "--no-ext-diff", "--no-textconv", format)
 	var summaries map[string]DiffSummary
 	if err == nil {
 		summaries, err = parseDiffSummaries(out, pairs, mode)

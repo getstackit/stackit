@@ -28,7 +28,7 @@ func (r *runner) getRemote() string {
 	if branch == "" {
 		return DefaultRemote
 	}
-	out, err := r.RunGitCommandWithContext(context.Background(),
+	out, err := r.Run(context.Background(),
 		"config", "--get", "branch."+branch+".remote",
 	)
 	if err == nil {
@@ -44,7 +44,7 @@ func (r *runner) getRemote() string {
 // makes `git fetch <remote>` fail with "does not appear to be a git
 // repository" rather than a genuine network/auth error.
 func (r *runner) remoteConfigured(ctx context.Context, remote string) bool {
-	_, err := r.RunGitCommandWithContext(ctx, "remote", "get-url", remote)
+	_, err := r.Run(ctx, "remote", "get-url", remote)
 	return err == nil
 }
 
@@ -64,7 +64,7 @@ func (r *runner) fetchRemoteShas(ctx context.Context, remote string) (RemoteBran
 		defer cancel()
 	}
 
-	out, err := r.RunGitCommandWithContext(ctx, "ls-remote", "--heads", "--refs", remote)
+	out, err := r.Run(ctx, "ls-remote", "--heads", "--refs", remote)
 	if err != nil {
 		// Empty remote / no refs is not an error for callers; treat exit
 		// code 2 (no matching refs) as an empty result. Network errors

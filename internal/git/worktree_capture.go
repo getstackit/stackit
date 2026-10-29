@@ -57,17 +57,17 @@ func (r *runner) CaptureUntracked(ctx context.Context, message string) (string, 
 	for chunk := range slices.Chunk(paths, restorePathBatchSize) {
 		// These are filenames from ls-files, never user-supplied pathspecs.
 		addArgs := append([]string{gitLiteralPathspecs, gitCmdAdd, "--"}, chunk...)
-		if _, err := r.RunGitCommandWithEnv(ctx, env, addArgs...); err != nil {
+		if _, err := r.RunWithEnv(ctx, env, addArgs...); err != nil {
 			return "", fmt.Errorf("failed to stage untracked files for capture: %w", err)
 		}
 	}
 
-	tree, err := r.RunGitCommandWithEnv(ctx, env, "write-tree")
+	tree, err := r.RunWithEnv(ctx, env, "write-tree")
 	if err != nil {
 		return "", fmt.Errorf("failed to write capture tree: %w", err)
 	}
 
-	commit, err := r.RunGitCommandWithContext(ctx, "commit-tree", strings.TrimSpace(tree), "-m", message)
+	commit, err := r.Run(ctx, "commit-tree", strings.TrimSpace(tree), "-m", message)
 	if err != nil {
 		return "", fmt.Errorf("failed to write capture commit: %w", err)
 	}
@@ -87,17 +87,14 @@ func (r *runner) RestoreUntracked(ctx context.Context, commitSHA string) (int, e
 		return 0, nil
 	}
 
-	output, err := r.RunGitCommandRawWithContext(ctx, "ls-tree", "-r", "--name-only", "-z", commitSHA)
+	output, err := r.RunRaw(ctx, "ls-tree", "-r", "--name-only", "-z", commitSHA)
 	if err != nil {
 		return 0, fmt.Errorf("failed to list captured files: %w", err)
 	}
 
 	root := r.getRepoRoot()
 	var missing []string
-	for path := range strings.SplitSeq(output, "\x00") {
-		if path == "" {
-			continue
-		}
+	for _, path := range splitNulTerminated(output) {
 		safe, err := canRestoreUntrackedPath(root, path)
 		if err != nil {
 			return 0, err
@@ -115,7 +112,7 @@ func (r *runner) RestoreUntracked(ctx context.Context, commitSHA string) (int, e
 	// argv per file would eventually exceed the platform's argument limit.
 	for chunk := range slices.Chunk(missing, restorePathBatchSize) {
 		args := append([]string{gitLiteralPathspecs, "restore", "--source", commitSHA, "--worktree", "--"}, chunk...)
-		if _, err := r.RunGitCommandWithContext(ctx, args...); err != nil {
+		if _, err := r.Run(ctx, args...); err != nil {
 			return 0, fmt.Errorf("failed to restore captured files: %w", err)
 		}
 	}
@@ -146,16 +143,10 @@ func canRestoreUntrackedPath(root, path string) (bool, error) {
 // untrackedPaths lists untracked files that Git is not ignoring, NUL-separated
 // so paths containing newlines survive the round trip.
 func (r *runner) untrackedPaths(ctx context.Context) ([]string, error) {
-	output, err := r.RunGitCommandRawWithContext(ctx, "ls-files", "--others", "--exclude-standard", "-z")
+	output, err := r.RunRaw(ctx, "ls-files", "--others", "--exclude-standard", "-z")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list untracked files: %w", err)
 	}
 
-	var paths []string
-	for path := range strings.SplitSeq(output, "\x00") {
-		if path != "" {
-			paths = append(paths, path)
-		}
-	}
-	return paths, nil
+	return splitNulTerminated(output), nil
 }

@@ -49,7 +49,7 @@ func (r *runner) ShowDiff(ctx context.Context, rr RevRange, format DiffFormat) (
 		args = append(args, "--stat")
 	}
 	args = append(args, rr.Base, rr.Head, "--")
-	return r.RunGitCommandWithContext(ctx, args...)
+	return r.Run(ctx, args...)
 }
 
 func (r *runner) ShowCommits(ctx context.Context, rr RevRange, format CommitLogFormat) (string, error) {
@@ -71,7 +71,7 @@ func (r *runner) ShowCommits(ctx context.Context, rr RevRange, format CommitLogF
 	}
 	args = append(args, fmt.Sprintf("%s..%s", baseRef, head))
 	args = append(args, "--")
-	return r.RunGitCommandWithContext(ctx, args...)
+	return r.Run(ctx, args...)
 }
 
 func (r *runner) GetStagedDiff(ctx context.Context, files ...string) (string, error) {
@@ -80,7 +80,7 @@ func (r *runner) GetStagedDiff(ctx context.Context, files ...string) (string, er
 		args = append(args, "--")
 		args = append(args, files...)
 	}
-	return r.RunGitCommandRawWithContext(ctx, args...)
+	return r.RunRaw(ctx, args...)
 }
 
 func (r *runner) GetUnstagedDiff(ctx context.Context, files ...string) (string, error) {
@@ -89,7 +89,7 @@ func (r *runner) GetUnstagedDiff(ctx context.Context, files ...string) (string, 
 		args = append(args, "--")
 		args = append(args, files...)
 	}
-	return r.RunGitCommandRawWithContext(ctx, args...)
+	return r.RunRaw(ctx, args...)
 }
 
 // GetUnstagedDiffBinary returns the unstaged (index->worktree) diff with full
@@ -105,7 +105,7 @@ func (r *runner) GetUnstagedDiffBinary(ctx context.Context, files ...string) (st
 		args = append(args, "--")
 		args = append(args, files...)
 	}
-	return r.RunGitCommandRawWithContext(ctx, args...)
+	return r.RunRaw(ctx, args...)
 }
 
 // GetDiffBetween returns the raw diff between two refs.
@@ -117,5 +117,5 @@ func (r *runner) GetDiffBetween(ctx context.Context, rr RevRange, files ...strin
 		args = append(args, "--")
 		args = append(args, files...)
 	}
-	return r.RunGitCommandRawWithContext(ctx, args...)
+	return r.RunRaw(ctx, args...)
 }

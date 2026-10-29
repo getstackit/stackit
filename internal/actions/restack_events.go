@@ -3,6 +3,8 @@ package actions
 import (
 	"sync"
 
+	"github.com/getstackit/stackit/internal/actions/restack"
+
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -129,7 +131,7 @@ func newRestackTally(eng engine.BranchReader, handler RestackHandler, prNumber f
 	return &restackTally{eng: eng, handler: handler, prNumber: prNumber}
 }
 
-func (t *restackTally) record(p RestackProgress) {
+func (t *restackTally) record(p restack.Progress) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -168,7 +170,7 @@ func (t *restackTally) record(p RestackProgress) {
 
 // parentName is the parent the branch now sits on. A reparented branch reports
 // its new parent directly: the engine's view can still name the landed one.
-func (t *restackTally) parentName(p RestackProgress) string {
+func (t *restackTally) parentName(p restack.Progress) string {
 	if p.Reparented && p.NewParent != "" {
 		return p.NewParent
 	}

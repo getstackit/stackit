@@ -3,6 +3,8 @@ package actions
 import (
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/actions/restack"
+
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
@@ -137,7 +139,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	// Continue with remaining branches to restack
 	if len(continuation.BranchesToRestack) > 0 {
 		branches := engine.BranchesFromNames(eng, continuation.BranchesToRestack)
-		if err := restackBranchesWithPlan(ctx, branches, nil, nil, ConflictModeEnterWorkflow, continuation); err != nil {
+		if err := restackBranchesWithPlan(ctx, branches, nil, nil, restack.ConflictEnterWorkflow, continuation); err != nil {
 			return err
 		}
 	}

@@ -6,6 +6,8 @@ import (
 	"maps"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/actions/restack"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
@@ -428,7 +430,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			// so absorb always finishes on a clean worktree; the user resolves
 			// with 'stackit restack'.
 			var conflicted, blocked []string
-			if err := actions.RestackBranchesWithHandler(ctx, upstackBranches, func(p actions.RestackProgress) {
+			if err := actions.RestackBranchesWithHandler(ctx, upstackBranches, func(p restack.Progress) {
 				switch p.Result {
 				case engine.RestackDone:
 					out.Info("Restacked %s on %s.",
@@ -439,7 +441,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				case engine.RestackBlocked:
 					blocked = append(blocked, p.Branch)
 				}
-			}, actions.ConflictModeContinue); err != nil {
+			}, restack.ConflictContinue); err != nil {
 				return fmt.Errorf("failed to restack upstack branches: %w", err)
 			}
 			if len(conflicted) > 0 {

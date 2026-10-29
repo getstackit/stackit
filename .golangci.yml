@@ -65,6 +65,7 @@ linters:
             - "**/internal/actions/doctor/**"
             - "**/internal/actions/freeze/**"
             - "**/internal/actions/pop/**"
+            - "**/internal/actions/restack/**"
             - "**/internal/actions/scope/**"
             - "**/internal/actions/untrack/**"
           deny:

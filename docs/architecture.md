@@ -171,6 +171,24 @@ When adding or refactoring an operation:
    implement only the narrow interface, so a missing method is a compile error
    rather than a nil-embedded panic.
 
+### Restack core
+
+Every command that rebases branches goes through `internal/actions/restack`,
+split so each half depends only on what it uses:
+
+- `restack.Planner` (read-only `PlanEngine`) validates ancestry, builds the
+  engine plan, trial-rebases it in a scratch worktree, and returns a `Plan`
+  classifying each branch as apply, conflict, or blocked.
+- `restack.Executor` (`ApplyEngine`, a `ProgressFunc`, a `ContinuationStore`,
+  a `ConflictReporter`) applies a `Plan` under a `ConflictMode`: report
+  conflicts and hold back their stacks, or stop at the first conflict and
+  leave the repository mid-rebase for `stackit continue`.
+
+Neither writes output directly: progress goes to the `ProgressFunc`, and
+`restack.TextReporter` renders it for commands without a progress UI.
+`actions.RestackBranches` is the `*app.Context` adapter that builds both for
+not-yet-converted callers.
+
 ## Transitional Guidance
 
 The repository already uses `internal/actions/*` as the home for reusable orchestration.

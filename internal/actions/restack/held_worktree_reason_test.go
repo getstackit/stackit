@@ -1,9 +1,11 @@
-package actions
+package restack_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/getstackit/stackit/internal/actions/restack"
 
 	"github.com/stretchr/testify/require"
 
@@ -40,7 +42,7 @@ func TestHeldWorktreeReason(t *testing.T) {
 	t.Run("clean checkout holds nothing", func(t *testing.T) {
 		t.Parallel()
 		s, _ := setup(t)
-		require.Empty(t, heldWorktreeReason(s.Context, "feature"))
+		require.Empty(t, restack.HeldWorktreeReason(t.Context(), s.Engine, "feature"))
 	})
 
 	t.Run("uncommitted changes are reported", func(t *testing.T) {
@@ -48,7 +50,7 @@ func TestHeldWorktreeReason(t *testing.T) {
 		s, worktreePath := setup(t)
 		require.NoError(t, os.WriteFile(filepath.Join(worktreePath, "scratch.txt"), []byte("wip"), 0o600))
 
-		reason := heldWorktreeReason(s.Context, "feature")
+		reason := restack.HeldWorktreeReason(t.Context(), s.Engine, "feature")
 		require.Contains(t, reason, "uncommitted changes")
 		require.Contains(t, reason, worktreePath,
 			"the reason must name the worktree to act on, not just the branch")
@@ -57,7 +59,7 @@ func TestHeldWorktreeReason(t *testing.T) {
 	t.Run("branch with no checkout holds nothing", func(t *testing.T) {
 		t.Parallel()
 		s, _ := setup(t)
-		require.Empty(t, heldWorktreeReason(s.Context, "main"))
-		require.Empty(t, heldWorktreeReason(s.Context, "does-not-exist"))
+		require.Empty(t, restack.HeldWorktreeReason(t.Context(), s.Engine, "main"))
+		require.Empty(t, restack.HeldWorktreeReason(t.Context(), s.Engine, "does-not-exist"))
 	})
 }

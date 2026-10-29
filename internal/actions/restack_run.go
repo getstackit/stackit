@@ -5,6 +5,8 @@ import (
 	stdruntime "runtime"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/actions/restack"
+
 	"github.com/getstackit/stackit/internal/workpool"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -114,13 +116,13 @@ func RunRestack(ctx *app.Context, req RestackRequest, handler RestackHandler) (R
 		return RestackOutcome{Summary: summary}, err
 	}
 
-	mode := ConflictModeContinue
+	mode := restack.ConflictContinue
 	if req.ConflictPolicy == RestackConflictEnterWorkflow {
-		mode = ConflictModeEnterWorkflow
+		mode = restack.ConflictEnterWorkflow
 	}
 	for _, group := range groups {
 		groupRoot := group.rootBranch
-		progress := func(p RestackProgress) {
+		progress := func(p restack.Progress) {
 			p.StackRoot = groupRoot
 			tally.record(p)
 		}
@@ -139,7 +141,7 @@ func RunRestack(ctx *app.Context, req RestackRequest, handler RestackHandler) (R
 			return RestackOutcome{Summary: summary}, fmt.Errorf("failed to prompt for conflict resolution: %w", err)
 		}
 		if resolve {
-			// The run used ConflictModeContinue, which held back the whole
+			// The run used restack.ConflictContinue, which held back the whole
 			// conflicted stack — ancestors included. Re-run that stack in
 			// EnterWorkflow mode so ancestors are applied before entering the
 			// conflict; see ResolveConflictWorkflow.
@@ -201,7 +203,7 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 	// "skipped=0" while an entire stack failed to start.
 	recordGroupFailure := func(group restackPlannedGroup, err error) error {
 		for _, b := range group.sortedBranches {
-			tally.record(RestackProgress{
+			tally.record(restack.Progress{
 				Branch:    b.Name(),
 				Result:    engine.RestackConflict,
 				Conflict:  true,
@@ -239,7 +241,7 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 		wtCtx.RepoRoot = wtPath.String()
 
 		groupRoot := group.rootBranch
-		progress := func(p RestackProgress) {
+		progress := func(p restack.Progress) {
 			p.StackRoot = groupRoot
 			tally.record(p)
 		}
@@ -249,7 +251,7 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 		// down, so entering it would silently destroy what the user needs to resolve.
 		// Per-branch outcomes reach the tally through the callback before any
 		// error surfaces, so only the error itself needs recording.
-		if err := RestackBranchesWithHandler(&wtCtx, group.sortedBranches, progress, ConflictModeContinue); err != nil {
+		if err := RestackBranchesWithHandler(&wtCtx, group.sortedBranches, progress, restack.ConflictContinue); err != nil {
 			wrappedErr := fmt.Errorf("stack %s: %w", group.rootBranch, err)
 			ctx.Logger.Warn("parallel restack group failed: %v", wrappedErr)
 			return wrappedErr

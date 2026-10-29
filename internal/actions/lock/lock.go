@@ -7,28 +7,39 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/submit"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 )
 
-// lockEngine lists exactly the engine methods lock and unlock call.
-type lockEngine interface {
+// Engine lists exactly the engine methods lock and unlock call.
+type Engine interface {
 	engine.BranchLookup
 	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
 	ReadBranchRemoteStatuses(ctx context.Context, branches engine.Branches) engine.BranchRemoteStatuses
 	SetLocked(ctx context.Context, branches engine.Branches, reason engine.LockReason) (engine.BatchLockResult, error)
 }
 
+// Deps are the collaborators lock and unlock need. Adapters build them from
+// their own runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	Out    output.Output
+	// PRSync pushes the lock metadata and refreshes the affected PRs.
+	PRSync actions.PRSync
+	// Submit runs the nested submit offered before locking unpushed branches.
+	Submit submit.Deps
+}
+
 // Action locks the specified branch and all branches downstack of it
-func Action(ctx *app.Context, branchName string, handler Handler) error {
+func Action(ctx context.Context, deps Deps, branchName string, handler Handler) error {
 	if handler == nil {
 		handler = &NullHandler{}
 	}
 	defer handler.Cleanup()
 
-	var eng lockEngine = ctx.Engine
-	out := ctx.Output
+	eng := deps.Engine
+	out := deps.Out
 
 	branch := eng.GetBranch(branchName)
 	if branch.IsTrunk() {
@@ -40,7 +51,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 	}
 
 	// Build StackGraph for efficient traversals
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	// Get downstack (ancestors including current)
 	branches := graph.Range(branch, engine.StackRange{
@@ -50,7 +61,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 
 	// Check for unpushed commits
 	unpushedBranches := []string{}
-	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+	remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
 	remoteStatuses := eng.ReadBranchRemoteStatuses(remoteCtx, branches)
 	cancelRemote()
 	for _, b := range branches.WithoutTrunk() {
@@ -75,7 +86,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 				Confirm:    false,
 			}
 			submitHandler := handler.SubmitHandler()
-			if err := submit.Action(ctx.Context, submitDeps(ctx), submitOpts, submitHandler); err != nil {
+			if err := submit.Action(ctx, deps.Submit, submitOpts, submitHandler); err != nil {
 				return fmt.Errorf("failed to submit before locking: %w", err)
 			}
 		}
@@ -112,7 +123,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 	// Only During Sync"). A lock is shared state: it must reflect for other
 	// collaborators and re-trigger PR CI right away, not on this user's next sync.
 	// Do not convert this to MarkBranchesForPRBodyUpdate + PushMetadataOnly.
-	if err := actions.PushMetadataAndSyncPRs(ctx, affectedBranches); err != nil {
+	if err := deps.PRSync.PushAndSync(ctx, affectedBranches); err != nil {
 		out.Debug("Failed to push metadata changes: %v", err)
 	}
 
@@ -120,14 +131,14 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 }
 
 // Unlock unlocks the specified branch and all branches upstack of it
-func Unlock(ctx *app.Context, branchName string, handler Handler) error {
+func Unlock(ctx context.Context, deps Deps, branchName string, handler Handler) error {
 	if handler == nil {
 		handler = &NullHandler{}
 	}
 	defer handler.Cleanup()
 
-	var eng lockEngine = ctx.Engine
-	out := ctx.Output
+	eng := deps.Engine
+	out := deps.Out
 
 	branch := eng.GetBranch(branchName)
 	if !branch.IsTracked() {
@@ -135,7 +146,7 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 	}
 
 	// Build StackGraph for efficient traversals
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	// Get upstack (descendants including current)
 	branches := graph.Range(branch, engine.StackRange{
@@ -193,28 +204,9 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 	// Only During Sync"). A lock is shared state: it must reflect for other
 	// collaborators and re-trigger PR CI right away, not on this user's next sync.
 	// Do not convert this to MarkBranchesForPRBodyUpdate + PushMetadataOnly.
-	if err := actions.PushMetadataAndSyncPRs(ctx, affectedBranches); err != nil {
+	if err := deps.PRSync.PushAndSync(ctx, affectedBranches); err != nil {
 		out.Debug("Failed to push metadata changes: %v", err)
 	}
 
 	return nil
-}
-
-// submitDeps builds the nested submit's collaborators from lock's runtime
-// context.
-func submitDeps(ctx *app.Context) submit.Deps {
-	return submit.Deps{
-		Engine:      ctx.Engine,
-		Out:         ctx.Output,
-		Log:         ctx.Logger,
-		GitHub:      ctx.GitHub,
-		GitHubError: ctx.GitHubError,
-		GHRunner:    ctx.GHRunner,
-		PRSync:      actions.PRSyncFrom(ctx),
-		Restack:     actions.RestackDepsFrom(ctx),
-		Snapshots:   actions.SnapshotsFrom(ctx),
-		Prompts:     ctx.Prompts(),
-		Verify:      ctx.Verify,
-		Config:      ctx.Config,
-	}
 }

@@ -2,6 +2,7 @@
 package absorb
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -46,7 +47,7 @@ type StackNode struct {
 }
 
 // GeneratePlanJSON creates a machine-readable plan from absorb results
-func GeneratePlanJSON(
+func GeneratePlanJSON(ctx context.Context,
 	currentBranch string,
 	hunkTargets []git.HunkTarget,
 	unabsorbedHunks []Unabsorbable,
@@ -58,11 +59,11 @@ func GeneratePlanJSON(
 		Absorbed:      make([]AbsorbedHunk, 0, len(hunkTargets)),
 		Unabsorbable:  make([]UnabsorbableHunk, 0, len(unabsorbedHunks)),
 		NewFiles:      newFiles,
-		Stack:         buildStackNodes(eng, currentBranch),
+		Stack:         buildStackNodes(ctx, eng, currentBranch),
 	}
 
 	// Convert absorbed hunks. Resolve all target branches in one batched scan.
-	commitBranches := eng.FindBranchesForCommits(targetCommitSHAs(hunkTargets))
+	commitBranches := eng.FindBranchesForCommits(ctx, targetCommitSHAs(hunkTargets))
 	for _, target := range hunkTargets {
 		branchName := commitBranches[target.CommitSHA]
 		if branchName == "" {
@@ -96,13 +97,13 @@ func GeneratePlanJSON(
 }
 
 // buildStackNodes creates the stack structure from the engine
-func buildStackNodes(eng engine.Engine, currentBranch string) []StackNode {
+func buildStackNodes(ctx context.Context, eng engine.Engine, currentBranch string) []StackNode {
 	var nodes []StackNode
 
 	// Get all branches and build the stack
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	current := eng.GetBranch(currentBranch)
-	if current.GetName() == "" {
+	if current.Name() == "" {
 		return nodes
 	}
 
@@ -111,9 +112,9 @@ func buildStackNodes(eng engine.Engine, currentBranch string) []StackNode {
 
 	// Also include trunk
 	trunk := eng.Trunk()
-	if trunk.GetName() != "" {
+	if trunk.Name() != "" {
 		nodes = append(nodes, StackNode{
-			Name:    trunk.GetName(),
+			Name:    trunk.Name(),
 			IsTrunk: true,
 		})
 	}
@@ -124,16 +125,16 @@ func buildStackNodes(eng engine.Engine, currentBranch string) []StackNode {
 			continue // Already added trunk
 		}
 
-		parent := branch.GetParent()
+		parent := branch.Parent()
 		parentName := ""
 		if parent != nil {
-			parentName = parent.GetName()
+			parentName = parent.Name()
 		}
 
 		nodes = append(nodes, StackNode{
-			Name:      branch.GetName(),
+			Name:      branch.Name(),
 			Parent:    parentName,
-			IsCurrent: branch.GetName() == currentBranch,
+			IsCurrent: branch.Name() == currentBranch,
 		})
 	}
 

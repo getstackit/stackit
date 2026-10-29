@@ -45,8 +45,8 @@ func (e *engineImpl) BranchNames() *BranchSet {
 }
 
 // CurrentBranch returns the current branch (nil if not on a branch)
-func (e *engineImpl) CurrentBranch() *Branch {
-	current, err := e.git.GetCurrentBranch()
+func (e *engineImpl) CurrentBranch(ctx context.Context) *Branch {
+	current, err := e.git.GetCurrentBranch(ctx)
 	if err != nil {
 		// Not on a branch (e.g., detached HEAD)
 		current = ""
@@ -72,20 +72,20 @@ func (e *engineImpl) CurrentBranch() *Branch {
 // CurrentBranchName returns the current branch name, or "" when HEAD is not on
 // a branch (e.g. a detached-HEAD server mirror). Use this for nil-safe reads
 // where a missing current branch should be absent rather than an error.
-func (e *engineImpl) CurrentBranchName() string {
-	if cb := e.CurrentBranch(); cb != nil {
-		return cb.GetName()
+func (e *engineImpl) CurrentBranchName(ctx context.Context) string {
+	if cb := e.CurrentBranch(ctx); cb != nil {
+		return cb.Name()
 	}
 	return ""
 }
 
 // ValidateOnBranch ensures the user is on a branch
-func (e *engineImpl) ValidateOnBranch() (string, error) {
-	currentBranch := e.CurrentBranch()
+func (e *engineImpl) ValidateOnBranch(ctx context.Context) (string, error) {
+	currentBranch := e.CurrentBranch(ctx)
 	if currentBranch == nil {
 		return "", errors.ErrNotOnBranch
 	}
-	return currentBranch.GetName(), nil
+	return currentBranch.Name(), nil
 }
 
 // Trunk returns the trunk branch
@@ -102,11 +102,11 @@ func (e *engineImpl) GetBranch(branchName string) Branch {
 
 // GetParent returns the parent branch (nil if no parent)
 func (e *engineImpl) GetParent(branch Branch) *Branch {
-	e.ensureBranchSharedLoaded(branch.GetName())
+	e.ensureBranchSharedLoaded(branch.Name())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	if state := e.readState(branch.GetName()); state != nil {
+	if state := e.readState(branch.Name()); state != nil {
 		b := NewBranch(state.Parent, e)
 		return &b
 	}
@@ -121,11 +121,11 @@ func (e *engineImpl) GetParent(branch Branch) *Branch {
 func (e *engineImpl) FindNearestNonExcludedAncestor(startParent string, isExcluded func(name string) bool) string {
 	current := startParent
 	for isExcluded(current) {
-		parent := e.GetBranch(current).GetParent()
+		parent := e.GetBranch(current).Parent()
 		if parent == nil {
-			return e.Trunk().GetName()
+			return e.Trunk().Name()
 		}
-		current = parent.GetName()
+		current = parent.Name()
 	}
 	return current
 }
@@ -201,7 +201,7 @@ func (e *engineImpl) FindMostRecentTrackedAncestors(ctx context.Context, branchN
 // resolves every branch's commits in one batched, cache-backed pass
 // (BatchCommits) rather than scanning branches one at a time. Commits not
 // owned by any branch are simply absent from the returned map.
-func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) CommitBranchMap {
+func (e *engineImpl) FindBranchesForCommits(ctx context.Context, commitSHAs []string) CommitBranchMap {
 	result := make(CommitBranchMap, len(commitSHAs))
 	if len(commitSHAs) == 0 {
 		return result
@@ -217,7 +217,7 @@ func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) CommitBranchMap
 	copy(branches, e.state.branches)
 	e.mu.RUnlock()
 
-	commitsByBranch := e.ReadBranchCommitNodes(context.Background(), BranchesFromNames(e, branches))
+	commitsByBranch := e.ReadBranchCommitNodes(ctx, BranchesFromNames(e, branches))
 	for _, branchName := range branches {
 		nodes, _ := commitsByBranch.Get(branchName)
 		for _, node := range nodes {
@@ -237,34 +237,34 @@ func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) CommitBranchMap
 // RefDecorations returns local branch and tag refs grouped by the commit SHA
 // they point at, for git-log-style annotations. Annotated tags are dereferenced
 // to the commit they wrap. Thin passthrough to the git layer.
-func (e *engineImpl) RefDecorations() (map[string][]git.RefDecoration, error) {
-	return e.git.RefDecorations()
+func (e *engineImpl) RefDecorations(ctx context.Context) (map[string][]git.RefDecoration, error) {
+	return e.git.RefDecorations(ctx)
 }
 
 // SortBranchesTopologically sorts branches so parents come before children.
 // This ensures correct restack order (bottom of stack first).
-func (e *engineImpl) SortBranchesTopologically(branches Branches) Branches {
+func (e *engineImpl) SortBranchesTopologically(ctx context.Context, branches Branches) Branches {
 	if len(branches) == 0 {
 		return branches
 	}
 
 	// Build the graph once and pre-compute each branch's depth to avoid
 	// repeated lookups inside the sort comparator (O(n²) → O(n log n)).
-	graph := e.Graph(SortStrategyAlphabetical)
+	graph := e.Graph(ctx, SortStrategyAlphabetical)
 	depth := make(map[string]int, len(branches))
 	for _, b := range branches {
-		if node := graph.GetNode(b.GetName()); node != nil {
-			depth[b.GetName()] = node.Depth
+		if node := graph.GetNode(b.Name()); node != nil {
+			depth[b.Name()] = node.Depth
 		}
 	}
 
 	result := make([]Branch, len(branches))
 	copy(result, branches)
 	slices.SortFunc(result, func(a, b Branch) int {
-		if c := cmp.Compare(depth[a.GetName()], depth[b.GetName()]); c != 0 {
+		if c := cmp.Compare(depth[a.Name()], depth[b.Name()]); c != 0 {
 			return c
 		}
-		return cmp.Compare(a.GetName(), b.GetName())
+		return cmp.Compare(a.Name(), b.Name())
 	})
 
 	return result
@@ -300,7 +300,7 @@ func (e *engineImpl) BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, in
 			return true
 		}
 
-		visit(startBranch.GetName(), 0)
+		visit(startBranch.Name(), 0)
 	}
 }
 
@@ -310,7 +310,7 @@ func (e *engineImpl) BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, in
 //
 // Returns the ParentBranchRevision from metadata if available and non-empty,
 // otherwise falls back to the parent's current revision.
-func (e *engineImpl) GetDivergencePoint(branchName string) (string, error) {
+func (e *engineImpl) GetDivergencePoint(ctx context.Context, branchName string) (string, error) {
 	// First, try to get from metadata
 	meta, err := e.readMetadata(branchName)
 	if rev := meta.GetParentBranchRevision(); err == nil && rev != nil && *rev != "" {
@@ -335,5 +335,5 @@ func (e *engineImpl) GetDivergencePoint(branchName string) (string, error) {
 	}
 
 	// Fall back to parent's current revision
-	return e.git.ReadRevisions(context.Background(), parentName).One()
+	return e.git.ReadRevisions(ctx, parentName).One()
 }

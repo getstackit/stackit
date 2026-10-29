@@ -1,9 +1,12 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/getstackit/stackit/internal/term"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -132,33 +135,33 @@ var defaultMoveKeys = moveKeyMap{
 }
 
 // NewMoveModel creates a new MoveModel for interactive branch selection
-func NewMoveModel(eng engine.Engine, config MoveModelConfig) *MoveModel {
+func NewMoveModel(ctx context.Context, eng engine.Engine, config MoveModelConfig) *MoveModel {
 	// Build non-selectable set from descendants
 	nonSelectable := make(map[string]bool)
 	for _, d := range config.Descendants {
-		nonSelectable[d.GetName()] = true
+		nonSelectable[d.Name()] = true
 	}
 
 	// Determine old parent name
-	oldParentName := eng.Trunk().GetName()
+	oldParentName := eng.Trunk().Name()
 	if config.OldParent != nil {
-		oldParentName = config.OldParent.GetName()
+		oldParentName = config.OldParent.Name()
 	}
 
 	// Build the branch list using the tree renderer for proper formatting
-	trunk := eng.Trunk().GetName()
+	trunk := eng.Trunk().Name()
 
 	// Create tree renderer
-	renderer := NewStackTreeRenderer(eng)
+	renderer := NewStackTreeRenderer(ctx, eng)
 
 	// Add custom annotation for source branch
 	annotations := make(map[string]tree.BranchAnnotation)
 	for _, b := range eng.AllBranches() {
 		ann := tree.BranchAnnotation{}
-		if b.GetName() == config.SourceBranch {
+		if b.Name() == config.SourceBranch {
 			ann.CustomLabel = " ← moving this"
 		}
-		annotations[b.GetName()] = ann
+		annotations[b.Name()] = ann
 	}
 	renderer.SetAnnotations(annotations)
 
@@ -563,12 +566,12 @@ func (m *MoveModel) Result() MoveResult {
 }
 
 // PromptMoveSelect runs the interactive move selection and returns the selection result.
-func PromptMoveSelect(eng engine.Engine, config MoveModelConfig) (MoveResult, error) {
-	if err := CheckInteractiveAllowed(); err != nil {
+func PromptMoveSelect(ctx context.Context, eng engine.Engine, config MoveModelConfig) (MoveResult, error) {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return MoveResult{}, err
 	}
 
-	model := NewMoveModel(eng, config)
+	model := NewMoveModel(ctx, eng, config)
 	// No tea.WithAltScreen() - run inline
 	p := tea.NewProgram(model)
 	finalModel, err := p.Run()

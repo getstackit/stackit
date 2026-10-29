@@ -3,13 +3,14 @@ package branch
 import (
 	"errors"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/tui"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // renameHandler prompts for a new branch name via the TUI when running
@@ -18,7 +19,7 @@ import (
 type renameHandler struct{}
 
 func (renameHandler) PromptNewName(currentName string) (string, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return "", errors.New("branch name is required in non-interactive mode")
 	}
 	return tui.PromptTextInput("Enter new branch name:", currentName)

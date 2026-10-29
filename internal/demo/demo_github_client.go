@@ -7,10 +7,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // checkStatusCompleted is the status value for completed check runs in demo mode.
@@ -21,13 +21,6 @@ const (
 
 // prCounter is used to generate unique PR numbers, starting after #100
 var prCounter atomic.Int32
-
-func init() {
-	// Register the demo GitHub client factory with runtime package
-	app.DemoGitHubClientFactory = func() github.Client {
-		return NewDemoGitHubClient()
-	}
-}
 
 // GitHubClient implements github.Client for demo mode
 type GitHubClient struct {
@@ -174,7 +167,7 @@ func (c *GitHubClient) BatchGetPRChecksStatus(ctx context.Context, branchNames [
 	results := make(github.ChecksByBranch)
 	var mu sync.Mutex
 
-	utils.RunWithWorkers(branchNames, github.MaxGitHubConcurrency, func(name string) {
+	workpool.RunN(branchNames, github.MaxGitHubConcurrency, func(name string) {
 		status := c.getPRChecksStatus(ctx, name)
 		mu.Lock()
 		results[name] = status

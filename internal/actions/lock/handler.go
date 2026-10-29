@@ -16,7 +16,7 @@ type Handler interface {
 	PromptUnlockDownstack(lockedBranchNames []string) (bool, error)
 
 	// GetSubmitHandler returns a handler for the nested submit operation
-	GetSubmitHandler() submit.Handler
+	SubmitHandler() submit.Handler
 
 	// Cleanup restores terminal state (may be no-op)
 	Cleanup()
@@ -37,5 +37,5 @@ func (h *NullHandler) PromptSubmitBeforeLock([]string) (bool, error) { return fa
 // PromptUnlockDownstack implements Handler. Returns false (skip) for null handler.
 func (h *NullHandler) PromptUnlockDownstack([]string) (bool, error) { return false, nil }
 
-// GetSubmitHandler implements Handler. Returns nil for null handler.
-func (h *NullHandler) GetSubmitHandler() submit.Handler { return nil }
+// SubmitHandler implements Handler. Returns nil for null handler.
+func (h *NullHandler) SubmitHandler() submit.Handler { return nil }

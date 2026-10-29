@@ -53,7 +53,7 @@ func resolveToken(ctx context.Context, runner GitCommandRunner, host string, get
 		args = append(args, "--hostname", host)
 	}
 
-	output, err := runner.RunGHCommandWithContext(ctx, args...)
+	output, err := runner.RunGH(ctx, args...)
 	if err != nil {
 		return "", fmt.Errorf("failed to get GitHub token: %w", err)
 	}

@@ -68,7 +68,7 @@ func (r *runner) UpdateBranchFromRemote(ctx context.Context, remote, branchName 
 	isRemoteAhead, err := r.IsAncestor(ctx, oldRev, remoteRev)
 	if err == nil && isRemoteAhead {
 		// Save current branch/detached HEAD immediately before mutating refs.
-		currentBranch, err := r.GetCurrentBranch()
+		currentBranch, err := r.GetCurrentBranch(ctx)
 		if err != nil {
 			currentBranch = ""
 		}

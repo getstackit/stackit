@@ -90,7 +90,7 @@ func TestGetSkipsBranchHeldByAnotherWorktree(t *testing.T) {
 
 			// The branch get was actually asked for still lands, and HEAD ends
 			// on it rather than wherever the loop happened to stop.
-			require.Equal(t, "b", sh.Engine.CurrentBranchName())
+			require.Equal(t, "b", sh.Engine.CurrentBranchName(t.Context()))
 		})
 	}
 }

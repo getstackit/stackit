@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/getstackit/stackit/internal/actions/stackview"
@@ -35,17 +36,17 @@ func (h *BranchesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	branchName := r.PathValue("name")
 	if branchName == "" {
-		h.listBranches(w, r, entry)
+		h.listBranches(r.Context(), w, r, entry)
 		return
 	}
 	if !validateBranchName(w, branchName) {
 		return
 	}
-	h.getBranch(w, r, entry, branchName)
+	h.getBranch(r.Context(), w, r, entry, branchName)
 }
 
-func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, entry *registry.RepoEntry) {
-	graph := entry.Engine.Graph(engine.SortStrategyAlphabetical)
+func (h *BranchesHandler) listBranches(ctx context.Context, w http.ResponseWriter, r *http.Request, entry *registry.RepoEntry) {
+	graph := entry.Engine.Graph(ctx, engine.SortStrategyAlphabetical)
 	branches := entry.Engine.AllBranches().Filter(engine.Branch.IsTracked)
 
 	var checksMap github.ChecksByBranch
@@ -58,24 +59,24 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, e
 
 	responses := make([]httpcontract.BranchResponse, 0, len(branches))
 	for _, branch := range branches {
-		node := graph.GetNode(branch.GetName())
+		node := graph.GetNode(branch.Name())
 		if node == nil {
 			continue
 		}
-		responses = append(responses, httpcontract.MapBranch(entry.Engine, httpcontract.NewBranchInput(node, checksMap.Get(branch.GetName()), data)))
+		responses = append(responses, httpcontract.MapBranch(ctx, entry.Engine, httpcontract.NewBranchInput(node, checksMap.Get(branch.Name()), data)))
 	}
 
 	writeJSON(w, responses)
 }
 
-func (h *BranchesHandler) getBranch(w http.ResponseWriter, r *http.Request, entry *registry.RepoEntry, branchName string) {
+func (h *BranchesHandler) getBranch(ctx context.Context, w http.ResponseWriter, r *http.Request, entry *registry.RepoEntry, branchName string) {
 	branch := entry.Engine.GetBranch(branchName)
 	if !branch.IsTracked() {
 		http.Error(w, "branch not found or not tracked", http.StatusNotFound)
 		return
 	}
 
-	graph := entry.Engine.Graph(engine.SortStrategyAlphabetical)
+	graph := entry.Engine.Graph(ctx, engine.SortStrategyAlphabetical)
 	node := graph.GetNode(branchName)
 	if node == nil {
 		http.Error(w, "branch not in stack graph", http.StatusNotFound)
@@ -89,5 +90,5 @@ func (h *BranchesHandler) getBranch(w http.ResponseWriter, r *http.Request, entr
 	}
 
 	data := stackview.FetchBranchData(r.Context(), entry.Engine, engine.BranchesOf(branch))
-	writeJSON(w, httpcontract.MapBranch(entry.Engine, httpcontract.NewBranchInput(node, checks, data)))
+	writeJSON(w, httpcontract.MapBranch(ctx, entry.Engine, httpcontract.NewBranchInput(node, checks, data)))
 }

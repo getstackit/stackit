@@ -81,7 +81,7 @@ func TestRestackOnSyncedTrunkMatrix(t *testing.T) {
 				CommitChange("child-only", "my work").
 				TrackBranch("child", "parent")
 
-			mainName := sh.Engine.Trunk().GetName()
+			mainName := sh.Engine.Trunk().Name()
 			parentSHAs := branchCommitSHAs(t, sh, "parent")
 
 			// Land the parent's changes on trunk via the chosen merge method.
@@ -117,7 +117,7 @@ func TestRestackOnSyncedTrunkMatrix(t *testing.T) {
 			require.NoError(t, actions.RestackAction(sh.Context, plan, &actions.NullRestackHandler{}))
 			sh.Rebuild()
 
-			require.Equal(t, mainName, sh.Engine.GetBranch("child").GetParent().GetName(),
+			require.Equal(t, mainName, sh.Engine.GetBranch("child").Parent().Name(),
 				"child should reparent to trunk past the landed parent")
 			count, err := sh.Scene.Repo.GetCommitCount("main", "child")
 			require.NoError(t, err)

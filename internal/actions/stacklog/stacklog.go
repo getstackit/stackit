@@ -7,6 +7,8 @@
 package stacklog
 
 import (
+	"context"
+
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -14,12 +16,12 @@ import (
 // Source is the narrow engine dependency this action needs. engine.Engine
 // satisfies it.
 type Source interface {
-	CurrentBranch() *engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
 	Trunk() engine.Branch
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
-	BatchCommits(branches engine.Branches) map[string]git.Commits
-	RefDecorations() (map[string][]git.RefDecoration, error)
-	GetRevision(branch engine.Branch) (string, error)
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+	BatchCommits(ctx context.Context, branches engine.Branches) map[string]git.Commits
+	RefDecorations(ctx context.Context) (map[string][]git.RefDecoration, error)
+	GetRevision(ctx context.Context, branch engine.Branch) (string, error)
 }
 
 // Commit is one commit on a stack branch, identified by its full SHA so the
@@ -57,32 +59,32 @@ type Result struct {
 // Gather collects the current stack's ancestor-path commits plus the decoration
 // map and trunk-tip marker. It never walks above HEAD (children are out of
 // scope) and excludes trunk from the band.
-func Gather(src Source) (Result, error) {
-	decorations, err := src.RefDecorations()
+func Gather(ctx context.Context, src Source) (Result, error) {
+	decorations, err := src.RefDecorations(ctx)
 	if err != nil {
 		return Result{}, err
 	}
 
 	trunk := src.Trunk()
-	trunkTip, err := src.GetRevision(trunk)
+	trunkTip, err := src.GetRevision(ctx, trunk)
 	if err != nil {
 		return Result{}, err
 	}
 
 	res := Result{
-		TrunkName:   trunk.GetName(),
+		TrunkName:   trunk.Name(),
 		TrunkTipSHA: trunkTip,
 		Decorations: decorations,
 	}
 
-	current := src.CurrentBranch()
+	current := src.CurrentBranch(ctx)
 	if current == nil || current.IsTrunk() {
 		return res, nil
 	}
 
 	// Downstack returns the ancestor path trunk-ward→current (trunk excluded).
 	// Reverse it so the branch we're standing on renders at the top.
-	branches := src.Graph(engine.SortStrategyAlphabetical).Downstack(*current, engine.IncludeCurrentBranch).Reverse()
+	branches := src.Graph(ctx, engine.SortStrategyAlphabetical).Downstack(*current, engine.IncludeCurrentBranch).Reverse()
 	if len(branches) == 0 {
 		// Current branch is untracked / not in the graph: no stack band to show.
 		return res, nil
@@ -90,11 +92,11 @@ func Gather(src Source) (Result, error) {
 
 	// One combined walk per branch yields both SHA and subject on each record,
 	// so the two never desync (an empty subject can't shift the pairing).
-	commitsByBranch := src.BatchCommits(branches)
+	commitsByBranch := src.BatchCommits(ctx, branches)
 
-	currentName := current.GetName()
+	currentName := current.Name()
 	for _, b := range branches {
-		name := b.GetName()
+		name := b.Name()
 		res.Branches = append(res.Branches, Branch{
 			Name:      name,
 			IsCurrent: name == currentName,

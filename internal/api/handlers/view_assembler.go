@@ -24,7 +24,7 @@ type ViewEngine interface {
 	engine.StackView
 	stackview.BranchDataReader
 	httpcontract.MapperReader
-	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
+	GetRecentTrunkCommits(ctx context.Context, count int) ([]git.RecentCommit, error)
 }
 
 // ViewAssembler builds the combined /view payload.
@@ -45,9 +45,9 @@ func NewViewAssembler(eng ViewEngine, gh ViewGitHub, remote string, visibility V
 }
 
 func (a *ViewAssembler) Build(ctx context.Context) (httpcontract.ViewResponse, error) {
-	stacks := stackview.DiscoverStacksWithSort(a.eng, engine.SortStrategySmart)
+	stacks := stackview.DiscoverStacksWithSort(ctx, a.eng, engine.SortStrategySmart)
 
-	graph := a.eng.Graph(engine.SortStrategySmart)
+	graph := a.eng.Graph(ctx, engine.SortStrategySmart)
 	checksMap := a.fetchChecks(ctx, stacks)
 	details := a.mapStackDetails(ctx, graph, stacks, checksMap)
 
@@ -78,8 +78,8 @@ func (a *ViewAssembler) buildRepo(ctx context.Context) httpcontract.RepoResponse
 	return httpcontract.RepoResponse{
 		Owner:         owner,
 		Repo:          repo,
-		Trunk:         a.eng.Trunk().GetName(),
-		CurrentBranch: a.eng.CurrentBranchName(),
+		Trunk:         a.eng.Trunk().Name(),
+		CurrentBranch: a.eng.CurrentBranchName(ctx),
 		Remote:        a.remote,
 		CurrentUser:   currentUser,
 	}
@@ -112,7 +112,7 @@ func (a *ViewAssembler) mapStackDetails(
 
 	details := make([]httpcontract.StackDetail, 0, len(stacks))
 	for _, stack := range stacks {
-		detail := httpcontract.MapStackDetail(a.eng, graph, stackInput(stack), checksMap, data)
+		detail := httpcontract.MapStackDetail(ctx, a.eng, graph, stackInput(stack), checksMap, data)
 		details = append(details, detail)
 	}
 	return details
@@ -129,7 +129,7 @@ func stackInput(stack stackview.StackInfo) httpcontract.StackInput {
 }
 
 func (a *ViewAssembler) fetchRecentlyMerged(ctx context.Context) []httpcontract.TrunkCommitResponse {
-	recentCommits, err := a.eng.GetRecentTrunkCommits(10)
+	recentCommits, err := a.eng.GetRecentTrunkCommits(ctx, 10)
 	if err != nil || len(recentCommits) == 0 {
 		return nil
 	}

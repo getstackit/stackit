@@ -37,7 +37,7 @@ func TestGetCurrentBranch(t *testing.T) {
 		dir := newRepo(t)
 		run(t, dir, "checkout", "-b", "feature/slash-name")
 
-		branch, err := NewRunnerWithPath(dir, nil).GetCurrentBranch()
+		branch, err := NewRunnerWithPath(dir, nil).GetCurrentBranch(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, "feature/slash-name", branch)
 	})
@@ -47,7 +47,7 @@ func TestGetCurrentBranch(t *testing.T) {
 		dir := newRepo(t)
 		run(t, dir, "checkout", "--detach")
 
-		_, err := NewRunnerWithPath(dir, nil).GetCurrentBranch()
+		_, err := NewRunnerWithPath(dir, nil).GetCurrentBranch(t.Context())
 		require.ErrorContains(t, err, "HEAD is not on a branch")
 	})
 
@@ -59,7 +59,7 @@ func TestGetCurrentBranch(t *testing.T) {
 		wt := filepath.Join(t.TempDir(), "wt")
 		run(t, dir, "worktree", "add", "-b", "wt-branch", wt)
 
-		branch, err := NewRunnerWithPath(wt, nil).GetCurrentBranch()
+		branch, err := NewRunnerWithPath(wt, nil).GetCurrentBranch(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, "wt-branch", branch)
 	})

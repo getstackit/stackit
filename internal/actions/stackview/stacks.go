@@ -1,6 +1,7 @@
 package stackview
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/engine"
@@ -61,14 +62,14 @@ func (stacks Stacks) AllBranchNames() []string {
 // siblings ordered alphabetically. Each stack is represented by its root
 // branch (direct child of trunk) and includes all branches in the stack in
 // topological order.
-func DiscoverStacks(eng engine.StackView) Stacks {
-	return DiscoverStacksWithSort(eng, engine.SortStrategyAlphabetical)
+func DiscoverStacks(ctx context.Context, eng engine.StackView) Stacks {
+	return DiscoverStacksWithSort(ctx, eng, engine.SortStrategyAlphabetical)
 }
 
 // DiscoverStacksWithSort is like DiscoverStacks but allows specifying the sort
 // strategy. Use SortStrategySmart to match the ordering of `stackit tree`.
-func DiscoverStacksWithSort(eng engine.StackView, strategy engine.SortStrategy) Stacks {
-	independentStacks := engine.DiscoverIndependentStacksWithSort(eng, strategy)
+func DiscoverStacksWithSort(ctx context.Context, eng engine.StackView, strategy engine.SortStrategy) Stacks {
+	independentStacks := engine.DiscoverIndependentStacksWithSort(ctx, eng, strategy)
 
 	stacks := make(Stacks, 0, len(independentStacks))
 	for _, independentStack := range independentStacks {
@@ -95,7 +96,7 @@ func DiscoverStacksWithSort(eng engine.StackView, strategy engine.SortStrategy) 
 func countPRs(branches engine.Branches) int {
 	count := 0
 	for _, branch := range branches {
-		prInfo, err := branch.GetPrInfo()
+		prInfo, err := branch.PrInfo()
 		if err == nil && prInfo != nil && prInfo.Number() != nil {
 			count++
 		}

@@ -1,9 +1,9 @@
 package branch
 
 import (
+	"github.com/getstackit/stackit/internal/actions/freeze"
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/errors"
@@ -34,7 +34,7 @@ This operation can be undone with 'st unfreeze'.`,
 					return err
 				}
 
-				return actions.FreezeAction(ctx, branchName)
+				return freeze.Freeze(ctx.Context, freeze.Deps{Engine: ctx.Engine, Out: ctx.Output}, branchName)
 			})
 		},
 	}

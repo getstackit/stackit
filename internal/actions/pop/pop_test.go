@@ -1,14 +1,13 @@
-package actions_test
+package pop_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/pop"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -26,7 +25,7 @@ func TestPopAction(t *testing.T) {
 		s.Checkout("branch1")
 
 		// Pop the branch
-		err := actions.PopAction(s.Context, actions.PopOptions{})
+		err := pop.Action(t.Context(), deps(s))
 		require.NoError(t, err)
 
 		// Verify we're now on main
@@ -35,7 +34,7 @@ func TestPopAction(t *testing.T) {
 		require.Equal(t, "main", currentBranch)
 
 		// Verify branch1 is deleted
-		branches, err := s.Git.GetAllBranchNames(context.Background())
+		branches, err := s.Git.GetAllBranchNames(t.Context())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch1")
 
@@ -57,17 +56,17 @@ func TestPopAction(t *testing.T) {
 		s.Checkout("branch1")
 
 		// Pop branch1
-		err := actions.PopAction(s.Context, actions.PopOptions{})
+		err := pop.Action(t.Context(), deps(s))
 		require.NoError(t, err)
 
 		// Verify branch2's parent is now main
 		branch := s.Engine.GetBranch("branch2")
-		parent := branch.GetParent()
+		parent := branch.Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "main", parent.GetName())
+		require.Equal(t, "main", parent.Name())
 
 		// Verify branch1 is deleted
-		branches, err := s.Git.GetAllBranchNames(context.Background())
+		branches, err := s.Git.GetAllBranchNames(t.Context())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch1")
 	})
@@ -77,7 +76,7 @@ func TestPopAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Try to pop trunk (main)
-		err := actions.PopAction(s.Context, actions.PopOptions{})
+		err := pop.Action(t.Context(), deps(s))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "cannot pop trunk branch")
 	})
@@ -88,7 +87,7 @@ func TestPopAction(t *testing.T) {
 			CreateBranch("untracked")
 
 		// Try to pop untracked branch
-		err := actions.PopAction(s.Context, actions.PopOptions{})
+		err := pop.Action(t.Context(), deps(s))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "is not tracked by stackit")
 	})
@@ -109,7 +108,7 @@ func TestPopAction(t *testing.T) {
 		require.True(t, s.Scene.Repo.RebaseInProgress(), "Rebase should be in progress")
 
 		// Try to pop during rebase
-		err = actions.PopAction(s.Context, actions.PopOptions{})
+		err = pop.Action(t.Context(), deps(s))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "rebase is already in progress")
 	})
@@ -123,8 +122,12 @@ func TestPopAction(t *testing.T) {
 			WithUncommittedChange("dirty")
 
 		// Try to pop with dirty tree
-		err := actions.PopAction(s.Context, actions.PopOptions{})
+		err := pop.Action(t.Context(), deps(s))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "uncommitted changes")
 	})
+}
+
+func deps(s *scenario.Scenario) pop.Deps {
+	return pop.Deps{Engine: s.Context.Engine, Out: s.Context.Output}
 }

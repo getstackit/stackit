@@ -1,7 +1,6 @@
 package merge
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -255,15 +254,15 @@ func TestMergeNextUsesCreateMergePlan(t *testing.T) {
 		branchB := s.Engine.GetBranch("branch-b")
 		branchC := s.Engine.GetBranch("branch-c")
 
-		err := s.Engine.UpsertPrInfo(context.Background(), branchA, testhelpers.NewTestPrInfo(101).
+		err := s.Engine.UpsertPrInfo(t.Context(), branchA, testhelpers.NewTestPrInfo(101).
 			WithURL("https://github.com/owner/repo/pull/101"))
 		require.NoError(t, err)
 
-		err = s.Engine.UpsertPrInfo(context.Background(), branchB, testhelpers.NewTestPrInfo(102).
+		err = s.Engine.UpsertPrInfo(t.Context(), branchB, testhelpers.NewTestPrInfo(102).
 			WithURL("https://github.com/owner/repo/pull/102"))
 		require.NoError(t, err)
 
-		err = s.Engine.UpsertPrInfo(context.Background(), branchC, testhelpers.NewTestPrInfo(103).
+		err = s.Engine.UpsertPrInfo(t.Context(), branchC, testhelpers.NewTestPrInfo(103).
 			WithURL("https://github.com/owner/repo/pull/103"))
 		require.NoError(t, err)
 
@@ -329,7 +328,7 @@ func TestPromptForShipDescription(t *testing.T) {
 
 	t.Run("skips silently when a description is already set", func(t *testing.T) {
 		s := newStack(t)
-		require.NoError(t, s.Engine.SetStackDescription(context.Background(),
+		require.NoError(t, s.Engine.SetStackDescription(t.Context(),
 			s.Engine.GetBranch("branch-a"),
 			&git.StackDescription{Title: "Existing title"}))
 
@@ -354,7 +353,7 @@ func TestPromptForShipDescription(t *testing.T) {
 		require.Contains(t, s.Output.String(), "stackit describe")
 
 		// No description should have been set.
-		require.Nil(t, s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a")))
+		require.Nil(t, s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("branch-a")))
 	})
 
 	t.Run("warns and continues when --yes skips the prompt", func(t *testing.T) {
@@ -363,7 +362,7 @@ func TestPromptForShipDescription(t *testing.T) {
 
 		promptForShipDescription(s.Context, branches, true)
 		require.Contains(t, s.Output.String(), "stackit describe")
-		require.Nil(t, s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a")))
+		require.Nil(t, s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("branch-a")))
 	})
 
 	t.Run("does not set a description when the user declines", func(t *testing.T) {
@@ -372,7 +371,7 @@ func TestPromptForShipDescription(t *testing.T) {
 		stubConfirm(t, false)
 
 		promptForShipDescription(s.Context, branches, false)
-		require.Nil(t, s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a")))
+		require.Nil(t, s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("branch-a")))
 	})
 
 	t.Run("sets the description from the entered title", func(t *testing.T) {
@@ -383,7 +382,7 @@ func TestPromptForShipDescription(t *testing.T) {
 
 		promptForShipDescription(s.Context, branches, false)
 
-		desc := s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a"))
+		desc := s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("branch-a"))
 		require.NotNil(t, desc)
 		require.Equal(t, "My stack title", desc.Title)
 		require.Contains(t, s.Output.String(), "My stack title")
@@ -396,7 +395,7 @@ func TestPromptForShipDescription(t *testing.T) {
 		stubTextInput(t, "   ")
 
 		promptForShipDescription(s.Context, branches, false)
-		require.Nil(t, s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a")))
+		require.Nil(t, s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("branch-a")))
 	})
 }
 

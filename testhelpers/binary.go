@@ -7,63 +7,28 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"testing"
 )
 
-var (
-	sharedBinaryPath string
-	binaryOnce       sync.Once
-	binaryErr        error
-	binaryMu         sync.RWMutex
-)
+// sharedBinary builds the stackit binary at most once per test process, on
+// first use, so packages that never spawn it never pay for the build.
+var sharedBinary = sync.OnceValues(buildBinary)
 
-// SetSharedBinaryPath sets the shared binary path for tests.
-// This is called by TestMain in cli_test package.
-func SetSharedBinaryPath(path string) {
-	binaryMu.Lock()
-	defer binaryMu.Unlock()
-	sharedBinaryPath = path
-}
-
-// GetSharedBinaryPath returns the shared binary path, building it if necessary.
-// This function is safe to call from any test package and will build the binary
-// lazily on first access if it hasn't been set via SetSharedBinaryPath.
+// GetSharedBinaryPath returns the shared binary path, building it on first
+// call. It returns "" when the build failed; see GetBinaryError.
 func GetSharedBinaryPath() string {
-	binaryOnce.Do(func() {
-		binaryMu.RLock()
-		path := sharedBinaryPath
-		binaryMu.RUnlock()
-
-		if path == "" {
-			// Build the binary lazily
-			builtPath, err := buildBinary()
-			if err != nil {
-				binaryMu.Lock()
-				binaryErr = err
-				binaryMu.Unlock()
-				return
-			}
-			binaryMu.Lock()
-			sharedBinaryPath = builtPath
-			binaryMu.Unlock()
-		}
-	})
-
-	binaryMu.RLock()
-	defer binaryMu.RUnlock()
-	return sharedBinaryPath
+	path, _ := sharedBinary()
+	return path
 }
 
 // GetBinaryError returns any error that occurred during binary building.
 func GetBinaryError() error {
-	binaryMu.RLock()
-	defer binaryMu.RUnlock()
-	return binaryErr
+	_, err := sharedBinary()
+	return err
 }
 
 // buildBinary builds the stackit binary and returns its path.
 func buildBinary() (string, error) {
-	path, _, err := buildBinaryOnce()
+	path, _, err := buildBinaryWithCleanup()
 	return path, err
 }
 
@@ -86,33 +51,8 @@ func findModuleRoot(startDir string) string {
 	return ""
 }
 
-// TestMain provides a shared TestMain function for packages that need
-// the stackit binary to be built once before running tests.
-// Packages can use this by calling testhelpers.TestMain(m) in their own TestMain.
-func TestMain(m *testing.M, cleanup func()) {
-	// Build the binary once before running any tests
-	binaryPath, binaryCleanup, err := buildBinaryOnce()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to build stackit binary: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Set the shared binary path for test packages
-	SetSharedBinaryPath(binaryPath)
-
-	// Run all tests
-	code := m.Run()
-
-	// Cleanup
-	binaryCleanup()
-	if cleanup != nil {
-		cleanup()
-	}
-	os.Exit(code)
-}
-
-// buildBinaryOnce builds the stackit binary once and returns its path and cleanup function.
-func buildBinaryOnce() (string, func(), error) {
+// buildBinaryWithCleanup builds the stackit binary and returns its path and cleanup function.
+func buildBinaryWithCleanup() (string, func(), error) {
 	if path := os.Getenv("STACKIT_TEST_BINARY"); path != "" {
 		if !filepath.IsAbs(path) {
 			return "", nil, fmt.Errorf("STACKIT_TEST_BINARY must be an absolute path: %s", path)

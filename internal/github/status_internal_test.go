@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,11 +42,11 @@ func TestParseCheckRollup_DeduplicatesByName(t *testing.T) {
 	status := parseCheckRollup(rollup, "APPROVED", "author")
 
 	require.NotNil(t, status)
-	assert.True(t, status.Passing, "should use the newer successful run, not the older failed one")
-	assert.False(t, status.Pending)
-	assert.Len(t, status.Checks, 1, "should deduplicate to single check")
-	assert.Equal(t, "Test", status.Checks[0].Name)
-	assert.Equal(t, CheckConclusionSuccess, status.Checks[0].Conclusion)
+	require.True(t, status.Passing, "should use the newer successful run, not the older failed one")
+	require.False(t, status.Pending)
+	require.Len(t, status.Checks, 1, "should deduplicate to single check")
+	require.Equal(t, "Test", status.Checks[0].Name)
+	require.Equal(t, CheckConclusionSuccess, status.Checks[0].Conclusion)
 }
 
 func TestParseCheckRollup_KeepsLatestByFinishedAt(t *testing.T) {
@@ -82,11 +81,11 @@ func TestParseCheckRollup_KeepsLatestByFinishedAt(t *testing.T) {
 	status := parseCheckRollup(rollup, "APPROVED", "author")
 
 	require.NotNil(t, status)
-	assert.True(t, status.Passing, "should use the check that finished last")
+	require.True(t, status.Passing, "should use the check that finished last")
 	require.Len(t, status.Checks, 1)
-	assert.Equal(t, CheckConclusionSuccess, status.Checks[0].Conclusion)
+	require.Equal(t, CheckConclusionSuccess, status.Checks[0].Conclusion)
 	expectedTime, _ := time.Parse(time.RFC3339, "2024-01-01T10:30:00Z")
-	assert.Equal(t, expectedTime, status.Checks[0].FinishedAt)
+	require.Equal(t, expectedTime, status.Checks[0].FinishedAt)
 }
 
 func TestParseCheckRollup_FiltersStackitChecks(t *testing.T) {
@@ -125,9 +124,9 @@ func TestParseCheckRollup_FiltersStackitChecks(t *testing.T) {
 	status := parseCheckRollup(rollup, "APPROVED", "author")
 
 	require.NotNil(t, status)
-	assert.True(t, status.Passing, "should ignore stackit checks and report passing")
-	assert.Len(t, status.Checks, 1, "should only include the CI check")
-	assert.Equal(t, "CI", status.Checks[0].Name)
+	require.True(t, status.Passing, "should ignore stackit checks and report passing")
+	require.Len(t, status.Checks, 1, "should only include the CI check")
+	require.Equal(t, "CI", status.Checks[0].Name)
 }
 
 func TestParseBranchStatus_ExtractsPRState(t *testing.T) {
@@ -159,7 +158,7 @@ func TestParseBranchStatus_ExtractsPRState(t *testing.T) {
 
 			status := parseBranchStatus(data)
 			require.NotNil(t, status)
-			assert.Equal(t, tt.expectedState, status.State)
+			require.Equal(t, tt.expectedState, status.State)
 		})
 	}
 }
@@ -172,7 +171,7 @@ func TestParseBranchStatus_NoPRReturnsNil(t *testing.T) {
 	}
 
 	status := parseBranchStatus(data)
-	assert.Nil(t, status)
+	require.Nil(t, status)
 }
 
 func TestParseCheckRollup_MultipleDistinctChecks(t *testing.T) {
@@ -209,6 +208,6 @@ func TestParseCheckRollup_MultipleDistinctChecks(t *testing.T) {
 	status := parseCheckRollup(rollup, "APPROVED", "author")
 
 	require.NotNil(t, status)
-	assert.True(t, status.Passing)
-	assert.Len(t, status.Checks, 3, "should include all distinct checks")
+	require.True(t, status.Passing)
+	require.Len(t, status.Checks, 3, "should include all distinct checks")
 }

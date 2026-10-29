@@ -71,13 +71,13 @@ func TestCleanBranches(t *testing.T) {
 			RunGit("merge", "branch1")
 
 		// Rebuild to see changes
-		err := s.Engine.Rebuild("main")
+		err := s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// Mark branch1 as merged via PR info
 		prInfo := testhelpers.NewTestPrInfoMerged(1, "main")
 		branch := s.Engine.GetBranch("branch1")
-		err = s.Engine.UpsertPrInfo(context.Background(), branch, prInfo)
+		err = s.Engine.UpsertPrInfo(t.Context(), branch, prInfo)
 		require.NoError(t, err)
 
 		result, err := cleanBranches(s.Context, actions.CleanBranchesOptions{
@@ -90,9 +90,9 @@ func TestCleanBranches(t *testing.T) {
 
 		// branch2 should have new parent (main)
 		branchparent2 := s.Engine.GetBranch("branch2")
-		parent2 := branchparent2.GetParent()
+		parent2 := branchparent2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName())
+		require.Equal(t, "main", parent2.Name())
 		require.Contains(t, result.BranchesWithNewParents, "branch2")
 	})
 
@@ -110,13 +110,13 @@ func TestCleanBranches(t *testing.T) {
 			RunGit("merge", "branch1")
 
 		// Rebuild to see changes
-		err := s.Engine.Rebuild("main")
+		err := s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// Mark branch1 as merged
 		prInfo := testhelpers.NewTestPrInfoWithState(1, "MERGED")
 		branch := s.Engine.GetBranch("branch1")
-		err = s.Engine.UpsertPrInfo(context.Background(), branch, prInfo)
+		err = s.Engine.UpsertPrInfo(t.Context(), branch, prInfo)
 		require.NoError(t, err)
 
 		result, err := cleanBranches(s.Context, actions.CleanBranchesOptions{
@@ -126,13 +126,13 @@ func TestCleanBranches(t *testing.T) {
 
 		// Both children should have new parent
 		branchparent2 := s.Engine.GetBranch("branch2")
-		parent2 := branchparent2.GetParent()
+		parent2 := branchparent2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName())
+		require.Equal(t, "main", parent2.Name())
 		branchparent3 := s.Engine.GetBranch("branch3")
-		parent3 := branchparent3.GetParent()
+		parent3 := branchparent3.Parent()
 		require.NotNil(t, parent3)
-		require.Equal(t, "main", parent3.GetName())
+		require.Equal(t, "main", parent3.Name())
 		require.Contains(t, result.BranchesWithNewParents, "branch2")
 		require.Contains(t, result.BranchesWithNewParents, "branch3")
 	})
@@ -155,11 +155,11 @@ func TestCleanBranches(t *testing.T) {
 		s.Checkout("main").
 			RunGit("merge", "branch1").
 			RunGit("merge", "branch2")
-		require.NoError(t, s.Engine.Rebuild("main"))
+		require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 
 		for i, name := range []string{"branch1", "branch2"} {
 			prInfo := testhelpers.NewTestPrInfoMerged(git.PRNumber(i+1), "main")
-			require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch(name), prInfo))
+			require.NoError(t, s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch(name), prInfo))
 		}
 
 		// Stand in for running from a linked worktree: the main working tree is
@@ -220,18 +220,18 @@ func TestCleanBranches(t *testing.T) {
 			RunGit("merge", "branch1")
 
 		// Rebuild to see changes
-		err := s.Engine.Rebuild("main")
+		err := s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// Lock the branch (simulating consolidation)
 		branch := s.Engine.GetBranch("branch1")
-		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonConsolidating)
+		_, err = s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonConsolidating)
 		require.NoError(t, err)
 		require.True(t, branch.IsLocked(), "branch should be locked")
 
 		// Mark branch1 as merged via PR info
 		prInfo := testhelpers.NewTestPrInfoMerged(1, "main")
-		err = s.Engine.UpsertPrInfo(context.Background(), branch, prInfo)
+		err = s.Engine.UpsertPrInfo(t.Context(), branch, prInfo)
 		require.NoError(t, err)
 
 		// Clean should delete the locked branch
@@ -255,13 +255,13 @@ func TestCleanBranches(t *testing.T) {
 		s.Checkout("main").
 			RunGit("merge", "branch1")
 
-		err := s.Engine.Rebuild("main")
+		err := s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// Mark branch1 as merged
 		prInfo := testhelpers.NewTestPrInfoMerged(1, "main")
 		branch := s.Engine.GetBranch("branch1")
-		err = s.Engine.UpsertPrInfo(context.Background(), branch, prInfo)
+		err = s.Engine.UpsertPrInfo(t.Context(), branch, prInfo)
 		require.NoError(t, err)
 
 		result, err := cleanBranches(s.Context, actions.CleanBranchesOptions{
@@ -289,7 +289,7 @@ func TestCleanBranches(t *testing.T) {
 		// branch2: IS merged
 		prInfo := testhelpers.NewTestPrInfoMerged(2, "branch1")
 		branch2 := s.Engine.GetBranch("branch2")
-		err := s.Engine.UpsertPrInfo(context.Background(), branch2, prInfo)
+		err := s.Engine.UpsertPrInfo(t.Context(), branch2, prInfo)
 		require.NoError(t, err)
 
 		_, err = cleanBranches(s.Context, actions.CleanBranchesOptions{
@@ -312,7 +312,7 @@ func TestCleanBranches(t *testing.T) {
 			})
 
 		for number, name := range []string{"branch1", "branch2", "branch3"} {
-			err := s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch(name), testhelpers.NewTestPrInfoMerged(git.PRNumber(number+1), "main"))
+			err := s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch(name), testhelpers.NewTestPrInfoMerged(git.PRNumber(number+1), "main"))
 			require.NoError(t, err)
 		}
 		countingEngine := &countingDeletionEngine{Engine: s.Engine}
@@ -352,7 +352,7 @@ func TestCleanBranches(t *testing.T) {
 		// Mark branch1 as merged via PR info
 		prInfo := testhelpers.NewTestPrInfoMerged(1, "main")
 		branch := s.Engine.GetBranch("branch1")
-		err = s.Engine.UpsertPrInfo(context.Background(), branch, prInfo)
+		err = s.Engine.UpsertPrInfo(t.Context(), branch, prInfo)
 		require.NoError(t, err)
 
 		s.Checkout("main")
@@ -381,7 +381,7 @@ func TestCleanBranches(t *testing.T) {
 
 		s.Checkout("branch1").CommitChange("follow-up.txt", "local-only follow-up").Checkout("main")
 		require.NoError(t, s.Scene.Repo.RunGitCommand("push", "origin", "--delete", "branch1"))
-		require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoClosed(1)))
+		require.NoError(t, s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoClosed(1)))
 
 		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesOptions{Force: true})
 		require.NoError(t, err)
@@ -399,7 +399,7 @@ func TestCleanBranches(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "main"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "branch1"))
 		require.NoError(t, s.Scene.Repo.RunGitCommand("push", "origin", "--delete", "branch1"))
-		require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoMerged(1, "main")))
+		require.NoError(t, s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoMerged(1, "main")))
 
 		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesOptions{Force: true})
 		require.NoError(t, err)
@@ -416,7 +416,7 @@ func TestCleanBranches(t *testing.T) {
 			})
 
 		prInfo := testhelpers.NewTestPrInfoMerged(1, "main")
-		err := s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("branch1"), prInfo)
+		err := s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("branch1"), prInfo)
 		require.NoError(t, err)
 
 		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesOptions{
@@ -426,9 +426,9 @@ func TestCleanBranches(t *testing.T) {
 		require.Contains(t, plan.BranchesToDelete, "branch1")
 		require.Contains(t, plan.BranchesWithNewParents, "branch2")
 
-		parent := s.Engine.GetBranch("branch2").GetParent()
+		parent := s.Engine.GetBranch("branch2").Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "branch1", parent.GetName(), "planning should not mutate branch metadata")
+		require.Equal(t, "branch1", parent.Name(), "planning should not mutate branch metadata")
 	})
 
 	t.Run("uses supplied remote statuses for unpushed detection", func(t *testing.T) {
@@ -439,7 +439,7 @@ func TestCleanBranches(t *testing.T) {
 			})
 
 		prInfo := testhelpers.NewTestPrInfoMerged(1, "main")
-		err := s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("branch1"), prInfo)
+		err := s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("branch1"), prInfo)
 		require.NoError(t, err)
 
 		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesOptions{
@@ -475,7 +475,7 @@ func TestCleanBranches(t *testing.T) {
 		// Mark branch1 as merged via PR info (no extra local commits)
 		prInfo := testhelpers.NewTestPrInfoMerged(1, "main")
 		branch := s.Engine.GetBranch("branch1")
-		err = s.Engine.UpsertPrInfo(context.Background(), branch, prInfo)
+		err = s.Engine.UpsertPrInfo(t.Context(), branch, prInfo)
 		require.NoError(t, err)
 
 		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesOptions{
@@ -504,7 +504,7 @@ func TestCleanBranches(t *testing.T) {
 		s.CommitChange("child.txt", "branch2-change")
 		s.TrackBranch("branch2", "branch1")
 
-		branch1Rev, err := s.Engine.GetBranch("branch1").GetRevision()
+		branch1Rev, err := s.Engine.GetBranch("branch1").Revision(t.Context())
 		require.NoError(t, err)
 
 		// Simulate squash merge of branch1 by adding branch1's final tree state to main in one commit.
@@ -513,7 +513,7 @@ func TestCleanBranches(t *testing.T) {
 
 		// Mark branch1 as merged in PR metadata so cleanup deletes it.
 		prInfo := testhelpers.NewTestPrInfoMerged(1, "main")
-		err = s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("branch1"), prInfo)
+		err = s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("branch1"), prInfo)
 		require.NoError(t, err)
 
 		_, err = cleanBranches(s.Context, actions.CleanBranchesOptions{
@@ -523,13 +523,13 @@ func TestCleanBranches(t *testing.T) {
 
 		// branch1 should be deleted and branch2 reparented to main.
 		require.False(t, s.Engine.GetBranch("branch1").IsTracked())
-		parent := s.Engine.GetBranch("branch2").GetParent()
+		parent := s.Engine.GetBranch("branch2").Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "main", parent.GetName())
+		require.Equal(t, "main", parent.Name())
 
 		// Critical regression assertion: preserve old divergence at branch1 tip.
 		// If this regresses, restack can replay branch1 commits and cause avoidable conflicts.
-		meta2, err := s.Metadata.ReadMetadata(context.Background(), "branch2").One()
+		meta2, err := s.Metadata.ReadMetadata(t.Context(), "branch2").One()
 		require.NoError(t, err)
 		require.NotNil(t, meta2.GetParentBranchRevision())
 		require.Equal(t, branch1Rev, *meta2.GetParentBranchRevision())

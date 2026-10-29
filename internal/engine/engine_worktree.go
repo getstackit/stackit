@@ -100,11 +100,11 @@ func (e *engineImpl) PruneWorktrees(ctx context.Context) error {
 // PruneOrphanedWorktreePathRefs removes reverse worktree path claims with no
 // matching forward registration, left behind by interrupted legacy cleanup.
 func (e *engineImpl) PruneOrphanedWorktreePathRefs(ctx context.Context) (int, error) {
-	forward, err := e.git.ListRefs(git.WorktreeRefPrefix)
+	forward, err := e.git.ListRefs(ctx, git.WorktreeRefPrefix)
 	if err != nil {
 		return 0, fmt.Errorf("list worktree registrations: %w", err)
 	}
-	pathRefs, err := e.git.ListRefs(git.WorktreePathRefPrefix)
+	pathRefs, err := e.git.ListRefs(ctx, git.WorktreePathRefPrefix)
 	if err != nil {
 		return 0, fmt.Errorf("list worktree path registrations: %w", err)
 	}
@@ -252,13 +252,13 @@ func (e *engineImpl) RegisterWorktree(ctx context.Context, registration Worktree
 		return fmt.Errorf("failed to canonicalize worktree path: %w", err)
 	}
 
-	if existing, err := e.GetWorktreeForStack(registration.AnchorBranch); err != nil {
+	if existing, err := e.GetWorktreeForStack(ctx, registration.AnchorBranch); err != nil {
 		return fmt.Errorf("failed to check existing worktree registration: %w", err)
 	} else if existing != nil {
 		return fmt.Errorf("worktree anchor %s is already registered at %s", registration.AnchorBranch, existing.Path)
 	}
 
-	worktrees, err := e.ListManagedWorktrees()
+	worktrees, err := e.ListManagedWorktrees(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list worktree registrations: %w", err)
 	}
@@ -289,8 +289,8 @@ func (e *engineImpl) UnregisterWorktree(ctx context.Context, stackRoot string) e
 }
 
 // GetWorktreeForStack returns worktree info for a stack root, or nil if none
-func (e *engineImpl) GetWorktreeForStack(stackRoot string) (*WorktreeInfo, error) {
-	meta, err := e.git.ReadWorktreeMeta(stackRoot)
+func (e *engineImpl) GetWorktreeForStack(ctx context.Context, stackRoot string) (*WorktreeInfo, error) {
+	meta, err := e.git.ReadWorktreeMeta(ctx, stackRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -310,13 +310,13 @@ func (e *engineImpl) GetWorktreeForStack(stackRoot string) (*WorktreeInfo, error
 // OwningWorktree returns the managed worktree for branch's stack. Stack
 // ownership is derived from the stack root, which is the worktree anchor for
 // stacks that have been attached to a managed worktree.
-func (e *engineImpl) OwningWorktree(branch Branch) (*WorktreeInfo, error) {
+func (e *engineImpl) OwningWorktree(ctx context.Context, branch Branch) (*WorktreeInfo, error) {
 	stackRoot := e.GetStackRootForBranch(branch)
 	if stackRoot == "" {
 		return nil, nil
 	}
 
-	worktree, err := e.GetWorktreeForStack(stackRoot)
+	worktree, err := e.GetWorktreeForStack(ctx, stackRoot)
 	if err != nil || worktree == nil {
 		return worktree, err
 	}
@@ -338,8 +338,8 @@ type WorktreeOwnership struct {
 // unreadable registration, or one whose anchor differs from the stack root it
 // is registered under, carries an error instead of being dropped: dropping it
 // would read as "unowned" and let a guarded mutation through.
-func (e *engineImpl) WorktreeOwnershipByStackRoot() (map[string]WorktreeOwnership, error) {
-	registrations, err := e.git.ListWorktreeRegistrations()
+func (e *engineImpl) WorktreeOwnershipByStackRoot(ctx context.Context) (map[string]WorktreeOwnership, error) {
+	registrations, err := e.git.ListWorktreeRegistrations(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -365,8 +365,8 @@ func (e *engineImpl) WorktreeOwnershipByStackRoot() (map[string]WorktreeOwnershi
 }
 
 // ListManagedWorktrees returns all stackit-managed worktrees, sorted by stack root name
-func (e *engineImpl) ListManagedWorktrees() ([]WorktreeInfo, error) {
-	metas, err := e.git.ListWorktreeMetas()
+func (e *engineImpl) ListManagedWorktrees(ctx context.Context) ([]WorktreeInfo, error) {
+	metas, err := e.git.ListWorktreeMetas(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +393,7 @@ func (e *engineImpl) ListManagedWorktrees() ([]WorktreeInfo, error) {
 // The stack root is the first ancestor branch whose parent is trunk.
 // Returns empty string for trunk or untracked branches.
 func (e *engineImpl) GetStackRootForBranch(branch Branch) string {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	// Trunk has no stack root
 	e.mu.RLock()
@@ -441,7 +441,7 @@ func (e *engineImpl) GetStackRootForBranch(branch Branch) string {
 
 // IsInManagedWorktree checks if the current directory is a stackit-managed worktree.
 // Returns true and worktree info if in a managed worktree, false otherwise.
-func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
+func (e *engineImpl) IsInManagedWorktree(ctx context.Context) (bool, *WorktreeInfo, error) {
 	// Check if .git is a file (worktree) vs directory (main repo)
 	gitPath := filepath.Join(e.repoRoot, ".git")
 	info, err := os.Stat(gitPath)
@@ -470,7 +470,7 @@ func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
 	}
 
 	// List all managed worktrees and check if current path matches.
-	worktrees, err := e.ListManagedWorktrees()
+	worktrees, err := e.ListManagedWorktrees(ctx)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to list managed worktrees: %w", err)
 	}
@@ -526,7 +526,7 @@ func (e *engineImpl) UntrackedCollision(ctx context.Context, branchName string, 
 	if state != nil && state.Parent != "" {
 		parent = state.Parent
 	}
-	baseRev, err := e.GetBranch(parent).GetRevision()
+	baseRev, err := e.GetBranch(parent).Revision(ctx)
 	if err != nil || baseRev == "" {
 		return false, false
 	}

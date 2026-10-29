@@ -93,7 +93,7 @@ func TestBranchDiffHandler_ThrottleGateRespectsContext(t *testing.T) {
 
 	// A canceled context stands in for a client that has gone away while
 	// queued behind the throttle.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	req := withRepo(httptest.NewRequest(http.MethodGet, "/api/v1/repos/acme/demo/branch-diff/"+url.PathEscape(branchName), nil).WithContext(ctx))

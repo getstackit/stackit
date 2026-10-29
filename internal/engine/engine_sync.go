@@ -45,7 +45,7 @@ func (e *engineImpl) RestackBranches(ctx context.Context, branches Branches, opt
 // and trunk itself — in two batched reads instead of per-branch git calls.
 // Consumers treat the maps as a point-in-time snapshot and fall back to
 // individual reads on a miss.
-func (e *engineImpl) collectRestackData(branchNames []string) (MetaMap, RevisionMap) {
+func (e *engineImpl) collectRestackData(ctx context.Context, branchNames []string) (MetaMap, RevisionMap) {
 	// Identify all potential parents and ancestors to fetch their metadata and revisions too
 	e.mu.RLock()
 	allInvolvedBranches := make(map[string]bool)
@@ -67,7 +67,7 @@ func (e *engineImpl) collectRestackData(branchNames []string) (MetaMap, Revision
 	e.mu.RUnlock()
 
 	metaMap, _ := e.batchReadMetadata(involvedBranchNames)
-	revMap, _ := e.git.ReadRevisions(context.Background(), involvedBranchNames...).ValuesAndErrors()
+	revMap, _ := e.git.ReadRevisions(ctx, involvedBranchNames...).ValuesAndErrors()
 	return metaMap, revMap
 }
 
@@ -78,18 +78,18 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	if plan != nil && e.linearStacks {
 		moves := make([]BranchParentMove, 0, len(branches))
 		for _, branch := range branches {
-			item, ok := plan.Items[branch.GetName()]
+			item, ok := plan.Items[branch.Name()]
 			if ok && item.Action != RestackPlanSkip && item.Reparented {
 				moves = append(moves, BranchParentMove{Branch: item.Branch, NewParent: item.NewParent})
 			}
 		}
-		if err := e.validateLinearParentMoves(moves); err != nil {
+		if err := e.validateLinearParentMoves(ctx, moves); err != nil {
 			return RestackBatchResult{}, err
 		}
 	}
 
 	// Save current branch to restore after restacking
-	originalBranch := e.CurrentBranch()
+	originalBranch := e.CurrentBranch(ctx)
 	var originalRev string
 	if originalBranch == nil {
 		originalRev, _ = e.git.ReadRevisions(ctx, "HEAD").One()
@@ -104,7 +104,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	}()
 
 	// 1. Collect all the data required for the restack (in bulk)
-	allMeta, allRevisions := e.collectRestackData(branches.Names())
+	allMeta, allRevisions := e.collectRestackData(ctx, branches.Names())
 
 	// Snapshot the worktree list once. Restacking N branches used to call
 	// `git worktree list` N times for the "reset other worktree's working dir"
@@ -192,14 +192,14 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	// own SHA for optimistic locking on the metadata ref UpdateRefs, so a
 	// pre-loop snapshot is stable.
 	metaRefSHAs := make(MetadataSHAMap)
-	if refs, listErr := e.git.ListRefs(git.MetadataRefPrefix); listErr == nil {
+	if refs, listErr := e.git.ListRefs(ctx, git.MetadataRefPrefix); listErr == nil {
 		for refName, sha := range refs {
 			metaRefSHAs[strings.TrimPrefix(refName, git.MetadataRefPrefix)] = sha
 		}
 	}
 	applyingBranches := make(BranchNameSet, len(branches))
 	for _, branch := range branches {
-		applyingBranches[branch.GetName()] = true
+		applyingBranches[branch.Name()] = true
 	}
 	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs, dirtyWorktrees: dirtyWorktrees, untrackedByWorktree: untrackedByWorktree, heldReasons: heldReasons, applyingBranches: applyingBranches}
 
@@ -209,7 +209,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	squashCache := git.NewSquashMergeCache()
 
 	for i, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 		var result RestackBranchResult
 		var err error
 		if validation != nil {
@@ -240,10 +240,10 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			// Convert remaining branches to []string for RestackBatchResult
 			remainingBranchNames := make([]string, len(branches[i+1:]))
 			for j, b := range branches[i+1:] {
-				remainingBranchNames[j] = b.GetName()
+				remainingBranchNames[j] = b.Name()
 			}
 			if needsRebuild {
-				if rebuildErr := e.rebuild(); rebuildErr != nil {
+				if rebuildErr := e.rebuild(ctx); rebuildErr != nil {
 					return RestackBatchResult{
 						ConflictBranch:    branchName,
 						RebasedBranchBase: result.RebasedBranchBase,
@@ -264,10 +264,10 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			// Convert remaining branches to []string for RestackBatchResult
 			remainingBranchNames := make([]string, len(branches[i+1:]))
 			for j, b := range branches[i+1:] {
-				remainingBranchNames[j] = b.GetName()
+				remainingBranchNames[j] = b.Name()
 			}
 			if needsRebuild {
-				if rebuildErr := e.rebuild(); rebuildErr != nil {
+				if rebuildErr := e.rebuild(ctx); rebuildErr != nil {
 					return RestackBatchResult{
 						ConflictBranch:    branchName,
 						RebasedBranchBase: result.RebasedBranchBase,
@@ -294,7 +294,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 
 	// Single rebuild at the end if any branches were restacked
 	if needsRebuild {
-		if err := e.rebuild(); err != nil {
+		if err := e.rebuild(ctx); err != nil {
 			return RestackBatchResult{
 				Results: results,
 			}, fmt.Errorf("failed to rebuild after batch restack: %w", err)
@@ -361,7 +361,7 @@ func (e *engineImpl) ContinueRebase(ctx context.Context, spec ContinueRebaseSpec
 	}
 
 	// Rebuild to refresh cache
-	if err := e.rebuild(); err != nil {
+	if err := e.rebuild(ctx); err != nil {
 		return ContinueRebaseResult{}, fmt.Errorf("failed to rebuild after continue: %w", err)
 	}
 

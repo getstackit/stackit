@@ -7,11 +7,12 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/google/go-github/v93/github"
 
 	"github.com/getstackit/stackit/internal/git"
 	githubpkg "github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // MockGitHubClient implements githubpkg.Client using the mock server
@@ -245,7 +246,7 @@ func (c *MockGitHubClient) BatchGetPRChecksStatus(ctx context.Context, branchNam
 	results := make(githubpkg.ChecksByBranch)
 	var mu sync.Mutex
 
-	utils.RunWithWorkers(branchNames, githubpkg.MaxGitHubConcurrency, func(name string) {
+	workpool.RunN(branchNames, githubpkg.MaxGitHubConcurrency, func(name string) {
 		status := c.getPRChecksStatus(ctx, name)
 		mu.Lock()
 		results[name] = status

@@ -5,6 +5,7 @@
 package stackview
 
 import (
+	"context"
 	"iter"
 
 	"github.com/getstackit/stackit/internal/engine"
@@ -12,7 +13,7 @@ import (
 
 // WorktreeSource is the engine surface BuildWorktreeIndex reads.
 type WorktreeSource interface {
-	ListManagedWorktrees() ([]engine.WorktreeInfo, error)
+	ListManagedWorktrees(ctx context.Context) ([]engine.WorktreeInfo, error)
 	GetBranch(branchName string) engine.Branch
 	BranchesDepthFirst(startBranch engine.Branch) iter.Seq2[engine.Branch, int]
 }
@@ -29,13 +30,13 @@ type WorktreeIndex struct {
 // BuildWorktreeIndex lists managed worktrees once and indexes them by stack
 // root, also recording which worktree anchors are empty (have no descendants).
 // A listing failure yields an empty index.
-func BuildWorktreeIndex(src WorktreeSource) *WorktreeIndex {
+func BuildWorktreeIndex(ctx context.Context, src WorktreeSource) *WorktreeIndex {
 	idx := &WorktreeIndex{
 		Empty:       make(map[string]*engine.WorktreeInfo),
 		ByStackRoot: make(map[string]*engine.WorktreeInfo),
 	}
 
-	worktrees, err := src.ListManagedWorktrees()
+	worktrees, err := src.ListManagedWorktrees(ctx)
 	if err != nil {
 		return idx
 	}
@@ -90,7 +91,7 @@ func (idx *WorktreeIndex) apply(eng stackRootResolver, branch engine.Branch, ann
 	if idx == nil {
 		return
 	}
-	if wt, ok := idx.Empty[branch.GetName()]; ok {
+	if wt, ok := idx.Empty[branch.Name()]; ok {
 		ann.IsEmptyWorktree = true
 		ann.WorktreePath = wt.Path
 		return

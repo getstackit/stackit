@@ -113,21 +113,21 @@ func handleShowTrunk(ctx *app.Context) error {
 	eng := ctx.Engine
 
 	// Get current branch
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	if currentBranch == nil {
 		// Not on a branch, just show primary trunk
 		trunk := eng.Trunk()
-		ctx.Output.Info("%s", trunk.GetName())
+		ctx.Output.Info("%s", trunk.Name())
 		return nil
 	}
 
 	// If current branch is trunk, show it
 	if currentBranch.IsTrunk() {
-		ctx.Output.Info("%s", currentBranch.GetName())
+		ctx.Output.Info("%s", currentBranch.Name())
 		return nil
 	}
 
-	trunk := eng.Graph(engine.SortStrategyAlphabetical).OwningTrunk(*currentBranch, ctx.Config.AllTrunks())
+	trunk := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical).OwningTrunk(*currentBranch, ctx.Config.AllTrunks())
 	ctx.Output.Info("%s", trunk)
 	return nil
 }

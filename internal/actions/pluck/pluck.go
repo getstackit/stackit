@@ -20,11 +20,11 @@ type pluckEngine interface {
 	validation.BranchValidationEngine
 	Trunk() engine.Branch
 	IsTrunk(branch engine.Branch) bool
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
-	GetAllCommits(branch engine.Branch) (git.Commits, error)
-	BatchRevisions(branches engine.Branches) engine.RevisionMap
-	GetDivergencePoint(branchName string) (string, error)
-	BatchDivergencePoints(branches engine.Branches) engine.RevisionMap
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+	GetAllCommits(ctx context.Context, branch engine.Branch) (git.Commits, error)
+	BatchRevisions(ctx context.Context, branches engine.Branches) engine.RevisionMap
+	GetDivergencePoint(ctx context.Context, branchName string) (string, error)
+	BatchDivergencePoints(ctx context.Context, branches engine.Branches) engine.RevisionMap
 	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec) (*engine.RebaseValidation, error)
 	ReparentBranchesToParents(ctx context.Context, moves []engine.BranchParentMove, opts engine.ReparentOpts) error
 	AssignBranchesToNewStack(ctx context.Context, root engine.Branch, branches engine.Branches) (string, error)
@@ -52,16 +52,16 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 	defer handler.Cleanup()
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Default source to current branch
 	source := opts.Source
 	if source == "" {
-		currentBranch := eng.CurrentBranch()
+		currentBranch := eng.CurrentBranch(ctx.Context)
 		if currentBranch == nil {
 			return errors.New("not on a branch and no source branch specified")
 		}
-		source = currentBranch.GetName()
+		source = currentBranch.Name()
 	}
 
 	// Validate source branch
@@ -99,19 +99,19 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
 
 	// Get current parent (grandparent for children)
-	oldParent := sourceBranch.GetParent()
+	oldParent := sourceBranch.Parent()
 	oldParentName := ""
 	grandparentBranch := eng.Trunk()
 	if oldParent == nil {
-		oldParentName = eng.Trunk().GetName()
+		oldParentName = eng.Trunk().Name()
 	} else {
-		oldParentName = oldParent.GetName()
+		oldParentName = oldParent.Name()
 		grandparentBranch = *oldParent
 	}
 
 	// Prompt for confirmation in interactive mode
 	if handler.IsInteractive() && !opts.SkipConfirm {
-		commitsData, _ := eng.GetAllCommits(sourceBranch)
+		commitsData, _ := eng.GetAllCommits(ctx.Context, sourceBranch)
 		commits := commitsData.Subjects()
 
 		preview := Preview{
@@ -139,8 +139,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Get revisions needed for rebase specs in a single batched call instead
 	// of one git process per branch.
-	grandparentName := grandparentBranch.GetName()
-	revisions := eng.BatchRevisions(engine.BranchesOf(ontoBranch, grandparentBranch, sourceBranch))
+	grandparentName := grandparentBranch.Name()
+	revisions := eng.BatchRevisions(ctx.Context, engine.BranchesOf(ontoBranch, grandparentBranch, sourceBranch))
 
 	ontoRev, ok := revisions.Rev(onto)
 	if !ok {
@@ -159,23 +159,23 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Capture old divergence point for source branch, falling back to the
 	// grandparent's revision (source's old parent) when unavailable.
-	sourceOldParentRev, divErr := eng.GetDivergencePoint(source)
+	sourceOldParentRev, divErr := eng.GetDivergencePoint(ctx.Context, source)
 	if divErr != nil || sourceOldParentRev == "" {
 		sourceOldParentRev = grandparentRev
 	}
 
 	// Children: rebase onto grandparent (source's old parent)
-	childDivPoints := eng.BatchDivergencePoints(children)
+	childDivPoints := eng.BatchDivergencePoints(ctx.Context, children)
 	for _, child := range children {
 		// Get the old upstream (divergence point)
-		childOldUpstream, ok := childDivPoints.Rev(child.GetName())
+		childOldUpstream, ok := childDivPoints.Rev(child.Name())
 		if !ok || childOldUpstream == "" {
 			// Fallback to source revision if unavailable
 			childOldUpstream = sourceRev
 		}
 
 		rebaseSpecs = append(rebaseSpecs, engine.RebaseSpec{
-			Branch:      child.GetName(),
+			Branch:      child.Name(),
 			NewParent:   grandparentRev,
 			OldUpstream: childOldUpstream,
 		})
@@ -215,7 +215,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// rejects even when the completed transformation is a valid chain.
 	moves := make([]engine.BranchParentMove, 0, len(children)+1)
 	for _, child := range children {
-		moves = append(moves, engine.BranchParentMove{Branch: child.GetName(), NewParent: grandparentBranch.GetName()})
+		moves = append(moves, engine.BranchParentMove{Branch: child.Name(), NewParent: grandparentBranch.Name()})
 	}
 	moves = append(moves, engine.BranchParentMove{Branch: source, NewParent: onto})
 
@@ -238,12 +238,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	var reparentedChildren []string
 	if len(children) > 0 {
 		for _, child := range children {
-			handler.OnChildReparented(basehandler.Reparent{Branch: child.GetName(), OldParent: source, NewParent: grandparentBranch.GetName()})
-			reparentedChildren = append(reparentedChildren, child.GetName())
+			handler.OnChildReparented(basehandler.Reparent{Branch: child.Name(), OldParent: source, NewParent: grandparentBranch.Name()})
+			reparentedChildren = append(reparentedChildren, child.Name())
 			out.Info("Reparented %s from %s to %s.",
-				output.BranchName(child.GetName()),
+				output.BranchName(child.Name()),
 				output.BranchName(source),
-				output.BranchName(grandparentBranch.GetName()))
+				output.BranchName(grandparentBranch.Name()))
 		}
 		handler.OnStep(StepReparentingChild, basehandler.StatusCompleted, "Children reparented")
 	}
@@ -265,7 +265,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.OnStep(StepRestackingOrphans, basehandler.StatusStarted, "Restacking branches...")
 
 	// Rebuild graph after parent changes
-	graph = eng.Graph(engine.SortStrategyAlphabetical)
+	graph = eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Collect all branches that need restacking:
 	// 1. The children (now on grandparent) and their descendants
@@ -273,7 +273,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	branchesToRestack := engine.Branches{}
 
 	for _, child := range children {
-		childBranch := eng.GetBranch(child.GetName())
+		childBranch := eng.GetBranch(child.Name())
 		childDescendants := graph.Range(childBranch, engine.StackRange{
 			RecursiveChildren: true,
 			IncludeCurrent:    true,
@@ -304,15 +304,15 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 // InvalidOntoTargets returns the branches source cannot be plucked onto:
 // source itself and all of its descendants.
-func InvalidOntoTargets(eng engine.StackView, source string) map[string]bool {
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+func InvalidOntoTargets(ctx context.Context, eng engine.StackView, source string) map[string]bool {
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	descendants := graph.Range(eng.GetBranch(source), engine.StackRange{
 		RecursiveChildren: true,
 		IncludeCurrent:    true,
 	})
 	excluded := make(map[string]bool, len(descendants))
 	for _, d := range descendants {
-		excluded[d.GetName()] = true
+		excluded[d.Name()] = true
 	}
 	return excluded
 }

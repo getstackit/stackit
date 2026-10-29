@@ -1,6 +1,7 @@
 package pr
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -70,19 +71,19 @@ func DefaultNavigationOptions() NavigationOptions {
 // location the footer is stripped, since it is posted as a comment or not at
 // all. Every writer of a PR body goes through here, so a body is never sent
 // with a stale or missing generated section.
-func ComposeBody(body, branch string, eng engine.BranchReader, opts NavigationOptions) string {
+func ComposeBody(ctx context.Context, body, branch string, eng engine.BranchReader, opts NavigationOptions) string {
 	composed := UpdatePRBodyLockSection(body, CreateLockSection(branch, eng))
 	if opts.Location == config.NavigationLocationBody {
-		return UpdatePRBodyFooter(composed, CreatePRBodyFooterWithOptions(branch, eng, opts))
+		return UpdatePRBodyFooter(composed, CreatePRBodyFooterWithOptions(ctx, branch, eng, opts))
 	}
 	return StripFooter(composed)
 }
 
 // countStackBranches counts the number of non-trunk branches in the stack.
-func countStackBranches(branch string, eng engine.BranchReader) int {
+func countStackBranches(ctx context.Context, branch string, eng engine.BranchReader) int {
 	terminalParentName := findTerminalParent(branch, eng)
 	terminalParent := eng.GetBranch(terminalParentName)
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	count := 0
 	branchRef := eng.GetBranch(branch)
@@ -92,7 +93,7 @@ func countStackBranches(branch string, eng engine.BranchReader) int {
 			continue
 		}
 		// Check if branch has a PR
-		prInfo, err := branchObj.GetPrInfo()
+		prInfo, err := branchObj.PrInfo()
 		if err != nil || prInfo == nil || prInfo.Number() == nil {
 			continue
 		}
@@ -102,13 +103,13 @@ func countStackBranches(branch string, eng engine.BranchReader) int {
 }
 
 // ShouldShowNavigation determines if navigation should be displayed based on options.
-func ShouldShowNavigation(opts NavigationOptions, branch string, eng engine.BranchReader) bool {
+func ShouldShowNavigation(ctx context.Context, opts NavigationOptions, branch string, eng engine.BranchReader) bool {
 	switch opts.When {
 	case config.NavigationWhenNever:
 		return false
 	case config.NavigationWhenMultiple:
 		// Only show navigation if there are 2 or more branches in the stack
-		return countStackBranches(branch, eng) >= 2
+		return countStackBranches(ctx, branch, eng) >= 2
 	case config.NavigationWhenAlways:
 		fallthrough
 	default:
@@ -119,8 +120,8 @@ func ShouldShowNavigation(opts NavigationOptions, branch string, eng engine.Bran
 // CreatePRBodyFooterWithOptions creates a PR body footer with dependency tree using custom options.
 // Returns empty string if neither navigation nor description should be shown.
 // The footer includes both the stack description and the navigation tree in a combined section.
-func CreatePRBodyFooterWithOptions(branch string, eng engine.BranchReader, opts NavigationOptions) string {
-	content := renderNavigationContent(branch, eng, opts)
+func CreatePRBodyFooterWithOptions(ctx context.Context, branch string, eng engine.BranchReader, opts NavigationOptions) string {
+	content := renderNavigationContent(ctx, branch, eng, opts)
 	if content == "" {
 		return ""
 	}
@@ -128,10 +129,10 @@ func CreatePRBodyFooterWithOptions(branch string, eng engine.BranchReader, opts 
 	return footerTitle + content + footerFooter
 }
 
-func renderNavigationContent(branch string, eng engine.BranchReader, opts NavigationOptions) string {
+func renderNavigationContent(ctx context.Context, branch string, eng engine.BranchReader, opts NavigationOptions) string {
 	branchObj := eng.GetBranch(branch)
-	showNav := ShouldShowNavigation(opts, branch, eng)
-	desc := eng.GetStackDescription(branchObj)
+	showNav := ShouldShowNavigation(ctx, opts, branch, eng)
+	desc := eng.GetStackDescription(ctx, branchObj)
 	descContent := formatStackDescription(desc)
 
 	// If nothing to show, return empty
@@ -155,7 +156,7 @@ func renderNavigationContent(branch string, eng engine.BranchReader, opts Naviga
 
 		terminalParentName := findTerminalParent(branch, eng)
 		terminalParent := eng.GetBranch(terminalParentName)
-		graph := eng.Graph(engine.SortStrategyAlphabetical)
+		graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 		// Add scope if present
 		scope := eng.GetScope(branchObj)
@@ -164,7 +165,7 @@ func renderNavigationContent(branch string, eng engine.BranchReader, opts Naviga
 		}
 
 		// Add notice if present in PrInfo
-		prInfo, _ := branchObj.GetPrInfo()
+		prInfo, _ := branchObj.PrInfo()
 		if prInfo != nil {
 			if prInfo.MergeBranch() != "" {
 				if prInfo.State() == git.PRStateMerged {
@@ -175,7 +176,7 @@ func renderNavigationContent(branch string, eng engine.BranchReader, opts Naviga
 
 					// If we can find the PR number for the merge branch, show it
 					mBranch := eng.GetBranch(mergeBranch)
-					if mPrInfo, err := mBranch.GetPrInfo(); err == nil && mPrInfo != nil && mPrInfo.Number() != nil {
+					if mPrInfo, err := mBranch.PrInfo(); err == nil && mPrInfo != nil && mPrInfo.Number() != nil {
 						msg = fmt.Sprintf("> 💡 **Notice**: This PR is part of a stack merge. See PR #%d for details.\n\n", *mPrInfo.Number())
 					}
 					content.WriteString(msg)
@@ -188,7 +189,7 @@ func renderNavigationContent(branch string, eng engine.BranchReader, opts Naviga
 				continue
 			}
 
-			leaf := buildLeafWithMarker(eng, b.GetName(), depth, branch, opts.Marker)
+			leaf := buildLeafWithMarker(eng, b.Name(), depth, branch, opts.Marker)
 			if leaf != "" {
 				content.WriteString(leaf)
 			}
@@ -196,7 +197,7 @@ func renderNavigationContent(branch string, eng engine.BranchReader, opts Naviga
 
 		// Add merged downstack history if enabled
 		if opts.ShowMerged {
-			mergedHistory := branchObj.GetMergedDownstack()
+			mergedHistory := branchObj.MergedDownstack()
 			if len(mergedHistory) > 0 {
 				content.WriteString("\n\n**Previously based on:**")
 				for _, mp := range slices.Backward(mergedHistory) {
@@ -277,7 +278,7 @@ func CreateLockSection(branch string, eng engine.BranchReader) string {
 		return ""
 	}
 
-	reason := branchObj.GetLockReason()
+	reason := branchObj.LockReason()
 	var message string
 	if reason == git.LockReasonUser {
 		message = "> 🔒 This PR has been locked. To unlock it, run `st unlock`."
@@ -338,8 +339,8 @@ func StripLockSection(body string) string {
 // CreateNavigationComment creates the content for a navigation comment.
 // This includes both the stack description and the navigation tree.
 // Returns empty string if neither navigation nor description should be shown.
-func CreateNavigationComment(branch string, eng engine.BranchReader, opts NavigationOptions) string {
-	content := renderNavigationContent(branch, eng, opts)
+func CreateNavigationComment(ctx context.Context, branch string, eng engine.BranchReader, opts NavigationOptions) string {
+	content := renderNavigationContent(ctx, branch, eng, opts)
 	if content == "" {
 		return ""
 	}
@@ -355,23 +356,23 @@ func IsStackitComment(body string) bool {
 // findTerminalParent finds the terminal parent (parent of trunk) for a branch.
 func findTerminalParent(currentBranch string, eng engine.BranchReader) string {
 	branch := eng.GetBranch(currentBranch)
-	parent := branch.GetParent()
+	parent := branch.Parent()
 	if parent == nil {
 		// No parent, use trunk
-		return eng.Trunk().GetName()
+		return eng.Trunk().Name()
 	}
 
 	if parent.IsTrunk() {
 		return currentBranch
 	}
 
-	return findTerminalParent(parent.GetName(), eng)
+	return findTerminalParent(parent.Name(), eng)
 }
 
 // buildLeafWithMarker builds a single leaf in the tree with a custom marker.
 func buildLeafWithMarker(eng engine.BranchReader, branchName string, depth int, prBranch string, customMarker string) string {
 	branch := eng.GetBranch(branchName)
-	prInfo, err := branch.GetPrInfo()
+	prInfo, err := branch.PrInfo()
 	if err != nil || prInfo == nil || prInfo.Number() == nil {
 		return ""
 	}

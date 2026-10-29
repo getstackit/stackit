@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -14,7 +16,6 @@ import (
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/tui/style"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewUpCmd creates the up command
@@ -46,16 +47,16 @@ the --to flag is used to specify a target branch to navigate towards.`,
 				steps = parsedSteps
 
 				// Get current branch
-				currentBranch := ctx.Engine.CurrentBranch()
+				currentBranch := ctx.Engine.CurrentBranch(ctx.Context)
 				if currentBranch == nil {
 					return errors.ErrNotOnBranch
 				}
 
 				// Build StackGraph for efficient traversals
-				graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+				graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 				// Traverse up the specified number of steps
-				targetBranch := currentBranch.GetName()
+				targetBranch := currentBranch.Name()
 				for i := range steps {
 					children := navigation.FlattenThroughAnchors(graph.ChildBranches(ctx.Engine.GetBranch(targetBranch)), graph)
 					if len(children) == 0 {
@@ -70,7 +71,7 @@ the --to flag is used to specify a target branch to navigate towards.`,
 					var nextBranch string
 					var err error
 					if len(children) == 1 {
-						nextBranch = children[0].GetName()
+						nextBranch = children[0].Name()
 					} else {
 						// Multiple children, decide which way to go
 						if toBranch != "" {
@@ -79,8 +80,8 @@ the --to flag is used to specify a target branch to navigate towards.`,
 							for _, child := range children {
 								upstack := graph.Range(child, engine.StackRange{RecursiveChildren: true})
 								upstackNames := upstack.Names()
-								if child.GetName() == toBranch || slices.Contains(upstackNames, toBranch) {
-									candidates = append(candidates, child.GetName())
+								if child.Name() == toBranch || slices.Contains(upstackNames, toBranch) {
+									candidates = append(candidates, child.Name())
 								}
 							}
 
@@ -111,7 +112,7 @@ the --to flag is used to specify a target branch to navigate towards.`,
 				}
 
 				// Check if we actually moved
-				if targetBranch == currentBranch.GetName() {
+				if targetBranch == currentBranch.Name() {
 					return nil
 				}
 
@@ -131,7 +132,7 @@ the --to flag is used to specify a target branch to navigate towards.`,
 }
 
 func promptForChild(children []string, parent string) (string, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return "", fmt.Errorf("multiple children found for %s; use --to or move in interactive mode", parent)
 	}
 

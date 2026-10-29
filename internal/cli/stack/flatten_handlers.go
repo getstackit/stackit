@@ -3,6 +3,8 @@ package stack
 import (
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/actions/flatten"
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -15,7 +17,7 @@ import (
 // The runner manages terminal state; the handler processes events.
 // Caller must defer runner.Cleanup() to restore terminal on exit.
 func NewFlattenUI(out output.Output, logger output.Logger) (*tui.Runner, flatten.Handler) {
-	if tui.IsTTY() {
+	if term.IsInteractive() {
 		model := flattenComponent.NewModel()
 		runner := tui.NewRunner(model, out, logger)
 		runner.Start()

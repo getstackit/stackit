@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/google/go-github/v93/github"
 	"golang.org/x/oauth2"
 
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // SyncPrInfo syncs PR information for branches from GitHub. It fetches every
@@ -70,7 +71,7 @@ func syncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []stri
 		return nil //nolint:nilerr // Preserve best-effort PR sync behavior.
 	}
 
-	utils.Run(branchNames, func(name string) {
+	workpool.Run(branchNames, func(name string) {
 		pr, err := getPRInfoForBranch(ctx, client, repo, name)
 		if err != nil || pr == nil || onUpdate == nil {
 			return
@@ -128,9 +129,9 @@ func createGitHubClient(ctx context.Context, hostname, token string) (*github.Cl
 // getRemoteRepository gets the hosted repository identity from the default
 // Git remote. GitHub-specific callers retain their established error messages
 // while sharing the canonical parser in the git package.
-func getRemoteRepository(_ context.Context, runner GitCommandRunner) (git.RemoteRepository, error) {
+func getRemoteRepository(ctx context.Context, runner GitCommandRunner) (git.RemoteRepository, error) {
 	// Get remote URL
-	remoteURL, err := runner.GetConfig("remote.origin.url")
+	remoteURL, err := runner.GetConfig(ctx, "remote.origin.url")
 	if err != nil {
 		return git.RemoteRepository{}, fmt.Errorf("failed to get remote URL: %w", err)
 	}

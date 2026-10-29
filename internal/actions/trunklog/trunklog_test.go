@@ -21,12 +21,12 @@ type fakeSource struct {
 	calledRange bool
 }
 
-func (f *fakeSource) GetRecentTrunkCommits(count int) ([]git.RecentCommit, error) {
+func (f *fakeSource) GetRecentTrunkCommits(_ context.Context, count int) ([]git.RecentCommit, error) {
 	f.gotCount = count
 	return f.recent, f.err
 }
 
-func (f *fakeSource) GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit, error) {
+func (f *fakeSource) GetTrunkCommitsInRange(_ context.Context, rr git.RevRange) ([]git.RecentCommit, error) {
 	f.calledRange = true
 	f.gotFrom, f.gotTo = rr.Base, rr.Head
 	return f.ranged, f.err
@@ -59,7 +59,7 @@ func TestGather_DefaultCountPath(t *testing.T) {
 	t.Parallel()
 	src := &fakeSource{recent: []git.RecentCommit{reg("a", 5, "feat: a (#5)")}}
 
-	res, err := trunklog.Gather(context.Background(), src, nil, trunklog.Request{Count: 10})
+	res, err := trunklog.Gather(t.Context(), src, nil, trunklog.Request{Count: 10})
 	require.NoError(t, err)
 	require.False(t, src.calledRange)
 	require.Equal(t, 10, src.gotCount)
@@ -71,7 +71,7 @@ func TestGather_RangePath(t *testing.T) {
 	t.Parallel()
 	src := &fakeSource{ranged: []git.RecentCommit{reg("a", 5, "feat: a")}}
 
-	res, err := trunklog.Gather(context.Background(), src, nil, trunklog.Request{From: "v1", To: "main"})
+	res, err := trunklog.Gather(t.Context(), src, nil, trunklog.Request{From: "v1", To: "main"})
 	require.NoError(t, err)
 	require.True(t, src.calledRange)
 	require.Equal(t, "v1", src.gotFrom)
@@ -90,7 +90,7 @@ func TestGather_CollapsesAndEnriches(t *testing.T) {
 	}}
 	titles := &fakeTitles{titles: map[git.PRNumber]string{100: "Consolidate", 1: "One", 2: "Two"}}
 
-	res, err := trunklog.Gather(context.Background(), src, titles, trunklog.Request{Count: 5})
+	res, err := trunklog.Gather(t.Context(), src, titles, trunklog.Request{Count: 5})
 	require.NoError(t, err)
 
 	// Constituents collapse into the merge.
@@ -109,7 +109,7 @@ func TestGather_OfflineNoTitles(t *testing.T) {
 	t.Parallel()
 	src := &fakeSource{recent: []git.RecentCommit{merge("m", 100, "FEAT-1", 1, 2)}}
 
-	res, err := trunklog.Gather(context.Background(), src, nil, trunklog.Request{Count: 5})
+	res, err := trunklog.Gather(t.Context(), src, nil, trunklog.Request{Count: 5})
 	require.NoError(t, err)
 	require.Len(t, res.Commits, 1)
 	require.Equal(t, "Merge pull request #x", res.Commits[0].Message) // unchanged, no enrichment
@@ -121,7 +121,7 @@ func TestGather_TitleErrorDegradesGracefully(t *testing.T) {
 	src := &fakeSource{recent: []git.RecentCommit{merge("m", 100, "", 1, 2)}}
 	titles := &fakeTitles{err: errors.New("rate limited")}
 
-	res, err := trunklog.Gather(context.Background(), src, titles, trunklog.Request{Count: 5})
+	res, err := trunklog.Gather(t.Context(), src, titles, trunklog.Request{Count: 5})
 	require.NoError(t, err)
 	require.Len(t, res.Commits, 1)
 	require.Nil(t, res.Commits[0].StackPRTitles)
@@ -131,6 +131,6 @@ func TestGather_SourceErrorPropagates(t *testing.T) {
 	t.Parallel()
 	src := &fakeSource{err: errors.New("boom")}
 
-	_, err := trunklog.Gather(context.Background(), src, nil, trunklog.Request{Count: 5})
+	_, err := trunklog.Gather(t.Context(), src, nil, trunklog.Request{Count: 5})
 	require.Error(t, err)
 }

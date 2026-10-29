@@ -1,6 +1,7 @@
 package git
 
 import (
+	"cmp"
 	"context"
 	"slices"
 	"strings"
@@ -23,12 +24,11 @@ type RefDecoration struct {
 // than lean on for-each-ref's refname order (which only happens to put "heads"
 // before "tags" lexically) so the grouping survives reordered ref args or a new
 // namespace like refs/remotes.
-func (r *runner) RefDecorations() (map[string][]RefDecoration, error) {
+func (r *runner) RefDecorations(ctx context.Context) (map[string][]RefDecoration, error) {
 	// %(*objectname) is empty for lightweight tags and branch heads, and the
 	// wrapped commit SHA for annotated tags. Prefer it when present.
-	out, err := r.RunGitCommandWithContext(context.Background(),
-		"for-each-ref",
-		"--format=%(refname)%00%(objectname)%00%(*objectname)",
+	refs, err := r.forEachRef(ctx,
+		[]string{atomRefName, atomObjectName, "*" + atomObjectName},
 		"refs/heads", "refs/tags",
 	)
 	if err != nil {
@@ -36,19 +36,8 @@ func (r *runner) RefDecorations() (map[string][]RefDecoration, error) {
 	}
 
 	result := make(map[string][]RefDecoration)
-	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
-		if line == "" {
-			continue
-		}
-		fields := strings.Split(line, "\x00")
-		if len(fields) < 2 {
-			continue
-		}
-		refname, objectname := fields[0], fields[1]
-		sha := objectname
-		if len(fields) >= 3 && fields[2] != "" {
-			sha = fields[2] // annotated tag: dereference to the wrapped commit
-		}
+	for _, ref := range refs {
+		refname, sha := ref[0], cmp.Or(ref[2], ref[1])
 		if sha == "" {
 			continue
 		}

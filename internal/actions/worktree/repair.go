@@ -122,7 +122,7 @@ func repairRegistration(ctx *app.Context, cfg RepoConfig, entry Entry, wtInfo en
 		}
 
 		if ctx.Engine.IsWorktreeAnchor(stackRoot) {
-			existing, err := ctx.Engine.GetWorktreeForStack(stackRootName)
+			existing, err := ctx.Engine.GetWorktreeForStack(ctx.Context, stackRootName)
 			if err != nil {
 				return RepairEntry{}, fmt.Errorf("failed to inspect anchor registration: %w", err)
 			}
@@ -196,11 +196,11 @@ func convertLegacyRegistration(ctx *app.Context, cfg RepoConfig, wtInfo engine.W
 		return "", fmt.Errorf("branch %s is not tracked by stackit", output.BranchName(rootBranchName))
 	}
 
-	originalParent := ctx.Engine.Trunk().GetName()
-	if parent := rootBranch.GetParent(); parent != nil {
-		originalParent = parent.GetName()
+	originalParent := ctx.Engine.Trunk().Name()
+	if parent := rootBranch.Parent(); parent != nil {
+		originalParent = parent.Name()
 	}
-	scope := rootBranch.GetScope().String()
+	scope := rootBranch.Scope().String()
 	name := wtInfo.Name
 	if name == "" {
 		name = engine.WorktreeName(rootBranchName)

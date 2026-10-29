@@ -115,7 +115,7 @@ func TestCommitBatchMergeAndAliases(t *testing.T) {
 	ctx := t.Context()
 	command := func(args ...string) string {
 		t.Helper()
-		out, err := runner.RunGitCommandWithContext(ctx, args...)
+		out, err := runner.Run(ctx, args...)
 		require.NoError(t, err)
 		return out
 	}

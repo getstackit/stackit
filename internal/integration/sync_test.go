@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -34,16 +33,16 @@ func TestSync(t *testing.T) {
 			TrackBranch("feature-b", "feature-a")
 
 		eng := sh.Engine
-		mainBranchName := eng.Trunk().GetName()
+		mainBranchName := eng.Trunk().Name()
 
 		// Verify initial parent of feature-b is feature-a
 		branchB := eng.GetBranch("feature-b")
-		require.Equal(t, "feature-a", branchB.GetParent().GetName())
+		require.Equal(t, "feature-a", branchB.Parent().Name())
 
 		// 2. Simulate GitHub PR metadata for feature-b pointing to main instead of feature-a
 		// This simulates someone manually changing the PR base on GitHub
 		t.Log("Simulating changed PR base on GitHub...")
-		meta, err := sh.Metadata.ReadMetadata(context.Background(), "feature-b").One()
+		meta, err := sh.Metadata.ReadMetadata(t.Context(), "feature-b").One()
 		require.NoError(t, err)
 
 		prInfo := meta.GetPrInfo()
@@ -54,7 +53,7 @@ func TestSync(t *testing.T) {
 		prInfo.Base = &newBase
 		meta = meta.WithPrInfo(prInfo)
 
-		err = sh.Metadata.WriteMetadata("feature-b", meta)
+		err = sh.Metadata.WriteMetadata(t.Context(), "feature-b", meta)
 		require.NoError(t, err)
 
 		// 3. Run sync
@@ -66,7 +65,7 @@ func TestSync(t *testing.T) {
 		// Local metadata is authoritative; if a GitHub client were available,
 		// sync would push the local parent to GitHub (not pull from GitHub)
 		branchBAfter := eng.GetBranch("feature-b")
-		require.Equal(t, "feature-a", branchBAfter.GetParent().GetName(), "Local parent should remain authoritative and not be changed by GitHub PR base")
+		require.Equal(t, "feature-a", branchBAfter.Parent().Name(), "Local parent should remain authoritative and not be changed by GitHub PR base")
 	})
 
 	t.Run("handles consolidation and deletion of merged branches", func(t *testing.T) {
@@ -84,10 +83,10 @@ func TestSync(t *testing.T) {
 		}
 
 		eng := sh.Engine
-		mainBranchName := eng.Trunk().GetName()
+		mainBranchName := eng.Trunk().Name()
 
 		// Batch read metadata for all individual branches at once
-		metas, readErrs := sh.Metadata.ReadMetadata(context.Background(), branchNames...).Split()
+		metas, readErrs := sh.Metadata.ReadMetadata(t.Context(), branchNames...).Split()
 		for branch, readErr := range readErrs {
 			require.NoError(t, readErr, "failed to read metadata for %s", branch)
 		}
@@ -109,7 +108,7 @@ func TestSync(t *testing.T) {
 			prInfo.State = &state
 			prInfo.Base = &base
 			meta = meta.WithPrInfo(prInfo)
-			err := sh.Metadata.WriteMetadata(branch, meta)
+			err := sh.Metadata.WriteMetadata(t.Context(), branch, meta)
 			require.NoError(t, err)
 		}
 
@@ -121,7 +120,7 @@ func TestSync(t *testing.T) {
 			CommitChange("merge-file", "merged content")
 
 		// Mark merge branch as merged
-		meta, err := sh.Metadata.ReadMetadata(context.Background(), mergeBranch).One()
+		meta, err := sh.Metadata.ReadMetadata(t.Context(), mergeBranch).One()
 		require.NoError(t, err)
 		prNum := git.PRNumber(100)
 		state := git.PRStateMerged
@@ -131,7 +130,7 @@ func TestSync(t *testing.T) {
 			State:  &state,
 			Base:   &base,
 		})
-		err = sh.Metadata.WriteMetadata(mergeBranch, meta)
+		err = sh.Metadata.WriteMetadata(t.Context(), mergeBranch, meta)
 		require.NoError(t, err)
 
 		// 3. Run sync (which should call clean_branches)
@@ -139,7 +138,7 @@ func TestSync(t *testing.T) {
 		require.NoError(t, err)
 
 		// 4. Verify all merged branches are deleted
-		allLocalBranches, _ := sh.Scene.Repo.GetLocalBranches()
+		allLocalBranches, _ := sh.Scene.Repo.LocalBranches()
 		for _, name := range branchNames {
 			require.NotContains(t, allLocalBranches, name, "Merged branch %s should have been deleted", name)
 		}
@@ -159,10 +158,10 @@ func TestSync(t *testing.T) {
 
 		// Update GitHub info: 'a' is merged, 'b' is open pointing to 'main', 'c' is open pointing to 'a'
 		eng := sh.Engine
-		mainBranchName := eng.Trunk().GetName()
+		mainBranchName := eng.Trunk().Name()
 
 		// a: MERGED into main
-		metaA, _ := sh.Metadata.ReadMetadata(context.Background(), "a").One()
+		metaA, _ := sh.Metadata.ReadMetadata(t.Context(), "a").One()
 		prNumA := git.PRNumber(1)
 		stateA := prStateMerged
 		baseA := mainBranchName
@@ -171,10 +170,10 @@ func TestSync(t *testing.T) {
 			State:  &stateA,
 			Base:   &baseA,
 		})
-		_ = sh.Metadata.WriteMetadata("a", metaA)
+		_ = sh.Metadata.WriteMetadata(t.Context(), "a", metaA)
 
 		// b: OPEN pointing to main
-		metaB, _ := sh.Metadata.ReadMetadata(context.Background(), "b").One()
+		metaB, _ := sh.Metadata.ReadMetadata(t.Context(), "b").One()
 		prNumB := git.PRNumber(2)
 		stateB := git.PRStateOpen
 		baseB := mainBranchName
@@ -183,21 +182,21 @@ func TestSync(t *testing.T) {
 			State:  &stateB,
 			Base:   &baseB,
 		})
-		_ = sh.Metadata.WriteMetadata("b", metaB)
+		_ = sh.Metadata.WriteMetadata(t.Context(), "b", metaB)
 
 		// 1. Run sync
 		err := sync.Action(sh.Context, sync.Options{}, nil)
 		require.NoError(t, err)
 
 		// 2. Verify 'a' is deleted
-		allLocalBranches, _ := sh.Scene.Repo.GetLocalBranches()
+		allLocalBranches, _ := sh.Scene.Repo.LocalBranches()
 		require.NotContains(t, allLocalBranches, "a")
 
 		// 3. Verify 'b' is reparented to 'main' (because GitHub says so)
-		require.Equal(t, "main", eng.GetBranch("b").GetParent().GetName())
+		require.Equal(t, "main", eng.GetBranch("b").Parent().Name())
 
 		// 4. Verify 'c' is reparented to 'main' (because 'a' was deleted)
-		require.Equal(t, "main", eng.GetBranch("c").GetParent().GetName())
+		require.Equal(t, "main", eng.GetBranch("c").Parent().Name())
 	})
 }
 
@@ -211,11 +210,11 @@ func TestSyncDraftPRs(t *testing.T) {
 		TrackBranch("branch-a", "main")
 
 	eng := sh.Engine
-	mainBranchName := eng.Trunk().GetName()
+	mainBranchName := eng.Trunk().Name()
 
 	// 1. Simulate GitHub PR metadata for branch-a being a DRAFT
 	t.Log("Simulating DRAFT PR on GitHub...")
-	meta, err := sh.Metadata.ReadMetadata(context.Background(), "branch-a").One()
+	meta, err := sh.Metadata.ReadMetadata(t.Context(), "branch-a").One()
 	require.NoError(t, err)
 
 	prNum := git.PRNumber(1)
@@ -229,12 +228,12 @@ func TestSyncDraftPRs(t *testing.T) {
 		IsDraft: &isDraft,
 	})
 
-	err = sh.Metadata.WriteMetadata("branch-a", meta)
+	err = sh.Metadata.WriteMetadata(t.Context(), "branch-a", meta)
 	require.NoError(t, err)
 
 	// 2. Verify it's a draft locally
 	branch := eng.GetBranch("branch-a")
-	prInfo, _ := branch.GetPrInfo()
+	prInfo, _ := branch.PrInfo()
 	require.True(t, prInfo.IsDraft())
 
 	// 3. Run sync
@@ -242,7 +241,7 @@ func TestSyncDraftPRs(t *testing.T) {
 	require.NoError(t, err)
 
 	// 4. Verify branch still exists (drafts shouldn't be deleted)
-	allLocalBranches, _ := sh.Scene.Repo.GetLocalBranches()
+	allLocalBranches, _ := sh.Scene.Repo.LocalBranches()
 	require.Contains(t, allLocalBranches, "branch-a")
 }
 
@@ -258,10 +257,10 @@ func TestSyncCleanupDiamond(t *testing.T) {
 	sh.CreateBranch("c").CommitChange("c", "c").TrackBranch("c", "a")
 
 	eng := sh.Engine
-	mainBranchName := eng.Trunk().GetName()
+	mainBranchName := eng.Trunk().Name()
 
 	// Mark 'a' as merged
-	metaA, _ := sh.Metadata.ReadMetadata(context.Background(), "a").One()
+	metaA, _ := sh.Metadata.ReadMetadata(t.Context(), "a").One()
 	prNum := git.PRNumber(1)
 	state := prStateMerged
 	base := mainBranchName
@@ -270,10 +269,10 @@ func TestSyncCleanupDiamond(t *testing.T) {
 		State:  &state,
 		Base:   &base,
 	})
-	_ = sh.Metadata.WriteMetadata("a", metaA)
+	_ = sh.Metadata.WriteMetadata(t.Context(), "a", metaA)
 
 	// Mark 'b' as merged
-	metaB, _ := sh.Metadata.ReadMetadata(context.Background(), "b").One()
+	metaB, _ := sh.Metadata.ReadMetadata(t.Context(), "b").One()
 	prNumB := git.PRNumber(2)
 	stateB := git.PRStateMerged
 	baseB := mainBranchName
@@ -282,20 +281,20 @@ func TestSyncCleanupDiamond(t *testing.T) {
 		State:  &stateB,
 		Base:   &baseB,
 	})
-	_ = sh.Metadata.WriteMetadata("b", metaB)
+	_ = sh.Metadata.WriteMetadata(t.Context(), "b", metaB)
 
 	// Run sync
 	err := sync.Action(sh.Context, sync.Options{}, nil)
 	require.NoError(t, err)
 
 	// Verify 'a' and 'b' are deleted, but 'c' remains (not merged)
-	allLocalBranches, _ := sh.Scene.Repo.GetLocalBranches()
+	allLocalBranches, _ := sh.Scene.Repo.LocalBranches()
 	require.NotContains(t, allLocalBranches, "a")
 	require.NotContains(t, allLocalBranches, "b")
 	require.Contains(t, allLocalBranches, "c")
 
 	// Verify 'c' is reparented to 'main'
-	require.Equal(t, "main", eng.GetBranch("c").GetParent().GetName())
+	require.Equal(t, "main", eng.GetBranch("c").Parent().Name())
 }
 
 func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
@@ -317,14 +316,14 @@ func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 		TrackBranch("branch-c", "branch-b")
 
 	eng := sh.Engine
-	mainBranchName := eng.Trunk().GetName()
+	mainBranchName := eng.Trunk().Name()
 
 	// Simulate squash merge of branch-a: apply final A tree state on main as one commit.
 	sh.Checkout("main")
 	sh.CommitChange("shared.txt", "a-v2")
 
 	// Mark branch-a PR as merged so sync cleanup deletes it.
-	metaA, err := sh.Metadata.ReadMetadata(context.Background(), "branch-a").One()
+	metaA, err := sh.Metadata.ReadMetadata(t.Context(), "branch-a").One()
 	require.NoError(t, err)
 	prNum := git.PRNumber(1)
 	state := prStateMerged
@@ -334,7 +333,7 @@ func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 		State:  &state,
 		Base:   &base,
 	})
-	err = sh.Metadata.WriteMetadata("branch-a", metaA)
+	err = sh.Metadata.WriteMetadata(t.Context(), "branch-a", metaA)
 	require.NoError(t, err)
 
 	// Run sync+restack from main.
@@ -342,12 +341,12 @@ func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 	err = sync.Action(sh.Context, sync.Options{Restack: true}, nil)
 	require.NoError(t, err)
 
-	allLocalBranches, err := sh.Scene.Repo.GetLocalBranches()
+	allLocalBranches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, allLocalBranches, "branch-a")
 
-	require.Equal(t, "main", eng.GetBranch("branch-b").GetParent().GetName())
-	require.Equal(t, "branch-b", eng.GetBranch("branch-c").GetParent().GetName())
+	require.Equal(t, "main", eng.GetBranch("branch-b").Parent().Name())
+	require.Equal(t, "branch-b", eng.GetBranch("branch-c").Parent().Name())
 
 	// Core regression assertions: B and C keep their own commit boundaries.
 	// If A commits were replayed into B/C, these counts would be inflated.
@@ -374,10 +373,10 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		eng := sh.Engine
-		mainBranchName := eng.Trunk().GetName()
+		mainBranchName := eng.Trunk().Name()
 
 		// Mark feature as merged
-		meta, err := sh.Metadata.ReadMetadata(context.Background(), "feature").One()
+		meta, err := sh.Metadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		prNum := git.PRNumber(1)
 		state := prStateMerged
@@ -387,7 +386,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			State:  &state,
 			Base:   &base,
 		})
-		err = sh.Metadata.WriteMetadata("feature", meta)
+		err = sh.Metadata.WriteMetadata(t.Context(), "feature", meta)
 		require.NoError(t, err)
 
 		// Detach HEAD at main
@@ -420,7 +419,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			TrackBranch("child", "feature")
 
 		eng := sh.Engine
-		mainBranchName := eng.Trunk().GetName()
+		mainBranchName := eng.Trunk().Name()
 
 		// 2. Go back to main and add a new commit (simulating trunk advancing)
 		sh.Checkout("main").
@@ -430,7 +429,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		// Also simulate main having the feature's content
 		sh.CommitChange("feature.txt", "feature v1")
 
-		metaF, err := sh.Metadata.ReadMetadata(context.Background(), "feature").One()
+		metaF, err := sh.Metadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		prNum := git.PRNumber(1)
 		state := prStateMerged
@@ -440,7 +439,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			State:  &state,
 			Base:   &base,
 		})
-		err = sh.Metadata.WriteMetadata("feature", metaF)
+		err = sh.Metadata.WriteMetadata(t.Context(), "feature", metaF)
 		require.NoError(t, err)
 
 		// 4. Stay on main and run sync
@@ -455,14 +454,14 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		requireCleanWorkingTree(t, sh)
 
 		// 6. Verify feature was deleted
-		allLocalBranches, err := sh.Scene.Repo.GetLocalBranches()
+		allLocalBranches, err := sh.Scene.Repo.LocalBranches()
 		require.NoError(t, err)
 		require.NotContains(t, allLocalBranches, "feature")
 
 		// 7. Verify child was reparented to main
 		childBranch := eng.GetBranch("child")
-		require.NotNil(t, childBranch.GetParent())
-		require.Equal(t, mainBranchName, childBranch.GetParent().GetName())
+		require.NotNil(t, childBranch.Parent())
+		require.Equal(t, mainBranchName, childBranch.Parent().Name())
 	})
 
 	t.Run("sync skips deletion of branch with unpushed commits", func(t *testing.T) {
@@ -475,7 +474,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		eng := sh.Engine
-		mainBranchName := eng.Trunk().GetName()
+		mainBranchName := eng.Trunk().Name()
 
 		// Push the branch once so the extra commit below is detected as unpushed.
 		sh.Checkout("feature")
@@ -486,7 +485,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		sh.CommitChange("extra.txt", "unpushed work")
 
 		// Mark feature as merged via PR metadata
-		meta, err := sh.Metadata.ReadMetadata(context.Background(), "feature").One()
+		meta, err := sh.Metadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		prNum := git.PRNumber(1)
 		state := prStateMerged
@@ -496,7 +495,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			State:  &state,
 			Base:   &base,
 		})
-		err = sh.Metadata.WriteMetadata("feature", meta)
+		err = sh.Metadata.WriteMetadata(t.Context(), "feature", meta)
 		require.NoError(t, err)
 
 		// Go back to main for sync
@@ -507,7 +506,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		require.NoError(t, err)
 
 		// Feature branch should NOT be deleted because it has unpushed commits
-		allLocalBranches, err := sh.Scene.Repo.GetLocalBranches()
+		allLocalBranches, err := sh.Scene.Repo.LocalBranches()
 		require.NoError(t, err)
 		require.Contains(t, allLocalBranches, "feature",
 			"branch with unpushed changes should not be deleted during sync")
@@ -539,7 +538,7 @@ func setupTwoBranchSquashScenario(t *testing.T, sh *scenario.Scenario) string {
 	sh.CreateBranch("branch-b").
 		CommitChange("file-b", "b").
 		TrackBranch("branch-b", "branch-a")
-	mainName := sh.Engine.Trunk().GetName()
+	mainName := sh.Engine.Trunk().Name()
 	sh.Checkout("main")
 	sh.CommitChange("file-a", "a")
 	markPrMerged(t, sh, "branch-a", 1, mainName)
@@ -558,7 +557,7 @@ func requireCleanWorkingTree(t *testing.T, sh *scenario.Scenario) {
 // Mirrors the inline pattern used elsewhere in sync_test.go.
 func markPrMerged(t *testing.T, sh *scenario.Scenario, branch string, prNumber git.PRNumber, base string) {
 	t.Helper()
-	meta, err := sh.Metadata.ReadMetadata(context.Background(), branch).One()
+	meta, err := sh.Metadata.ReadMetadata(t.Context(), branch).One()
 	require.NoError(t, err)
 	num := prNumber
 	state := prStateMerged
@@ -568,7 +567,7 @@ func markPrMerged(t *testing.T, sh *scenario.Scenario, branch string, prNumber g
 		State:  &state,
 		Base:   &b,
 	})
-	require.NoError(t, sh.Metadata.WriteMetadata(branch, meta))
+	require.NoError(t, sh.Metadata.WriteMetadata(t.Context(), branch, meta))
 }
 
 // TestSquashMergeMiddleOfStack covers the case where a middle PR (B) is
@@ -599,16 +598,16 @@ func TestSquashMergeMiddleOfStack(t *testing.T) {
 	sh.Checkout("main")
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "branch-b", "merged middle branch should be deleted")
 	require.Contains(t, branches, "branch-a", "open parent should remain")
 	require.Contains(t, branches, "branch-c", "open child should remain")
 
 	// C must hop to A (B's parent), not skip to main.
-	require.Equal(t, "branch-a", sh.Engine.GetBranch("branch-c").GetParent().GetName(),
+	require.Equal(t, "branch-a", sh.Engine.GetBranch("branch-c").Parent().Name(),
 		"C should reparent to A, not main")
-	require.Equal(t, "main", sh.Engine.GetBranch("branch-a").GetParent().GetName())
+	require.Equal(t, "main", sh.Engine.GetBranch("branch-a").Parent().Name())
 
 	// C keeps its own commits — A's squash content shouldn't replay into C.
 	require.Equal(t, 1, sh.BranchCommitCount("branch-c"))
@@ -630,7 +629,7 @@ func TestSyncLinearStackDeletesMergedMiddleBranch(t *testing.T) {
 	require.NoError(t, sh.Scene.Repo.RunGitCommand("config", "--local", "stackit.stack.shape", config.StackShapeLinear))
 	cfg, err := config.LoadConfig(sh.Scene.Dir)
 	require.NoError(t, err)
-	linearEngine, err := engine.NewEngine(engine.Options{
+	linearEngine, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot:     sh.Scene.Dir,
 		Trunk:        cfg.Trunk(),
 		LinearStacks: cfg.StackShape() == config.StackShapeLinear,
@@ -642,10 +641,10 @@ func TestSyncLinearStackDeletesMergedMiddleBranch(t *testing.T) {
 	sh.Checkout("main")
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "b")
-	require.Equal(t, "a", sh.Engine.GetBranch("c").GetParent().GetName())
+	require.Equal(t, "a", sh.Engine.GetBranch("c").Parent().Name())
 	require.Equal(t, 1, sh.BranchCommitCount("c"))
 }
 
@@ -668,7 +667,7 @@ func TestSquashMergeMultipleAdjacentMergedInOneSync(t *testing.T) {
 		TrackBranch("branch-c", "branch-b")
 
 	// Squash A and then B onto trunk (sequential GitHub merges).
-	mainName := sh.Engine.Trunk().GetName()
+	mainName := sh.Engine.Trunk().Name()
 	sh.Checkout("main")
 	sh.CommitChange("file-a", "a")
 	sh.CommitChange("file-b", "b")
@@ -678,14 +677,14 @@ func TestSquashMergeMultipleAdjacentMergedInOneSync(t *testing.T) {
 
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "branch-a")
 	require.NotContains(t, branches, "branch-b")
 	require.Contains(t, branches, "branch-c")
 
 	// findNonDeletingAncestor must walk past both deletions to main.
-	require.Equal(t, mainName, sh.Engine.GetBranch("branch-c").GetParent().GetName())
+	require.Equal(t, mainName, sh.Engine.GetBranch("branch-c").Parent().Name())
 
 	// C should not have inherited A's or B's commits during restack.
 	require.Equal(t, 1, sh.BranchCommitCount("branch-c"))
@@ -723,13 +722,13 @@ func TestSquashMergeDiamondAllChildrenMerged(t *testing.T) {
 	sh.Checkout("main")
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "branch-b")
 	require.NotContains(t, branches, "branch-c")
 	require.Contains(t, branches, "branch-a", "open parent should survive losing both children")
 
-	require.Equal(t, "main", sh.Engine.GetBranch("branch-a").GetParent().GetName())
+	require.Equal(t, "main", sh.Engine.GetBranch("branch-a").Parent().Name())
 }
 
 // TestSquashMergeSyncWhileOnMergedBranch is a safety-invariants test:
@@ -747,7 +746,7 @@ func TestSquashMergeSyncWhileOnMergedBranch(t *testing.T) {
 	sh.Checkout("branch-a")
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "branch-a")
 	require.Contains(t, branches, "branch-b")
@@ -775,12 +774,12 @@ func TestSquashMergeSyncWhileOnChildOfMergedBranch(t *testing.T) {
 	sh.Checkout("branch-b")
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "branch-a")
 	require.Contains(t, branches, "branch-b")
 
-	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").GetParent().GetName())
+	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").Parent().Name())
 
 	// User stays on branch-b even though its parent changed under it.
 	headRef, err := sh.Scene.Repo.RunGitCommandAndGetOutput("symbolic-ref", "--short", "HEAD")
@@ -809,13 +808,13 @@ func TestSquashMergeNoRestackLeavesGitRefsUntouched(t *testing.T) {
 
 	require.NoError(t, sync.Action(sh.Context, sync.Options{NoRestack: true}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "branch-a", "cleanup should still run with --no-restack")
 	require.Contains(t, branches, "branch-b")
 
 	// Metadata parent updated to main even though restack was skipped.
-	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").GetParent().GetName())
+	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").Parent().Name())
 
 	// Git ref untouched: branch-b still points at its original commit.
 	bSHAafterSync, err := sh.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "branch-b")
@@ -846,19 +845,19 @@ func TestSquashMergeChildBecomesEmpty(t *testing.T) {
 
 	// Squash-merge of A includes B's content too: trunk jumps straight
 	// to v2 in one commit. (The reviewer combined the two PRs.)
-	mainName := sh.Engine.Trunk().GetName()
+	mainName := sh.Engine.Trunk().Name()
 	sh.Checkout("main")
 	sh.CommitChange("shared", "v2")
 	markPrMerged(t, sh, "branch-a", 1, mainName)
 
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "branch-a")
 	require.Contains(t, branches, "branch-b", "B has no PR; should survive even if empty")
 
-	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").GetParent().GetName())
+	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").Parent().Name())
 
 	empty, err := sh.Engine.IsBranchEmpty(sh.Context.Context, "branch-b")
 	require.NoError(t, err)
@@ -887,12 +886,12 @@ func TestUserDeletedMergedBranchBeforeSync(t *testing.T) {
 
 	// Refresh the engine so it sees that branch-a is gone — equivalent to a
 	// fresh CLI invocation.
-	require.NoError(t, sh.Engine.Rebuild(mainName))
+	require.NoError(t, sh.Engine.Rebuild(t.Context(), mainName))
 
 	// Sync runs and shouldn't error.
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "branch-a")
 	require.Contains(t, branches, "branch-b")
@@ -901,14 +900,14 @@ func TestUserDeletedMergedBranchBeforeSync(t *testing.T) {
 	// cleaned up. The ghost-detection path in buildDeletionPlanAndReparent
 	// synthesizes a deletion entry for A so the existing reparent + cleanup
 	// machinery runs against it.
-	bParent := sh.Engine.GetBranch("branch-b").GetParent()
+	bParent := sh.Engine.GetBranch("branch-b").Parent()
 	require.NotNil(t, bParent, "B must have a parent entry after sync")
-	require.Equal(t, mainName, bParent.GetName(),
+	require.Equal(t, mainName, bParent.Name(),
 		"B should reparent to trunk now that A is gone")
 
 	// Stale metadata for the ghost should be cleaned up too — otherwise
 	// the next sync would re-detect it and churn pointlessly.
-	meta, err := sh.Metadata.ReadMetadata(context.Background(), "branch-a").One()
+	meta, err := sh.Metadata.ReadMetadata(t.Context(), "branch-a").One()
 	require.NoError(t, err)
 	require.True(t, meta == nil || meta.GetParentBranchName() == nil,
 		"A's stale metadata should be cleared after sync")
@@ -941,7 +940,7 @@ func TestUserManuallyRebasedChildBeforeSync(t *testing.T) {
 	if err != nil {
 		require.Contains(t, err.Error(), "divergence point",
 			"if sync errors here, the message should still mention divergence point so users can diagnose")
-		branches, lerr := sh.Scene.Repo.GetLocalBranches()
+		branches, lerr := sh.Scene.Repo.LocalBranches()
 		require.NoError(t, lerr)
 		require.Contains(t, branches, "branch-a",
 			"sync aborted before deletion — A should still exist")
@@ -950,11 +949,11 @@ func TestUserManuallyRebasedChildBeforeSync(t *testing.T) {
 	}
 	// Future-graceful path: if sync ever handles this without error,
 	// it must still leave the world consistent.
-	branches, lerr := sh.Scene.Repo.GetLocalBranches()
+	branches, lerr := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, lerr)
 	require.NotContains(t, branches, "branch-a")
 	require.Contains(t, branches, "branch-b")
-	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").GetParent().GetName())
+	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").Parent().Name())
 }
 
 // TestMergeCommitNotSquash: GitHub merged the PR with the merge-commit
@@ -973,7 +972,7 @@ func TestMergeCommitNotSquash(t *testing.T) {
 		CommitChange("file-b", "b").
 		TrackBranch("branch-b", "branch-a")
 
-	mainName := sh.Engine.Trunk().GetName()
+	mainName := sh.Engine.Trunk().Name()
 
 	// Merge-commit strategy: trunk now contains A's real commits via a merge,
 	// not a single squash. A's tip becomes an ancestor of trunk.
@@ -983,12 +982,12 @@ func TestMergeCommitNotSquash(t *testing.T) {
 
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "branch-a", "merge-committed branch should be cleaned up too")
 	require.Contains(t, branches, "branch-b")
 
-	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").GetParent().GetName())
+	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").Parent().Name())
 
 	// B's commit boundary must be preserved — A's commits are already in trunk.
 	require.Equal(t, 1, sh.BranchCommitCount("branch-b"), "B should have its own commit only, not a duplicate of A's")
@@ -1016,7 +1015,7 @@ func TestUserLocallyAdvancedTrunkBeforeSync(t *testing.T) {
 		CommitChange("file-b", "b").
 		TrackBranch("branch-b", "branch-a")
 
-	mainName := sh.Engine.Trunk().GetName()
+	mainName := sh.Engine.Trunk().Name()
 
 	// Squash already on trunk locally before sync starts.
 	sh.Checkout("main")
@@ -1033,12 +1032,12 @@ func TestUserLocallyAdvancedTrunkBeforeSync(t *testing.T) {
 	require.Equal(t, strings.TrimSpace(mainSHABeforeSync), strings.TrimSpace(mainSHAAfterSync),
 		"trunk must not move during sync when it's already at the merged state")
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "branch-a")
 	require.Contains(t, branches, "branch-b")
 
-	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").GetParent().GetName())
+	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").Parent().Name())
 
 	require.Equal(t, 1, sh.BranchCommitCount("branch-b"))
 
@@ -1064,15 +1063,15 @@ func TestSyncSnapshotPrecedesBranchCleanup(t *testing.T) {
 
 	require.NoError(t, sync.Action(sh.Context, sync.Options{}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "branch-a", "sync should have deleted the merged branch")
-	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").GetParent().GetName(),
+	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").Parent().Name(),
 		"the merged branch's child should be reparented to main")
 
 	require.NoError(t, undo.Action(sh.Context, undo.Options{Force: true}, nil))
 
-	branches, err = sh.Scene.Repo.GetLocalBranches()
+	branches, err = sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.Contains(t, branches, "branch-a",
 		"sync's snapshot must predate the cleanup it performs, or abort/undo silently keeps the deletions")

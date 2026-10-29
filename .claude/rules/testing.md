@@ -255,6 +255,18 @@ func TestThing(t *testing.T) {
 }
 ```
 
+### Use `t.Context()` Instead of `context.Background()`
+
+`t.Context()` is cancelled when the test finishes, so a goroutine or git
+subprocess that outlives its test is cut off instead of leaking into the next
+one. Benchmarks use `b.Context()`. The `usetesting` linter enforces this.
+Keep `context.Background()` only for state that outlives one test, such as a
+harness started from a `sync.Once` or torn down in `TestMain`.
+
+For timer- or debounce-driven code, wrap the test in `synctest.Test` and use
+`synctest.Wait()` instead of `time.Sleep` plus `require.Eventually`; virtual
+time makes it deterministic and instant (see `internal/api/reposync/coalescer_test.go`).
+
 ### Use `t.Helper()` in Helper Functions
 
 ```go
@@ -332,7 +344,7 @@ The test directory path is printed and won't be cleaned up, allowing inspection.
 
 1. **Forgetting `t.Parallel()`** - Tests run serially without it, wasting time and CPU cores
 2. **Using `WithRemote()` unnecessarily** - Remote setup adds overhead; only use for push/pull/sync tests
-3. **Using `NewScene` instead of `NewSceneParallel`** - `NewScene` uses `os.Chdir()` which breaks parallel tests
+3. **Using `NewScene` instead of `NewSceneParallel`** - `NewScene` changes the working directory with `t.Chdir()`, so it panics under `t.Parallel()`
 4. **Using `assert` instead of `require`** - Tests continue past failures, causing confusing cascading errors
 5. **Not using `WithRemote()` when needed** - Sync/push/pull tests fail without a remote
 6. **Using raw git commands** - Prefer stackit commands via `sh.Run()` to test actual behavior

@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-github/v93/github"
@@ -134,14 +133,14 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 		require.Contains(t, syncResult.BranchesUpdated, "branch-c", "branch-c should have its PR base updated on GitHub")
 
 		// Rebuild engine
-		err = s.Engine.Rebuild("main")
+		err = s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// CRITICAL: Local parent should be PRESERVED (not changed by sync)
 		branchC := s.Engine.GetBranch("branch-c")
-		parentC := branchC.GetParent()
+		parentC := branchC.Parent()
 		require.NotNil(t, parentC)
-		require.Equal(t, "branch-a", parentC.GetName(), "branch-c local parent should remain branch-a")
+		require.Equal(t, "branch-a", parentC.Name(), "branch-c local parent should remain branch-a")
 
 		// Verify the expected structure is preserved
 		s.ExpectStackStructure(map[string]string{
@@ -194,15 +193,15 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 			CommitChange("file-a-modified", "branch-a modified")
 
 		// Rebuild to update metadata
-		err = s.Engine.Rebuild("main")
+		err = s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// Manually restack children (simulating what modify would do)
 		branchB := s.Engine.GetBranch("branch-b")
 		branchC := s.Engine.GetBranch("branch-c")
-		_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branchB), engine.RestackOpts{})
+		_, err = s.Engine.RestackBranches(t.Context(), engine.BranchesOf(branchB), engine.RestackOpts{})
 		require.NoError(t, err)
-		_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branchC), engine.RestackOpts{})
+		_, err = s.Engine.RestackBranches(t.Context(), engine.BranchesOf(branchC), engine.RestackOpts{})
 		require.NoError(t, err)
 
 		// Now setup mock GitHub with potentially stale info
@@ -336,14 +335,14 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 		require.NoError(t, err)
 
 		// Rebuild to pick up changes
-		err = s.Engine.Rebuild("main")
+		err = s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// VERIFICATION: Local parent should be PRESERVED (branch-a, not changed to main)
 		branchB := s.Engine.GetBranch("branch-b")
-		parent := branchB.GetParent()
+		parent := branchB.Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "branch-a", parent.GetName(), "branch-b local parent should remain branch-a (local is authoritative)")
+		require.Equal(t, "branch-a", parent.Name(), "branch-b local parent should remain branch-a (local is authoritative)")
 	})
 }
 
@@ -351,7 +350,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 func storeLocalPRInfo(t *testing.T, eng engine.Engine, branchName string, prNumber git.PRNumber, baseBranch string) {
 	t.Helper()
 	branch := eng.GetBranch(branchName)
-	err := eng.UpsertPrInfo(context.Background(), branch, testhelpers.NewTestPrInfoWithTitle(prNumber, branchName+" PR").
+	err := eng.UpsertPrInfo(t.Context(), branch, testhelpers.NewTestPrInfoWithTitle(prNumber, branchName+" PR").
 		WithBase(baseBranch).
 		WithURL("https://github.com/owner/repo/pull/"+string(rune('0'+prNumber))))
 	require.NoError(t, err)

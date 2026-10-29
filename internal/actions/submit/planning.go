@@ -1,6 +1,7 @@
 package submit
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -25,7 +26,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	for _, branch := range branches {
 		revBranches = append(revBranches, branch, resolveSubmitParent(nav, branch))
 	}
-	revisions := ctx.Engine.BatchRevisions(revBranches)
+	revisions := ctx.Engine.BatchRevisions(ctx.Context, revBranches)
 
 	// PR-info writes are collected here and persisted in one batched ref write
 	// after planning, instead of a git ref write per branch.
@@ -50,14 +51,14 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	// Batch misses (including a failed query) retain the single-PR fallback.
 	missingContent := make([]string, 0, len(branches))
 	for _, branch := range branches {
-		status := statuses[branch.GetName()]
+		status := statuses[branch.Name()]
 		action, _ := effectiveSubmitAction(status)
 		if _, skip := submissionSkipReason(status, action, opts); skip {
 			continue
 		}
-		info, _ := branch.GetPrInfo()
+		info, _ := branch.PrInfo()
 		if info != nil && info.Number() != nil && (info.Title() == "" || info.Body() == "") {
-			missingContent = append(missingContent, branch.GetName())
+			missingContent = append(missingContent, branch.Name())
 		}
 	}
 	var current map[git.PRNumber]github.PRContent
@@ -66,7 +67,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	}
 
 	for _, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 		status := statuses[branchName]
 
 		action, prNumber := effectiveSubmitAction(status)
@@ -107,7 +108,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		prUpdates[branchName] = pendingPrInfo(branch, metadata)
 
 		// Get SHAs from the batched revisions resolved above.
-		parentBranchName := resolveSubmitParent(nav, branch).GetName()
+		parentBranchName := resolveSubmitParent(nav, branch).Name()
 		headSHA := revisions[branchName]
 		baseSHA := revisions[parentBranchName]
 
@@ -206,7 +207,7 @@ func getBranchesToSubmit(ctx *app.Context, opts Options) ([]string, error) {
 	nav := ctx.Navigator()
 
 	// Get branch scope
-	branchName, err := resolveBranchNameFromNav(nav, opts.Branch)
+	branchName, err := resolveBranchNameFromNav(ctx.Context, nav, opts.Branch)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +217,7 @@ func getBranchesToSubmit(ctx *app.Context, opts Options) ([]string, error) {
 	if !stackRange.RecursiveParents && !stackRange.IncludeCurrent && !stackRange.RecursiveChildren {
 		stackRange = engine.StackRangeDownstack(engine.IncludeCurrentBranch)
 	}
-	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+	graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	stackBranches := graph.Range(nav.GetBranch(branchName), stackRange)
 	allBranches := stackBranches.Names()
 
@@ -235,6 +236,6 @@ func getBranchesToSubmit(ctx *app.Context, opts Options) ([]string, error) {
 }
 
 // resolveBranchNameFromNav resolves a branch name, defaulting to current branch if empty.
-func resolveBranchNameFromNav(nav engine.StackNavigator, branchName string) (string, error) {
-	return actions.ResolveBranchName(nav, branchName)
+func resolveBranchNameFromNav(ctx context.Context, nav engine.StackNavigator, branchName string) (string, error) {
+	return actions.ResolveBranchName(ctx, nav, branchName)
 }

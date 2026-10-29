@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 
@@ -37,7 +36,7 @@ func TestResolveRefInWorktree(t *testing.T) {
 
 	// Add worktree for feature branch using the main runner
 	mainRunner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
-	err = mainRunner.AddWorktree(context.Background(), git.WorktreePath(worktreePath), "feature", git.WorktreeAttached)
+	err = mainRunner.AddWorktree(t.Context(), git.WorktreePath(worktreePath), "feature", git.WorktreeAttached)
 	require.NoError(t, err)
 
 	// Create a NEW runner pointing to the worktree
@@ -48,17 +47,17 @@ func TestResolveRefInWorktree(t *testing.T) {
 	// Try to resolve 'main' from the worktree runner. `git rev-parse` follows
 	// the worktree's gitdir pointer back to the common dir, so refs are
 	// resolvable from inside a linked worktree.
-	resolvedSHA, err := worktreeRunner.ReadRevisions(context.Background(), "main").One()
+	resolvedSHA, err := worktreeRunner.ReadRevisions(t.Context(), "main").One()
 	require.NoError(t, err, "Should be able to resolve 'main' from a worktree")
 	require.Equal(t, mainSHA, resolvedSHA)
 
 	// Also test resolving by full ref name
-	resolvedSHA2, err := worktreeRunner.ReadRevisions(context.Background(), "refs/heads/main").One()
+	resolvedSHA2, err := worktreeRunner.ReadRevisions(t.Context(), "refs/heads/main").One()
 	require.NoError(t, err)
 	require.Equal(t, mainSHA, resolvedSHA2)
 
 	// Test resolving HEAD
-	headSHA, err := worktreeRunner.ReadRevisions(context.Background(), "HEAD").One()
+	headSHA, err := worktreeRunner.ReadRevisions(t.Context(), "HEAD").One()
 	require.NoError(t, err)
 	featureSHA, err := scene.Repo.GetRevision("feature")
 	require.NoError(t, err)

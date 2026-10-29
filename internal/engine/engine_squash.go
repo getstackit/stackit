@@ -38,7 +38,7 @@ func (e *engineImpl) SquashCurrentBranch(ctx context.Context, opts SquashOptions
 
 	// Get current branch revision
 	branch := e.GetBranch(branchName)
-	branchRevision, err := branch.GetRevision()
+	branchRevision, err := branch.Revision(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get branch revision: %w", err)
 	}
@@ -75,7 +75,7 @@ func (e *engineImpl) SquashCurrentBranch(ctx context.Context, opts SquashOptions
 		// Don't set Edit - git will open editor by default if no message and no noEdit
 	}
 
-	if err := e.git.CommitWithOptions(commitOpts); err != nil {
+	if err := e.git.CommitWithOptions(ctx, commitOpts); err != nil {
 		// Try to rollback on error
 		if rollbackErr := e.git.SoftReset(ctx, branchRevision); rollbackErr != nil {
 			// Log rollback error but return original error
@@ -86,7 +86,7 @@ func (e *engineImpl) SquashCurrentBranch(ctx context.Context, opts SquashOptions
 
 	// Rebuild to refresh cache (parent/children relationships remain the same)
 	// Don't refresh currentBranch - we're still on the same branch
-	if err := e.rebuildInternal(skipCurrentBranchRefresh); err != nil {
+	if err := e.rebuildInternal(ctx, skipCurrentBranchRefresh); err != nil {
 		return fmt.Errorf("failed to rebuild after squash: %w", err)
 	}
 

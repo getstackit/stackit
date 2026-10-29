@@ -19,11 +19,11 @@ type tokenRunner struct {
 	ghArgs []string
 }
 
-func (r *tokenRunner) GetConfig(string) (string, error) {
+func (r *tokenRunner) GetConfig(context.Context, string) (string, error) {
 	return r.remoteURL, r.configErr
 }
 
-func (r *tokenRunner) RunGHCommandWithContext(_ context.Context, args ...string) (string, error) {
+func (r *tokenRunner) RunGH(_ context.Context, args ...string) (string, error) {
 	r.ghArgs = args
 	if r.ghErr != nil {
 		return "", r.ghErr

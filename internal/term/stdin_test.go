@@ -1,4 +1,4 @@
-package utils
+package term
 
 import (
 	"os"
@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestReadFromStdin(t *testing.T) {
+func TestReadStdin(t *testing.T) {
 	// Set to non-interactive mode
 	SetInteractive(false)
 
@@ -24,7 +24,7 @@ func TestReadFromStdin(t *testing.T) {
 		_ = w.Close()
 	}()
 
-	msg, err := ReadFromStdin()
+	msg, err := ReadStdin()
 	require.NoError(t, err)
 	require.Equal(t, expected, msg)
 }

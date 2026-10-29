@@ -38,12 +38,12 @@ type StackInfoResult struct {
 
 // QueryStackInfo gathers structured information about the current stack.
 func QueryStackInfo(ctx context.Context, eng engine.Engine) (StackInfoResult, error) {
-	current := eng.CurrentBranch()
+	current := eng.CurrentBranch(ctx)
 	if current == nil {
 		return StackInfoResult{}, errors.ErrNotOnBranch
 	}
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	stackBranches := graph.Range(*current, engine.StackRange{
 		RecursiveParents:  true,
 		IncludeCurrent:    true,
@@ -53,15 +53,15 @@ func QueryStackInfo(ctx context.Context, eng engine.Engine) (StackInfoResult, er
 	// Read each per-branch concern the projection needs as its own batched value
 	// map — commits, diff stats, changed-file counts, PR status, and restack
 	// status — instead of warming an engine-global cache.
-	commits := eng.BatchCommits(stackBranches)
-	diffs := eng.BatchDiffStats(stackBranches)
+	commits := eng.BatchCommits(ctx, stackBranches)
+	diffs := eng.BatchDiffStats(ctx, stackBranches)
 	fileCounts := eng.BatchChangedFileCounts(ctx, stackBranches)
 	prStatuses, _ := eng.BatchGetPRSubmissionStatus(ctx, stackBranches, nil)
-	statuses := eng.ReadBranchStatuses(stackBranches)
+	statuses := eng.ReadBranchStatuses(ctx, stackBranches)
 
-	trunk := eng.Trunk().GetName()
+	trunk := eng.Trunk().Name()
 	result := StackInfoResult{
-		Current:  current.GetName(),
+		Current:  current.Name(),
 		Trunk:    trunk,
 		Order:    make([]string, 0, len(stackBranches)),
 		Parents:  make(map[string]string, len(stackBranches)),
@@ -70,9 +70,9 @@ func QueryStackInfo(ctx context.Context, eng engine.Engine) (StackInfoResult, er
 	}
 
 	for _, branch := range stackBranches {
-		name := branch.GetName()
+		name := branch.Name()
 		result.Order = append(result.Order, name)
-		result.Parents[name] = branch.GetParentOrTrunk()
+		result.Parents[name] = branch.ParentOrTrunk()
 		result.UpToDate[name] = statuses.IsUpToDate(branch)
 
 		if branch.IsTrunk() {
@@ -82,10 +82,10 @@ func QueryStackInfo(ctx context.Context, eng engine.Engine) (StackInfoResult, er
 		diff := diffs[name]
 		info := StackInfoBranch{
 			Name:           name,
-			Parent:         branch.GetParentOrTrunk(),
+			Parent:         branch.ParentOrTrunk(),
 			IsLocked:       branch.IsLocked(),
 			IsFrozen:       branch.IsFrozen(),
-			Scope:          branch.GetScope().String(),
+			Scope:          branch.Scope().String(),
 			CommitMessages: commits[name].Onelines(),
 			DiffStats: BranchDiffStats{
 				Additions:    diff.Added,
@@ -110,7 +110,7 @@ func QueryStackInfo(ctx context.Context, eng engine.Engine) (StackInfoResult, er
 	// Trunk never needs a restack; mirror the tree renderer's own invariant.
 	result.UpToDate[trunk] = true
 
-	if stackDesc := eng.GetStackDescription(*current); stackDesc != nil && !stackDesc.IsEmpty() {
+	if stackDesc := eng.GetStackDescription(ctx, *current); stackDesc != nil && !stackDesc.IsEmpty() {
 		result.StackTitle = stackDesc.Title
 		result.StackDescription = stackDesc.Description
 	}

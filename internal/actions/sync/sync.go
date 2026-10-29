@@ -128,8 +128,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		ctx.Logger.Info("goroutine remote fetch started delayMs=%v", time.Since(parallelStart).Milliseconds())
 		fetchStart := time.Now()
 		trunkFetchErr = eng.FetchRemote(remoteCtx, engine.RemoteFetchRequest{
-			Remote:               eng.GetRemote(),
-			Branches:             []string{eng.Trunk().GetName()},
+			Remote:               eng.GetRemote(ctx.Context),
+			Branches:             []string{eng.Trunk().Name()},
 			IncludeMetadata:      true,
 			IncludeStackMetadata: true,
 		})
@@ -165,7 +165,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	ctx.Logger.Info("parallel phase completed durationMs=%v", time.Since(parallelStart).Milliseconds())
 
 	if trunkFetchErr != nil {
-		return fmt.Errorf("failed to fetch trunk from %s: %w", eng.GetRemote(), trunkFetchErr)
+		return fmt.Errorf("failed to fetch trunk from %s: %w", eng.GetRemote(ctx.Context), trunkFetchErr)
 	}
 	if parallelErr != nil {
 		return parallelErr
@@ -245,7 +245,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		ctx.Output.Warn("Stack metadata cleanup: %s", errMsg)
 	}
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Add branches with new parents to restack list (skip dirty stacks)
 	for _, branchName := range cleanResult.BranchesWithNewParents {
@@ -257,7 +257,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			RecursiveChildren: true,
 		})
 		for _, b := range upstack {
-			branchesToRestack = append(branchesToRestack, b.GetName())
+			branchesToRestack = append(branchesToRestack, b.Name())
 		}
 		branchesToRestack = append(branchesToRestack, branchName)
 	}

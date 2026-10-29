@@ -1,4 +1,4 @@
-package utils
+package sync
 
 // LazyHeaders decides when a keyed section's header should be emitted to a
 // streaming display: at most once, on the section's first item, and only for

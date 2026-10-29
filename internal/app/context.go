@@ -15,13 +15,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getstackit/stackit/internal/term"
+
+	"github.com/getstackit/stackit/internal/demo"
+
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // DefaultRemoteOperationTimeout bounds explicit remote operations launched by
@@ -162,7 +165,7 @@ func (c *Context) RequireGitHub() (github.Client, error) {
 }
 
 // Prompts returns the adapter-supplied prompter, or a non-interactive one
-// whose prompts fail with utils.ErrInteractiveDisabled when none was set.
+// whose prompts fail with term.ErrInteractiveDisabled when none was set.
 func (c *Context) Prompts() handler.Prompter {
 	if c.Prompter == nil {
 		return handler.NonInteractivePrompter{}
@@ -298,7 +301,7 @@ func NewContext(eng engine.Engine, opts ...ContextOption) *Context {
 	}
 
 	// Update global TUI interactivity
-	utils.SetInteractive(options.global.Interactive)
+	term.SetInteractive(options.global.Interactive)
 
 	// Create console output
 	consoleOutput := output.NewConsoleOutput(options.writer, options.global.Debug)
@@ -337,24 +340,16 @@ func NewContext(eng engine.Engine, opts ...ContextOption) *Context {
 	}
 }
 
-// DemoEngineFactory is a function that creates a demo engine and the runner
-// the GitHub integration should use alongside it.
-// This is set by the demo package to avoid circular imports.
-var DemoEngineFactory func() (engine.Engine, github.GitCommandRunner)
-
-// DemoGitHubClientFactory is a function that creates a demo GitHub client.
-// This is set by the demo package to avoid circular imports.
-var DemoGitHubClientFactory func() github.Client
-
 // NewContextAutoWithWriter is like NewContextAuto but allows specifying the output writer.
 func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalOptions, writer io.Writer) (*Context, error) {
-	if utils.IsDemoMode() && DemoEngineFactory != nil {
-		eng, ghRunner := DemoEngineFactory()
+	if demo.Enabled() {
+		eng, ghRunner, err := demo.NewDemoEngine(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("demo engine: %w", err)
+		}
 		runtimeCtx := NewContext(eng, WithRepoRoot(repoRoot), WithGlobalOptions(opts), WithWriter(writer), WithGitHubRunner(ghRunner))
 		runtimeCtx.Context = ctx
-		if DemoGitHubClientFactory != nil {
-			runtimeCtx.GitHubClient = DemoGitHubClientFactory()
-		}
+		runtimeCtx.GitHubClient = demo.NewDemoGitHubClient()
 		return runtimeCtx, nil
 	}
 
@@ -401,7 +396,7 @@ func newContextWithConfig(ctx context.Context, repoRoot string, opts GlobalOptio
 	// ReadLocalMetadata at bootstrap — local metadata (Frozen, etc.)
 	// loads on first accessor call. For commands that never read local-only
 	// fields this cuts metadata I/O roughly in half on big repos.
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(ctx, engine.Options{
 		RepoRoot:          repoRoot,
 		Trunk:             trunk,
 		MaxUndoStackDepth: maxUndoDepth,
@@ -438,7 +433,7 @@ func GetContext(ctx context.Context, opts GlobalOptions) (*Context, error) {
 // GetContextWithWriter is like GetContext but allows specifying the output writer.
 func GetContextWithWriter(ctx context.Context, opts GlobalOptions, writer io.Writer) (*Context, error) {
 	// Check for demo mode first
-	if utils.IsDemoMode() {
+	if demo.Enabled() {
 		return NewContextAutoWithWriter(ctx, "", opts, writer)
 	}
 

@@ -32,7 +32,7 @@ func (c *countingFetchRunner) FetchRemoteShas(ctx context.Context, remote string
 func newCountingEngine(t *testing.T, dir string) (engine.Engine, *countingFetchRunner) {
 	t.Helper()
 	counting := &countingFetchRunner{Runner: git.NewRunnerWithPath(dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: dir,
 		Trunk:    "main",
 		Git:      counting,
@@ -56,7 +56,7 @@ func TestBatchGetPRSubmissionStatusReadsRemoteOnceForUpdates(t *testing.T) {
 
 	// Give each branch an existing PR so it is an update, not a create.
 	for i, name := range []string{"P", "C1", "C2"} {
-		require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch(name),
+		require.NoError(t, eng.UpsertPrInfo(t.Context(), eng.GetBranch(name),
 			testhelpers.NewTestPrInfoWithTitle(git.PRNumber(100+i), "title")))
 	}
 
@@ -64,7 +64,7 @@ func TestBatchGetPRSubmissionStatusReadsRemoteOnceForUpdates(t *testing.T) {
 
 	// Measure only the batched call, isolating it from any setup reads.
 	counting.fetchRemoteShas.Store(0)
-	statuses, err := eng.BatchGetPRSubmissionStatus(context.Background(), branches, nil)
+	statuses, err := eng.BatchGetPRSubmissionStatus(t.Context(), branches, nil)
 	require.NoError(t, err)
 	require.Len(t, statuses, 3)
 
@@ -89,10 +89,10 @@ func TestBatchUpsertPrInfo(t *testing.T) {
 			"C2": testhelpers.NewTestPrInfoWithTitle(103, "PR for C2").WithMergeBranch("consolidation"),
 		}
 
-		require.NoError(t, eng.BatchUpsertPrInfo(context.Background(), updates))
+		require.NoError(t, eng.BatchUpsertPrInfo(t.Context(), updates))
 
 		for name, want := range updates {
-			got, err := eng.GetBranch(name).GetPrInfo()
+			got, err := eng.GetBranch(name).PrInfo()
 			require.NoError(t, err)
 			require.NotNil(t, got, "branch %s should have PR info", name)
 			require.Equal(t, want.Title(), got.Title(), "branch %s title", name)
@@ -110,17 +110,17 @@ func TestBatchUpsertPrInfo(t *testing.T) {
 		branch := eng.GetBranch("A")
 
 		// Set initial PR info with a title and state
-		require.NoError(t, eng.UpsertPrInfo(context.Background(), branch,
+		require.NoError(t, eng.UpsertPrInfo(t.Context(), branch,
 			testhelpers.NewTestPrInfoFull(200, "original title", "body", "OPEN", "main", "https://example.com", false)))
 
 		// Batch upsert only updates MergeBranch; other fields should be preserved
-		prInfo, err := branch.GetPrInfo()
+		prInfo, err := branch.PrInfo()
 		require.NoError(t, err)
-		require.NoError(t, eng.BatchUpsertPrInfo(context.Background(), map[string]*engine.PrInfo{
+		require.NoError(t, eng.BatchUpsertPrInfo(t.Context(), map[string]*engine.PrInfo{
 			"A": prInfo.WithMergeBranch("my-consolidation"),
 		}))
 
-		got, err := branch.GetPrInfo()
+		got, err := branch.PrInfo()
 		require.NoError(t, err)
 		require.Equal(t, "original title", got.Title())
 		require.Equal(t, "my-consolidation", got.MergeBranch())
@@ -132,8 +132,8 @@ func TestBatchUpsertPrInfo(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{"A": "main"})
 
-		require.NoError(t, s.Engine.BatchUpsertPrInfo(context.Background(), nil))
-		require.NoError(t, s.Engine.BatchUpsertPrInfo(context.Background(), map[string]*engine.PrInfo{}))
+		require.NoError(t, s.Engine.BatchUpsertPrInfo(t.Context(), nil))
+		require.NoError(t, s.Engine.BatchUpsertPrInfo(t.Context(), map[string]*engine.PrInfo{}))
 	})
 }
 
@@ -148,7 +148,7 @@ func TestBatchGetPRSubmissionStatusSkipsRemoteForCreates(t *testing.T) {
 	branches := engine.BranchesOf(eng.GetBranch("P"), eng.GetBranch("C1"), eng.GetBranch("C2"))
 
 	counting.fetchRemoteShas.Store(0)
-	statuses, err := eng.BatchGetPRSubmissionStatus(context.Background(), branches, nil)
+	statuses, err := eng.BatchGetPRSubmissionStatus(t.Context(), branches, nil)
 	require.NoError(t, err)
 	require.Len(t, statuses, 3)
 
@@ -167,7 +167,7 @@ func TestBatchGetPRSubmissionStatusFailsOnUnreadableMetadata(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{"P": "main", "C1": "P"})
 	for i, name := range []string{"P", "C1"} {
-		require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch(name),
+		require.NoError(t, s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch(name),
 			testhelpers.NewTestPrInfoWithTitle(git.PRNumber(100+i), "title")))
 	}
 
@@ -181,9 +181,9 @@ func TestBatchGetPRSubmissionStatusFailsOnUnreadableMetadata(t *testing.T) {
 	eng, _ := newCountingEngine(t, s.Scene.Dir)
 	branches := engine.BranchesOf(eng.GetBranch("P"), eng.GetBranch("C1"))
 
-	_, err = eng.BatchGetPRSubmissionStatus(context.Background(), branches, nil)
+	_, err = eng.BatchGetPRSubmissionStatus(t.Context(), branches, nil)
 	require.ErrorContains(t, err, "C1")
 
-	_, err = eng.BatchGetPRSubmissionStatus(context.Background(), branches, engine.BranchRemoteStatuses{})
+	_, err = eng.BatchGetPRSubmissionStatus(t.Context(), branches, engine.BranchRemoteStatuses{})
 	require.ErrorContains(t, err, "C1")
 }

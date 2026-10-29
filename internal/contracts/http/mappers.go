@@ -1,6 +1,7 @@
 package httpcontract
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"time"
@@ -10,15 +11,14 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // MapperReader is the engine surface the mappers read beyond their batched
 // inputs.
 type MapperReader interface {
-	CurrentBranchName() string
+	CurrentBranchName(ctx context.Context) string
 	GetScope(branch engine.Branch) engine.Scope
-	GetStackDescription(branch engine.Branch) *git.StackDescription
+	GetStackDescription(ctx context.Context, branch engine.Branch) *git.StackDescription
 }
 
 // BranchInput is everything MapBranch needs about one branch. RemoteStatus,
@@ -42,7 +42,7 @@ type BranchInput struct {
 // stackview.FetchBranchData.
 func NewBranchInput(node *engine.StackNode, checks *github.CheckStatus, data stackview.BranchData) BranchInput {
 	branch := node.Branch
-	name := branch.GetName()
+	name := branch.Name()
 	return BranchInput{
 		Branch:       branch,
 		Node:         node,
@@ -56,24 +56,24 @@ func NewBranchInput(node *engine.StackNode, checks *github.CheckStatus, data sta
 }
 
 // MapBranch converts an engine Branch and its StackNode into an API BranchResponse.
-func MapBranch(eng MapperReader, in BranchInput) BranchResponse {
+func MapBranch(ctx context.Context, eng MapperReader, in BranchInput) BranchResponse {
 	branch, node, checks := in.Branch, in.Node, in.Checks
 	remoteStatus, stat, commits, commitInfo, needsRestack := in.RemoteStatus, in.Stat, in.Commits, in.CommitInfo, in.NeedsRestack
 	resp := BranchResponse{
-		Name:         branch.GetName(),
+		Name:         branch.Name(),
 		Depth:        node.Depth,
-		IsCurrent:    branch.GetName() == eng.CurrentBranchName(),
+		IsCurrent:    branch.Name() == eng.CurrentBranchName(ctx),
 		NeedsRestack: needsRestack,
 		IsLocked:     branch.IsLocked(),
 		IsFrozen:     branch.IsFrozen(),
 		Children:     node.Children,
 	}
 
-	if parent := branch.GetParent(); parent != nil {
-		resp.Parent = parent.GetName()
+	if parent := branch.Parent(); parent != nil {
+		resp.Parent = parent.Name()
 	}
 
-	if lockReason := branch.GetLockReason(); lockReason.IsLocked() {
+	if lockReason := branch.LockReason(); lockReason.IsLocked() {
 		resp.LockReason = string(lockReason)
 	}
 
@@ -97,7 +97,7 @@ func MapBranch(eng MapperReader, in BranchInput) BranchResponse {
 	}
 
 	// Map PR info
-	if prInfo, err := branch.GetPrInfo(); err == nil && prInfo != nil && prInfo.Number() != nil {
+	if prInfo, err := branch.PrInfo(); err == nil && prInfo != nil && prInfo.Number() != nil {
 		resp.PR = mapPR(prInfo)
 	}
 
@@ -133,9 +133,9 @@ type StackInput struct {
 // the stack root's PR author, or "" when unknown. statuses should come from a
 // single ReadBranchStatuses batch call covering every stack being summarized
 // in the current request, not one call per stack — see stackview.BranchData.
-func MapStackSummary(eng MapperReader, graph *engine.StackGraph, stack StackInput, owner string, statuses engine.BranchStatuses) StackSummary {
+func MapStackSummary(ctx context.Context, eng MapperReader, graph *engine.StackGraph, stack StackInput, owner string, statuses engine.BranchStatuses) StackSummary {
 	rootBranch, allBranches, prCount := stack.RootBranch, stack.AllBranches, stack.PRCount
-	currentBranch := eng.CurrentBranchName()
+	currentBranch := eng.CurrentBranchName(ctx)
 	isCurrent := slices.Contains(allBranches, currentBranch)
 
 	// Detect worktree anchor and filter it from display branches
@@ -158,7 +158,7 @@ func MapStackSummary(eng MapperReader, graph *engine.StackGraph, stack StackInpu
 	// set via `stackit describe`. No fallback to PR titles or branch names.
 	var title, description string
 	if rootNode != nil {
-		if stackDesc := eng.GetStackDescription(rootNode.Branch); stackDesc != nil && !stackDesc.IsEmpty() {
+		if stackDesc := eng.GetStackDescription(ctx, rootNode.Branch); stackDesc != nil && !stackDesc.IsEmpty() {
 			title = stackDesc.Title
 			description = stackDesc.Description
 		}
@@ -181,7 +181,7 @@ func MapStackSummary(eng MapperReader, graph *engine.StackGraph, stack StackInpu
 // MapStackDetail creates a full StackDetail with all branch info. data
 // should come from stackview.FetchBranchData covering every stack being
 // mapped in the current request — see stackview.BranchData.
-func MapStackDetail(eng MapperReader, graph *engine.StackGraph, stack StackInput, checksMap github.ChecksByBranch, data stackview.BranchData) StackDetail {
+func MapStackDetail(ctx context.Context, eng MapperReader, graph *engine.StackGraph, stack StackInput, checksMap github.ChecksByBranch, data stackview.BranchData) StackDetail {
 	rootBranch, allBranches := stack.RootBranch, stack.AllBranches
 	// Derive owner from root branch's PR author
 	var owner string
@@ -191,7 +191,7 @@ func MapStackDetail(eng MapperReader, graph *engine.StackGraph, stack StackInput
 		}
 	}
 
-	summary := MapStackSummary(eng, graph, stack, owner, data.Statuses)
+	summary := MapStackSummary(ctx, eng, graph, stack, owner, data.Statuses)
 
 	// Check if root is a worktree anchor to filter it from branches
 	isAnchor := summary.HasWorktree
@@ -211,7 +211,7 @@ func MapStackDetail(eng MapperReader, graph *engine.StackGraph, stack StackInput
 
 	branches := make([]BranchResponse, 0, len(nodes))
 	for _, node := range nodes {
-		br := MapBranch(eng, NewBranchInput(node, checksMap.Get(node.Branch.GetName()), data))
+		br := MapBranch(ctx, eng, NewBranchInput(node, checksMap.Get(node.Branch.Name()), data))
 		if isAnchor {
 			// Anchor's direct children become display roots
 			if br.Parent == anchorName {
@@ -299,7 +299,7 @@ func MapTrunkCommits(commits []git.RecentCommit, prTitles map[git.PRNumber]strin
 		// Message substitution and constituent-title selection are shared with
 		// the `stackit log` command via internal/git.
 		resp := TrunkCommitResponse{
-			SHA:           utils.ShortRevision(c.SHA, 0),
+			SHA:           git.ShortRevision(c.SHA, 0),
 			Message:       c.DisplayMessage(prTitles),
 			Author:        c.Author,
 			Date:          c.Date.Format(time.RFC3339),

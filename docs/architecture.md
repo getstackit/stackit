@@ -52,7 +52,7 @@ on the narrow interfaces in `internal/actions/handler` (`Confirmer`,
 `Selector`, `TextInputPrompter`, `MultiSelector`). Actions that take
 `*app.Context` reach the adapter's implementation through `ctx.Prompts()`,
 which falls back to a non-interactive prompter (every prompt returns
-`utils.ErrInteractiveDisabled`) when no adapter set `ctx.Prompter`; the CLI
+`term.ErrInteractiveDisabled`) when no adapter set `ctx.Prompter`; the CLI
 sets `common.TUIPrompter`. Whole-screen interactive flows (e.g. the move
 target picker, the reorder editor) live in the adapter and hand the action
 its result or implement an action-defined interface such as
@@ -144,7 +144,14 @@ When adding or refactoring an operation:
 
 1. Put the orchestration in an `internal/actions/<name>/` package.
 2. Pass resolved options into the request struct instead of loading config inside the operation.
-3. Pass dependencies explicitly instead of passing `*app.Context`.
+3. Pass dependencies explicitly instead of passing `*app.Context`. The entry
+   point is `func Action(ctx context.Context, deps Deps, opts Options, ...)`,
+   where `Deps` holds the package's exported consumer-side `Engine` interface
+   plus whatever else it needs (`output.Output`, a GitHub runner, the repo
+   root). The CLI adapter builds `Deps` from its `app.Context`. `describe`,
+   `doctor`, `freeze`, `pop`, `scope` and `untrack` follow this shape; the
+   `actions-no-app-context` depguard rule keeps them off `internal/app`, so
+   add a package to that rule when you convert it.
 4. Return structured results and typed events instead of writing output directly.
 5. Keep terminal rendering, JSON mapping, and interactive prompts in adapters.
 6. Read-only consumers take `engine.StackView` (or a narrower local interface
@@ -163,6 +170,24 @@ When adding or refactoring an operation:
    and `actions.RecoveryEngine` for abort/undo-style rollback. Test fakes then
    implement only the narrow interface, so a missing method is a compile error
    rather than a nil-embedded panic.
+
+### Restack core
+
+Every command that rebases branches goes through `internal/actions/restack`,
+split so each half depends only on what it uses:
+
+- `restack.Planner` (read-only `PlanEngine`) validates ancestry, builds the
+  engine plan, trial-rebases it in a scratch worktree, and returns a `Plan`
+  classifying each branch as apply, conflict, or blocked.
+- `restack.Executor` (`ApplyEngine`, a `ProgressFunc`, a `ContinuationStore`,
+  a `ConflictReporter`) applies a `Plan` under a `ConflictMode`: report
+  conflicts and hold back their stacks, or stop at the first conflict and
+  leave the repository mid-rebase for `stackit continue`.
+
+Neither writes output directly: progress goes to the `ProgressFunc`, and
+`restack.TextReporter` renders it for commands without a progress UI.
+`actions.RestackBranches` is the `*app.Context` adapter that builds both for
+not-yet-converted callers.
 
 ## Transitional Guidance
 

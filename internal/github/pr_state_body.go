@@ -2,7 +2,7 @@ package github
 
 import (
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/xslices"
 
 	"context"
 )
@@ -22,7 +22,7 @@ func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, re
 		return make(map[git.PRNumber]PRStateBody), nil
 	}
 
-	unique := utils.Unique(prNumbers)
+	unique := xslices.Unique(prNumbers)
 
 	query := buildPRStateBodyQuery(unique)
 	variables := map[string]any{

@@ -70,12 +70,12 @@ func BuildState(ctx *app.Context, _ StateOptions) StateResult {
 	eng := ctx.Engine
 
 	result := StateResult{
-		Trunk: eng.Trunk().GetName(),
+		Trunk: eng.Trunk().Name(),
 		Stack: BuildTreeJSON(ctx.Context, ctx.Engine, ctx.GitHub(), TreeJSONRequest{Style: TreeStyleNormal}),
 	}
 
-	if cur := eng.CurrentBranch(); cur != nil {
-		result.CurrentBranch = cur.GetName()
+	if cur := eng.CurrentBranch(ctx.Context); cur != nil {
+		result.CurrentBranch = cur.Name()
 	} else {
 		result.Detached = true
 	}

@@ -22,10 +22,10 @@ func TestTraverseUpwardSkipsWorktreeAnchors(t *testing.T) {
 			"feature":   "wt-anchor",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 	target, err := traverseUpward("main", s.Context.Engine, s.Context.Output, graph, &NullHandler{})
 	require.NoError(t, err)
 	require.Equal(t, "feature", target)
@@ -43,12 +43,12 @@ func TestTraverseUpwardSkipsNestedWorktreeAnchors(t *testing.T) {
 			"feature": "anchor2",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("anchor1"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("anchor1"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
-	err = s.Engine.SetBranchType(s.Engine.GetBranch("anchor2"), git.BranchTypeWorktreeAnchor)
+	err = s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("anchor2"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 	target, err := traverseUpward("main", s.Context.Engine, s.Context.Output, graph, &NullHandler{})
 	require.NoError(t, err)
 	require.Equal(t, "feature", target)
@@ -64,10 +64,10 @@ func TestTraverseUpwardReturnsCurrentWhenOnlyChildIsAnchorWithNoDescendants(t *t
 			"wt-anchor": "main",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 	target, err := traverseUpward("main", s.Context.Engine, s.Context.Output, graph, &NullHandler{})
 	require.NoError(t, err)
 	require.Equal(t, "main", target)
@@ -85,7 +85,7 @@ func TestTraverseDownwardSkipsWorktreeAnchorParent(t *testing.T) {
 			"child":     "parent",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
 	s.Checkout("child")
@@ -105,9 +105,9 @@ func TestTraverseDownwardSkipsNestedAnchorsToBottom(t *testing.T) {
 			"feature": "anchor2",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("anchor1"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("anchor1"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
-	err = s.Engine.SetBranchType(s.Engine.GetBranch("anchor2"), git.BranchTypeWorktreeAnchor)
+	err = s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("anchor2"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
 	s.Checkout("feature")
@@ -129,7 +129,7 @@ func TestSwitchBranchActionTopSkipsWorktreeAnchors(t *testing.T) {
 			"tip":       "feature",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
 	s.Checkout("main")
@@ -151,7 +151,7 @@ func TestSwitchBranchActionBottomSkipsWorktreeAnchors(t *testing.T) {
 			"tip":       "feature",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
 	s.Checkout("tip")
@@ -172,17 +172,17 @@ func TestFlattenThroughAnchorsPromotesGrandchildren(t *testing.T) {
 			"child2": "anchor",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("anchor"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("anchor"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 	trunk := s.Engine.Trunk()
 	children := graph.ChildBranches(trunk)
 
 	flattened := FlattenThroughAnchors(children, graph)
 	names := make([]string, len(flattened))
 	for i, b := range flattened {
-		names[i] = b.GetName()
+		names[i] = b.Name()
 	}
 	require.ElementsMatch(t, []string{"child1", "child2"}, names)
 }

@@ -24,11 +24,11 @@ type regenerationEngine struct {
 func (e *regenerationEngine) BatchGetPRSubmissionStatus(_ context.Context, branches engine.Branches, _ engine.BranchRemoteStatuses) (map[string]engine.PRSubmissionStatus, error) {
 	statuses := make(map[string]engine.PRSubmissionStatus)
 	for _, branch := range branches {
-		pr, err := branch.GetPrInfo()
+		pr, err := branch.PrInfo()
 		if err != nil {
 			return nil, err
 		}
-		statuses[branch.GetName()] = engine.PRSubmissionStatus{
+		statuses[branch.Name()] = engine.PRSubmissionStatus{
 			Action: engine.SubmitActionUpdate, PRInfo: pr, PRNumber: pr.Number(), NeedsUpdate: false,
 		}
 	}
@@ -57,7 +57,7 @@ func TestRegeneratePlanningAndEmptyBody(t *testing.T) {
 	branch := s.Engine.GetBranch("feature")
 	old := testhelpers.NewTestPrInfoEmpty().WithNumber(new(git.PRNumber(42))).WithTitle("Remote title").
 		WithBody("Remote description").WithBase("main").WithURL("https://example.com/pr/42").WithIsDraft(true)
-	require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), branch, old))
+	require.NoError(t, s.Engine.UpsertPrInfo(t.Context(), branch, old))
 	eng := &regenerationEngine{Engine: s.Engine}
 	client := &regenerationClient{}
 	s.Context.Engine, s.Context.GitHubClient = eng, client
@@ -75,7 +75,7 @@ func TestRegeneratePlanningAndEmptyBody(t *testing.T) {
 	require.Empty(t, preview[0].Metadata.Body)
 	require.True(t, preview[0].Metadata.IsDraft, "regeneration preserves draft state")
 	require.Zero(t, eng.writes, "dry-run must not save replacement text")
-	stored, err := branch.GetPrInfo()
+	stored, err := branch.PrInfo()
 	require.NoError(t, err)
 	require.Equal(t, old.Title(), stored.Title())
 	require.Equal(t, old.Body(), stored.Body())
@@ -117,9 +117,9 @@ func TestRegenerateUsesCurrentCommitMessages(t *testing.T) {
 				s.CommitChange("second", "fix: second\n\nSecond body")
 			}
 			branch := s.Engine.GetBranch("feature")
-			require.NoError(t, s.Engine.SetScope(context.Background(), branch, engine.NewScope("PROJ-1")))
+			require.NoError(t, s.Engine.SetScope(t.Context(), branch, engine.NewScope("PROJ-1")))
 			old := testhelpers.NewTestPrInfoEmpty().WithNumber(new(git.PRNumber(42))).WithTitle("Old title").WithBody("Old body")
-			require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), branch, old))
+			require.NoError(t, s.Engine.UpsertPrInfo(t.Context(), branch, old))
 			// Any attempted GitHub read would panic: existing remote content is irrelevant.
 			s.Context.GitHubClient = &regenerationClient{}
 			metadata, err := PreparePRMetadata(branch, MetadataOptions{Text: PRTextRegenerate}, s.Context, nil)
@@ -154,7 +154,7 @@ func TestRegenerateEditTitlePrefillsRegeneratedText(t *testing.T) {
 	s.CreateBranch("feature").CommitChange("file", "feat: replacement").TrackBranch("feature", "main")
 	branch := s.Engine.GetBranch("feature")
 	old := testhelpers.NewTestPrInfoEmpty().WithNumber(new(git.PRNumber(42))).WithTitle("Old title").WithBody("Old body")
-	require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), branch, old))
+	require.NoError(t, s.Engine.UpsertPrInfo(t.Context(), branch, old))
 	prompter := &recordingPrompter{}
 	s.Context.GitHubClient, s.Context.Prompter = &regenerationClient{}, prompter
 
@@ -170,7 +170,7 @@ func TestRegenerateKeepsLockBanner(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.CreateBranch("feature").CommitChange("file", "feat: replacement\n\nNew body").TrackBranch("feature", "main")
 	branch := s.Engine.GetBranch("feature")
-	_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
+	_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonUser)
 	require.NoError(t, err)
 
 	for _, footer := range []bool{false, true} {

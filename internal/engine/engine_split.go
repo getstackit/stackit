@@ -24,7 +24,7 @@ func (e *engineImpl) ApplySplitToCommits(ctx context.Context, opts ApplySplitOpt
 			return fmt.Errorf("failed to read metadata: %w", err)
 		}
 		if parent := meta.GetParentBranchName(); parent != nil {
-			if err := e.validateLinearSiblingSplit(*parent, opts.BranchToSplit, opts.BranchNames); err != nil {
+			if err := e.validateLinearSiblingSplit(ctx, *parent, opts.BranchToSplit, opts.BranchNames); err != nil {
 				return err
 			}
 		}
@@ -119,7 +119,7 @@ func (e *engineImpl) ApplySplitToCommits(ctx context.Context, opts ApplySplitOpt
 			})
 		}
 
-		if err := e.writeMetadata(branchName, newMeta); err != nil {
+		if err := e.writeMetadata(ctx, branchName, newMeta); err != nil {
 			return fmt.Errorf("failed to write metadata for %s: %w", branchName, err)
 		}
 
@@ -142,7 +142,7 @@ func (e *engineImpl) ApplySplitToCommits(ctx context.Context, opts ApplySplitOpt
 	// branch, which is typically the original branch name if it was preserved).
 	if lastBranchName != opts.BranchToSplit {
 		lastBranch := e.GetBranch(lastBranchName)
-		if err := e.ReparentBranchesToParents(ctx, MovesTo(children, lastBranch.GetName()), ReparentOpts{}); err != nil {
+		if err := e.ReparentBranchesToParents(ctx, MovesTo(children, lastBranch.Name()), ReparentOpts{}); err != nil {
 			return fmt.Errorf("failed to reparent children to %s: %w", lastBranchName, err)
 		}
 	}
@@ -157,7 +157,7 @@ func (e *engineImpl) ApplySplitToCommits(ctx context.Context, opts ApplySplitOpt
 	// Checkout last branch
 	e.currentBranch = lastBranchName
 	lastBranch := e.GetBranch(lastBranchName)
-	if err := e.git.CheckoutBranch(ctx, lastBranch.GetName()); err != nil {
+	if err := e.git.CheckoutBranch(ctx, lastBranch.Name()); err != nil {
 		return fmt.Errorf("failed to checkout branch %s: %w", lastBranchName, err)
 	}
 
@@ -188,7 +188,7 @@ func (e *engineImpl) DetachAndResetBranchChanges(ctx context.Context, branchName
 
 	// Get branch revision
 	branch := e.GetBranch(branchName)
-	branchRevision, err := branch.GetRevision()
+	branchRevision, err := branch.Revision(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get branch revision: %w", err)
 	}
@@ -227,7 +227,7 @@ func (e *engineImpl) ForceCheckoutBranch(ctx context.Context, branch Branch) err
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	err := e.git.CheckoutBranchForce(ctx, branchName)
 	if err != nil {
 		return fmt.Errorf("failed to force checkout branch: %w", err)

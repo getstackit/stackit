@@ -2,8 +2,6 @@
 package common
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -46,7 +44,7 @@ func RunWithOptions(cmd *cobra.Command, opts app.GlobalOptions, fn func(ctx *app
 
 	// Populate worktree context
 	if ctx.Engine != nil && !opts.SkipManagedWorktreeCheck {
-		if isManaged, wtInfo, err := ctx.Engine.IsInManagedWorktree(); err == nil && isManaged {
+		if isManaged, wtInfo, err := ctx.Engine.IsInManagedWorktree(ctx.Context); err == nil && isManaged {
 			ctx.InManagedWorktree = true
 			ctx.WorktreeInfo = wtInfo
 		}
@@ -95,11 +93,11 @@ func ResolveBranchArg(ctx *app.Context, args []string, missingErr error) (string
 		return args[0], nil
 	}
 
-	currentBranch := ctx.Engine.CurrentBranch()
+	currentBranch := ctx.Engine.CurrentBranch(ctx.Context)
 	if currentBranch == nil {
 		return "", missingErr
 	}
-	return currentBranch.GetName(), nil
+	return currentBranch.Name(), nil
 }
 
 // HandleCommandError formats known error types for user display.
@@ -108,10 +106,20 @@ func HandleCommandError(err error) error {
 		return nil
 	}
 	if modErr, ok := errors.AsType[*errors.BranchModificationError](err); ok {
-		return fmt.Errorf("%s", style.FormatBranchModificationError(modErr))
+		return &displayError{msg: style.FormatBranchModificationError(modErr), err: err}
 	}
 	return err
 }
+
+// displayError replaces an error's message with a user-facing rendering while
+// keeping the original in the chain, so errors.Is/As still see it.
+type displayError struct {
+	msg string
+	err error
+}
+
+func (e *displayError) Error() string { return e.msg }
+func (e *displayError) Unwrap() error { return e.err }
 
 // CompleteBranches is a helper for cobra.ValidArgsFunction and RegisterFlagCompletionFunc
 // that returns all branch names in the repository.

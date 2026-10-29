@@ -278,7 +278,7 @@ func TestForeachAction(t *testing.T) {
 			}
 		}
 		require.Equal(t, []string{"branch1", "branch2", "branch3"}, executed)
-		require.Equal(t, "branch3", s.Engine.CurrentBranch().GetName())
+		require.Equal(t, "branch3", s.Engine.CurrentBranch(t.Context()).Name())
 	})
 
 	t.Run("branch option supports downstack traversal", func(t *testing.T) {
@@ -310,7 +310,7 @@ func TestForeachAction(t *testing.T) {
 			}
 		}
 		require.Equal(t, []string{"branch1", "branch2", "branch3"}, executed)
-		require.Equal(t, "branch1", s.Engine.CurrentBranch().GetName())
+		require.Equal(t, "branch1", s.Engine.CurrentBranch(t.Context()).Name())
 	})
 
 	t.Run("branch option rejects untracked branch", func(t *testing.T) {

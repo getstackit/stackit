@@ -12,7 +12,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/tui/style"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // CommitEditorConfig configures the commit message editor
@@ -114,7 +113,7 @@ func (m *CommitEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// Clean the message (remove comments, trailing whitespace)
-		m.message = utils.CleanCommitMessage(msg.content)
+		m.message = editor.CleanMessage(msg.content)
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -177,7 +176,7 @@ func (m *CommitEditorModel) openEditor() tea.Cmd {
 	}
 
 	// Create the command
-	c, err := utils.BuildEditorCommand(editorCmd, m.tempFile)
+	c, err := editor.Command(editorCmd, m.tempFile)
 	if err != nil {
 		_ = os.Remove(m.tempFile)
 		return func() tea.Msg {

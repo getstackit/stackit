@@ -1,12 +1,10 @@
 package sync_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/sync"
@@ -25,11 +23,11 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		s.TrackBranch("feature-branch", "main")
 
 		// Register a fake worktree for this branch (we won't actually create the worktree dir)
-		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-branch", Path: "/tmp/fake-worktree-path"})
+		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-branch", Path: "/tmp/fake-worktree-path"})
 		require.NoError(t, err)
 
 		// Verify worktree is registered
-		wt, err := s.Engine.GetWorktreeForStack("feature-branch")
+		wt, err := s.Engine.GetWorktreeForStack(t.Context(), "feature-branch")
 		require.NoError(t, err)
 		require.NotNil(t, wt)
 
@@ -44,9 +42,9 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify worktree registration was cleaned up
-		wt, err = s.Engine.GetWorktreeForStack("feature-branch")
+		wt, err = s.Engine.GetWorktreeForStack(t.Context(), "feature-branch")
 		require.NoError(t, err)
-		assert.Nil(t, wt, "worktree registration should be removed after branch deletion")
+		require.Nil(t, wt, "worktree registration should be removed after branch deletion")
 	})
 
 	t.Run("preserves worktree when stack root branch still exists", func(t *testing.T) {
@@ -58,7 +56,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		s.TrackBranch("feature-branch", "main")
 
 		// Register a worktree for this branch
-		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-branch", Path: "/tmp/fake-worktree-path"})
+		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-branch", Path: "/tmp/fake-worktree-path"})
 		require.NoError(t, err)
 
 		// Go back to main and run sync
@@ -68,9 +66,9 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify worktree registration is preserved
-		wt, err := s.Engine.GetWorktreeForStack("feature-branch")
+		wt, err := s.Engine.GetWorktreeForStack(t.Context(), "feature-branch")
 		require.NoError(t, err)
-		assert.NotNil(t, wt, "worktree registration should be preserved when branch exists")
+		require.NotNil(t, wt, "worktree registration should be preserved when branch exists")
 	})
 
 	t.Run("preserves registration when worktree removal fails", func(t *testing.T) {
@@ -80,20 +78,20 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		worktreePath := filepath.Join(t.TempDir(), "not-a-git-worktree")
 		require.NoError(t, os.MkdirAll(worktreePath, 0o755))
 
-		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "missing-anchor", Path: engine.WorktreePath(worktreePath)})
+		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "missing-anchor", Path: engine.WorktreePath(worktreePath)})
 		require.NoError(t, err)
 
 		handler := &sync.NullHandler{}
 		err = sync.Action(s.Context, sync.Options{}, handler)
 		require.NoError(t, err)
 
-		wt, err := s.Engine.GetWorktreeForStack("missing-anchor")
+		wt, err := s.Engine.GetWorktreeForStack(t.Context(), "missing-anchor")
 		require.NoError(t, err)
-		assert.NotNil(t, wt, "registration should be preserved when physical worktree removal fails")
+		require.NotNil(t, wt, "registration should be preserved when physical worktree removal fails")
 		canonicalWorktreePath, err := filepath.EvalSymlinks(worktreePath)
 		require.NoError(t, err)
 		canonicalRegisteredPath, err := filepath.EvalSymlinks(wt.Path.String())
 		require.NoError(t, err)
-		assert.Equal(t, canonicalWorktreePath, canonicalRegisteredPath)
+		require.Equal(t, canonicalWorktreePath, canonicalRegisteredPath)
 	})
 }

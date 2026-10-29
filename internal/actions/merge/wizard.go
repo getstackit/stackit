@@ -41,13 +41,13 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		out.Debug("merge wizard: no scope or target branch pre-selected, prompting user")
 
 		// Check if "this branch" is a valid option (not on trunk and not in empty worktree)
-		currentBranch := eng.CurrentBranch()
+		currentBranch := eng.CurrentBranch(ctx.Context)
 		canMergeThisBranch := currentBranch != nil && !currentBranch.IsTrunk()
 		out.Debug("merge wizard: canMergeThisBranch=%v (currentBranch=%v)", canMergeThisBranch, currentBranch != nil)
 
 		// Get available scopes and stacks for the prompt
 		availableScopes := GetAvailableScopes(eng)
-		availableStacks, err := DiscoverStacks(eng)
+		availableStacks, err := DiscoverStacks(ctx.Context, eng)
 		if err != nil {
 			out.Debug("merge wizard: failed to discover stacks: %v", err)
 			availableStacks = nil
@@ -64,9 +64,9 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		switch mergeType {
 		case MergeTypeThis:
 			// Use current branch
-			currentBranch := eng.CurrentBranch()
+			currentBranch := eng.CurrentBranch(ctx.Context)
 			if currentBranch != nil {
-				targetBranch = currentBranch.GetName()
+				targetBranch = currentBranch.Name()
 				out.Debug("merge wizard: using current branch: %s", targetBranch)
 			}
 		case MergeTypeScope:
@@ -201,7 +201,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	// issues, we skip the full plan display and use a simple "Merge X into Y?" confirmation.
 	// This reduces friction for the common case of merging a single PR, while still showing
 	// the full plan for complex scenarios where users need to understand all the steps.
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	isSimpleMerge := IsSingleBranchLeafMerge(plan, graph) &&
 		len(validation.Errors) == 0 &&
 		len(validation.Warnings) == 0
@@ -209,7 +209,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	if isSimpleMerge && !opts.DryRun {
 		// Use simplified confirmation for single-branch merges
 		branch := plan.BranchesToMerge[0]
-		baseBranch := eng.Trunk().GetName()
+		baseBranch := eng.Trunk().Name()
 		out.Debug("merge wizard: simple single-branch merge detected, using simplified confirmation")
 
 		confirmed, err := handler.PromptSimpleMergeConfirm(branch, baseBranch)
@@ -307,7 +307,7 @@ func HandlePostMerge(ctx *app.Context, handler InteractiveHandler) error {
 
 	// Check for uncommitted changes
 	hasChanges := eng.HasUncommittedChanges(ctx.Context)
-	trunkName := eng.Trunk().GetName()
+	trunkName := eng.Trunk().Name()
 
 	action, err := handler.PromptPostMerge(hasChanges, trunkName)
 	if err != nil {
@@ -324,7 +324,7 @@ func HandlePostMerge(ctx *app.Context, handler InteractiveHandler) error {
 		// The handler will need to handle this action
 		// This involves checking out trunk and running sync
 		// For now, return a sentinel error that the CLI can handle
-		return &PostMergeActionRequired{Action: action}
+		return &PostMergeActionRequiredError{Action: action}
 	case PostMergeDone:
 		return nil
 	}
@@ -332,12 +332,12 @@ func HandlePostMerge(ctx *app.Context, handler InteractiveHandler) error {
 	return nil
 }
 
-// PostMergeActionRequired is returned when post-merge action is needed
-type PostMergeActionRequired struct {
+// PostMergeActionRequiredError is returned when post-merge action is needed
+type PostMergeActionRequiredError struct {
 	Action PostMergeAction
 }
 
-func (e *PostMergeActionRequired) Error() string {
+func (e *PostMergeActionRequiredError) Error() string {
 	return fmt.Sprintf("post-merge action required: %s", e.Action)
 }
 

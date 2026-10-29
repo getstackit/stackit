@@ -124,17 +124,17 @@ func (r *AnalysisResult) filterByStatus(status Status) []Stack {
 	return result
 }
 
-// GetShippable returns only the stacks that are ready to ship.
-func (r *AnalysisResult) GetShippable() []Stack { return r.filterByStatus(StatusShippable) }
+// Shippable returns only the stacks that are ready to ship.
+func (r *AnalysisResult) Shippable() []Stack { return r.filterByStatus(StatusShippable) }
 
-// GetPending returns only the stacks that are pending.
-func (r *AnalysisResult) GetPending() []Stack { return r.filterByStatus(StatusPending) }
+// Pending returns only the stacks that are pending.
+func (r *AnalysisResult) Pending() []Stack { return r.filterByStatus(StatusPending) }
 
-// GetBlocked returns only the stacks that are blocked.
-func (r *AnalysisResult) GetBlocked() []Stack { return r.filterByStatus(StatusBlocked) }
+// Blocked returns only the stacks that are blocked.
+func (r *AnalysisResult) Blocked() []Stack { return r.filterByStatus(StatusBlocked) }
 
-// GetIncomplete returns only the stacks that are incomplete.
-func (r *AnalysisResult) GetIncomplete() []Stack { return r.filterByStatus(StatusIncomplete) }
+// Incomplete returns only the stacks that are incomplete.
+func (r *AnalysisResult) Incomplete() []Stack { return r.filterByStatus(StatusIncomplete) }
 
 // HasShippable returns true if there are any shippable stacks.
 func (r *AnalysisResult) HasShippable() bool {
@@ -225,8 +225,8 @@ func (r *CombinationResult) AllCombined() bool {
 	return len(r.ConflictingStacks) == 0
 }
 
-// GetWorkingRoots returns the root branch names of working stacks.
-func (r *CombinationResult) GetWorkingRoots() []string {
+// WorkingRoots returns the root branch names of working stacks.
+func (r *CombinationResult) WorkingRoots() []string {
 	roots := make([]string, len(r.WorkingStacks))
 	for i, s := range r.WorkingStacks {
 		roots[i] = s.RootBranch()
@@ -234,8 +234,8 @@ func (r *CombinationResult) GetWorkingRoots() []string {
 	return roots
 }
 
-// GetConflictingRoots returns the root branch names of conflicting stacks.
-func (r *CombinationResult) GetConflictingRoots() []string {
+// ConflictingRoots returns the root branch names of conflicting stacks.
+func (r *CombinationResult) ConflictingRoots() []string {
 	roots := make([]string, len(r.ConflictingStacks))
 	for i, s := range r.ConflictingStacks {
 		roots[i] = s.Stack.RootBranch()

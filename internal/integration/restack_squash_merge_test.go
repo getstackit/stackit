@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -19,7 +18,7 @@ import (
 // branch whose PR was merged on GitHub before its local state synced to MERGED.
 func markPrWithState(t *testing.T, sh *scenario.Scenario, branch string, prNumber git.PRNumber, state git.PRState, base string) {
 	t.Helper()
-	meta, err := sh.Metadata.ReadMetadata(context.Background(), branch).One()
+	meta, err := sh.Metadata.ReadMetadata(t.Context(), branch).One()
 	require.NoError(t, err)
 	num := prNumber
 	s := state
@@ -29,7 +28,7 @@ func markPrWithState(t *testing.T, sh *scenario.Scenario, branch string, prNumbe
 		State:  &s,
 		Base:   &b,
 	})
-	require.NoError(t, sh.Metadata.WriteMetadata(branch, meta))
+	require.NoError(t, sh.Metadata.WriteMetadata(t.Context(), branch, meta))
 }
 
 // TestSquashMergeMultiCommitParent reproduces the case where a parent branch
@@ -56,19 +55,19 @@ func TestSquashMergeMultiCommitParent(t *testing.T) {
 		TrackBranch("child", "parent")
 
 	// GitHub squash-merges parent's PR: one combined commit lands on main.
-	mainName := sh.Engine.Trunk().GetName()
+	mainName := sh.Engine.Trunk().Name()
 	sh.Checkout("main")
 	sh.CommitChange("file-p", "v1\nv2\nv3")
 	markPrMerged(t, sh, "parent", 1, mainName)
 
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "parent", "squash-merged parent should be deleted")
 	require.Contains(t, branches, "child")
 
-	require.Equal(t, mainName, sh.Engine.GetBranch("child").GetParent().GetName())
+	require.Equal(t, mainName, sh.Engine.GetBranch("child").Parent().Name())
 
 	// Child must keep ONLY its own commit — parent's 3 commits must not replay.
 	require.Equal(t, 1, sh.BranchCommitCount("child"), "child should not inherit parent's squashed commits")
@@ -97,7 +96,7 @@ func TestRestackAfterMultiCommitSquashParentDeleted(t *testing.T) {
 		CommitChange("file-c", "c").
 		TrackBranch("child", "parent")
 
-	mainName := sh.Engine.Trunk().GetName()
+	mainName := sh.Engine.Trunk().Name()
 	sh.Checkout("main")
 	sh.CommitChange("file-p", "v1\nv2\nv3")
 	// The squash landed on the real trunk and was fetched, so origin/main carries
@@ -117,7 +116,7 @@ func TestRestackAfterMultiCommitSquashParentDeleted(t *testing.T) {
 	require.NoError(t, actions.RestackAction(sh.Context, plan, &actions.NullRestackHandler{}))
 
 	sh.Rebuild()
-	require.Equal(t, mainName, sh.Engine.GetBranch("child").GetParent().GetName())
+	require.Equal(t, mainName, sh.Engine.GetBranch("child").Parent().Name())
 
 	require.Equal(t, 1, sh.BranchCommitCount("child"), "child should not inherit parent's squashed commits")
 
@@ -146,7 +145,7 @@ func TestRestackDetectsSquashMergeWithStalePRState(t *testing.T) {
 	// Squash-merge parent onto main. The PR number is recorded but its state is
 	// stale (still OPEN) — simulating a GitHub UI squash-merge before st sync
 	// marked the PR MERGED.
-	mainName := sh.Engine.Trunk().GetName()
+	mainName := sh.Engine.Trunk().Name()
 	sh.Checkout("main")
 	sh.CommitChange("file-main", "unrelated")
 	sh.CommitChange("file-p", "v1\nv2")
@@ -167,7 +166,7 @@ func TestRestackDetectsSquashMergeWithStalePRState(t *testing.T) {
 	require.NoError(t, actions.RestackAction(sh.Context, plan, &actions.NullRestackHandler{}))
 
 	sh.Rebuild()
-	require.Equal(t, mainName, sh.Engine.GetBranch("child").GetParent().GetName(),
+	require.Equal(t, mainName, sh.Engine.GetBranch("child").Parent().Name(),
 		"child should reparent to main when the squash scan detects the parent merged")
 
 	require.Equal(t, 1, sh.BranchCommitCount("child"), "child should keep only its own commit")
@@ -194,7 +193,7 @@ func TestSyncCleansUpSquashMergedBranchWithStalePRState(t *testing.T) {
 		CommitChange("file-f", "v1\nv2").
 		TrackBranch("feature", "main")
 
-	mainName := sh.Engine.Trunk().GetName()
+	mainName := sh.Engine.Trunk().Name()
 
 	// GitHub squash-merges feature: one combined commit lands on main. An
 	// unrelated trunk commit ensures a whole-tree comparison would not match.
@@ -207,7 +206,7 @@ func TestSyncCleansUpSquashMergedBranchWithStalePRState(t *testing.T) {
 
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "feature",
 		"squash-merged branch with a stale PR state should be cleaned up by sync")
@@ -229,7 +228,7 @@ func TestSyncKeepsUnmergedBranchWithPRNumber(t *testing.T) {
 		CommitChange("file-f", "unique work").
 		TrackBranch("feature", "main")
 
-	mainName := sh.Engine.Trunk().GetName()
+	mainName := sh.Engine.Trunk().Name()
 
 	// Trunk moves forward with unrelated work; feature's own change never lands.
 	sh.Checkout("main")
@@ -239,7 +238,7 @@ func TestSyncKeepsUnmergedBranchWithPRNumber(t *testing.T) {
 
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
 
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.Contains(t, branches, "feature",
 		"an unmerged branch must not be deleted just because it has a PR number")
@@ -272,10 +271,10 @@ func TestSquashMergedSiblingKeepsOwnCommit(t *testing.T) {
 		CommitChange("file-b", "b").
 		TrackBranch("branch-b", "main")
 
-	mainName := sh.Engine.Trunk().GetName()
+	mainName := sh.Engine.Trunk().Name()
 
 	// Capture A's pre-merge tip — the exact SHA B must never be moved onto.
-	aStaleTip, err := sh.Engine.GetBranch("branch-a").GetRevision()
+	aStaleTip, err := sh.Engine.GetBranch("branch-a").Revision(t.Context())
 	require.NoError(t, err)
 
 	// GitHub squash-merges A: one combined commit lands on main.
@@ -286,17 +285,17 @@ func TestSquashMergedSiblingKeepsOwnCommit(t *testing.T) {
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
 
 	// A is cleaned up; B survives.
-	branches, err := sh.Scene.Repo.GetLocalBranches()
+	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "branch-a", "squash-merged sibling should be deleted")
 	require.Contains(t, branches, "branch-b")
 
 	// B stays parented to main, never to the merged sibling.
-	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").GetParent().GetName(),
+	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").Parent().Name(),
 		"sibling B must remain parented to main, not reparented onto merged A")
 
 	// B's ref must not have been moved onto A's stale tip.
-	bTip, err := sh.Engine.GetBranch("branch-b").GetRevision()
+	bTip, err := sh.Engine.GetBranch("branch-b").Revision(t.Context())
 	require.NoError(t, err)
 	require.NotEqual(t, aStaleTip, bTip,
 		"sibling B must never be reset to A's stale pre-merge tip (issue #1345 data loss)")
@@ -327,7 +326,7 @@ func TestRestackAfterMultiCommitSquashWithoutSync(t *testing.T) {
 		TrackBranch("child", "parent")
 
 	// GitHub squash-merges parent's PR: one combined commit lands on main.
-	mainName := sh.Engine.Trunk().GetName()
+	mainName := sh.Engine.Trunk().Name()
 	sh.Checkout("main")
 	sh.CommitChange("file-p", "v1\nv2\nv3")
 	markPrMerged(t, sh, "parent", 1, mainName)
@@ -344,7 +343,7 @@ func TestRestackAfterMultiCommitSquashWithoutSync(t *testing.T) {
 	require.NoError(t, actions.RestackAction(sh.Context, plan, &actions.NullRestackHandler{}))
 
 	sh.Rebuild()
-	require.Equal(t, mainName, sh.Engine.GetBranch("child").GetParent().GetName(),
+	require.Equal(t, mainName, sh.Engine.GetBranch("child").Parent().Name(),
 		"child should reparent to main past the merged parent")
 
 	// Child must keep ONLY its own commit — parent's 3 commits must not replay.

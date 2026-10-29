@@ -4,8 +4,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-func registerMergeStories() {
-	RegisterStory(Story{
+func (r *storyRegistry) registerMergeStories() {
+	r.add(Story{
 		Name:        "Merge Type Selector",
 		Category:    "Merge",
 		Description: "The initial selector to choose what to merge (this branch, scope, or stack)",
@@ -18,7 +18,7 @@ func registerMergeStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "Merge Strategy Selector",
 		Category:    "Merge",
 		Description: "Selecting the merge strategy (bottom-up or ship)",
@@ -30,7 +30,7 @@ func registerMergeStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "Scope Selector",
 		Category:    "Merge",
 		Description: "Selecting a scope from a list of available scopes",
@@ -44,7 +44,7 @@ func registerMergeStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "Stack Selector (Branch Selection)",
 		Category:    "Merge",
 		Description: "Selecting a leaf branch to merge an entire stack",

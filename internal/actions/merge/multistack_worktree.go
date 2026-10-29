@@ -69,7 +69,7 @@ func (w *MultiStackWorktreeExecutor) ExecuteInWorktree(ctx context.Context, stac
 
 	// Reset to trunk before trying per-stack
 	trunk := w.eng.Trunk()
-	if err := session.Engine.ResetHard(ctx, trunk.GetName()); err != nil {
+	if err := session.Engine.ResetHard(ctx, trunk.Name()); err != nil {
 		session.Close()
 		return nil, fmt.Errorf("failed to reset after global merge failure: %w", err)
 	}

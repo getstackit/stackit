@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -82,7 +81,7 @@ func TestGetStackID(t *testing.T) {
 
 		t.Run("returns stack ID after EnsureStackID", func(t *testing.T) {
 			branch := s.Engine.GetBranch("feature")
-			stackID, err := engine.Impl(s.Engine).EnsureStackID(context.Background(), branch)
+			stackID, err := engine.Impl(s.Engine).EnsureStackID(t.Context(), branch)
 			require.NoError(t, err)
 			require.NotEmpty(t, stackID)
 			require.Contains(t, stackID, "feature")
@@ -108,7 +107,7 @@ func TestGetStackID(t *testing.T) {
 		childBranch := s.Engine.GetBranch("child")
 
 		// Ensure stack ID from child - should propagate to all branches in stack
-		childStackID, err := engine.Impl(s.Engine).EnsureStackID(context.Background(), childBranch)
+		childStackID, err := engine.Impl(s.Engine).EnsureStackID(t.Context(), childBranch)
 		require.NoError(t, err)
 
 		rootStackID := s.Engine.GetStackID(rootBranch)
@@ -132,7 +131,7 @@ func TestSetStackID(t *testing.T) {
 		branch := s.Engine.GetBranch("feature")
 		newStackID := "new-stack-id"
 
-		err := s.Engine.SetStackID(context.Background(), engine.BranchesOf(branch), newStackID)
+		err := s.Engine.SetStackID(t.Context(), engine.BranchesOf(branch), newStackID)
 		require.NoError(t, err)
 
 		// Verify it was set
@@ -165,7 +164,7 @@ func TestStackIDInheritance(t *testing.T) {
 		child2 := s.Engine.GetBranch("child2")
 
 		// EnsureStackID from any branch propagates to whole stack
-		rootID, err := engine.Impl(s.Engine).EnsureStackID(context.Background(), root)
+		rootID, err := engine.Impl(s.Engine).EnsureStackID(t.Context(), root)
 		require.NoError(t, err)
 
 		child1ID := s.Engine.GetStackID(child1)
@@ -194,7 +193,7 @@ func TestStackIDInheritance(t *testing.T) {
 		grandchild := s.Engine.GetBranch("grandchild")
 
 		// EnsureStackID from grandchild propagates to all ancestors and descendants
-		grandchildID, err := engine.Impl(s.Engine).EnsureStackID(context.Background(), grandchild)
+		grandchildID, err := engine.Impl(s.Engine).EnsureStackID(t.Context(), grandchild)
 		require.NoError(t, err)
 
 		rootID := s.Engine.GetStackID(root)
@@ -218,9 +217,9 @@ func TestStackIDInheritance(t *testing.T) {
 		stack1 := s.Engine.GetBranch("stack1")
 		stack2 := s.Engine.GetBranch("stack2")
 
-		id1, err := engine.Impl(s.Engine).EnsureStackID(context.Background(), stack1)
+		id1, err := engine.Impl(s.Engine).EnsureStackID(t.Context(), stack1)
 		require.NoError(t, err)
-		id2, err := engine.Impl(s.Engine).EnsureStackID(context.Background(), stack2)
+		id2, err := engine.Impl(s.Engine).EnsureStackID(t.Context(), stack2)
 		require.NoError(t, err)
 
 		require.NotEmpty(t, id1)
@@ -244,11 +243,11 @@ func TestStackIDInheritance(t *testing.T) {
 
 		root := s.Engine.GetBranch("root")
 		child := s.Engine.GetBranch("child")
-		rootID, err := engine.Impl(s.Engine).EnsureStackID(context.Background(), root)
+		rootID, err := engine.Impl(s.Engine).EnsureStackID(t.Context(), root)
 		require.NoError(t, err)
 		require.Equal(t, rootID, s.Engine.GetStackID(child))
 
-		_, err = s.Engine.AssignBranchesToNewStack(context.Background(), child, engine.Branches{child, s.Engine.GetBranch("grandchild")})
+		_, err = s.Engine.AssignBranchesToNewStack(t.Context(), child, engine.Branches{child, s.Engine.GetBranch("grandchild")})
 		require.NoError(t, err)
 
 		child = s.Engine.GetBranch("child")
@@ -270,7 +269,7 @@ func TestStackRefMeta(t *testing.T) { //nolint:tparallel // subtests share one f
 	s.WithInitialCommit()
 
 	t.Run("GetStackMeta returns nil for non-existent stack ID", func(t *testing.T) {
-		meta, err := engine.Impl(s.Engine).GetStackMeta("non-existent-stack-id")
+		meta, err := engine.Impl(s.Engine).GetStackMeta(t.Context(), "non-existent-stack-id")
 		require.NoError(t, err)
 		require.Nil(t, meta)
 	})
@@ -286,11 +285,11 @@ func TestStackRefMeta(t *testing.T) { //nolint:tparallel // subtests share one f
 			CreatedBy:   "test-user",
 		}
 
-		err := engine.Impl(s.Engine).CreateStackRef(stackID, meta)
+		err := engine.Impl(s.Engine).CreateStackRef(t.Context(), stackID, meta)
 		require.NoError(t, err)
 
 		// Verify GetStackMeta returns the correct metadata
-		retrieved, err := engine.Impl(s.Engine).GetStackMeta(stackID)
+		retrieved, err := engine.Impl(s.Engine).GetStackMeta(t.Context(), stackID)
 		require.NoError(t, err)
 		require.NotNil(t, retrieved)
 		require.Equal(t, stackID, retrieved.ID)
@@ -303,11 +302,11 @@ func TestStackRefMeta(t *testing.T) { //nolint:tparallel // subtests share one f
 	t.Run("CreateStackRef creates stack ref with nil metadata using defaults", func(t *testing.T) {
 		stackID := "default-meta-stack"
 
-		err := engine.Impl(s.Engine).CreateStackRef(stackID, nil)
+		err := engine.Impl(s.Engine).CreateStackRef(t.Context(), stackID, nil)
 		require.NoError(t, err)
 
 		// Verify GetStackMeta returns metadata with defaults
-		retrieved, err := engine.Impl(s.Engine).GetStackMeta(stackID)
+		retrieved, err := engine.Impl(s.Engine).GetStackMeta(t.Context(), stackID)
 		require.NoError(t, err)
 		require.NotNil(t, retrieved)
 		require.Equal(t, stackID, retrieved.ID)
@@ -329,16 +328,16 @@ func TestStackRefMeta(t *testing.T) { //nolint:tparallel // subtests share one f
 			CreatedAt: time.Now().Truncate(time.Second),
 		}
 
-		err := engine.Impl(s.Engine).CreateStackRef(stack1ID, meta1)
+		err := engine.Impl(s.Engine).CreateStackRef(t.Context(), stack1ID, meta1)
 		require.NoError(t, err)
-		err = engine.Impl(s.Engine).CreateStackRef(stack2ID, meta2)
+		err = engine.Impl(s.Engine).CreateStackRef(t.Context(), stack2ID, meta2)
 		require.NoError(t, err)
 
-		retrieved1, err := engine.Impl(s.Engine).GetStackMeta(stack1ID)
+		retrieved1, err := engine.Impl(s.Engine).GetStackMeta(t.Context(), stack1ID)
 		require.NoError(t, err)
 		require.Equal(t, "Stack One", retrieved1.Title)
 
-		retrieved2, err := engine.Impl(s.Engine).GetStackMeta(stack2ID)
+		retrieved2, err := engine.Impl(s.Engine).GetStackMeta(t.Context(), stack2ID)
 		require.NoError(t, err)
 		require.Equal(t, "Stack Two", retrieved2.Title)
 	})

@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"slices"
 	"testing"
 
@@ -24,7 +23,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		err := repo.CreateChangeAndCommit("file1 content", "file1")
 		require.NoError(t, err)
 
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot: scene.Dir,
 			Trunk:    "main",
 		})
@@ -46,7 +45,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		// Track feature branch
-		err = eng.TrackBranch(context.Background(), "feature", "main")
+		err = eng.TrackBranch(t.Context(), "feature", "main")
 		require.NoError(t, err)
 
 		// Detach before split to avoid "used by worktree" error
@@ -62,7 +61,7 @@ func TestApplySplitToCommits(t *testing.T) {
 			BranchPoints:  []int{0, 1, 2}, // Will be reversed to [2, 1, 0]
 		}
 
-		err = eng.ApplySplitToCommits(context.Background(), opts)
+		err = eng.ApplySplitToCommits(t.Context(), opts)
 		require.NoError(t, err)
 
 		// Verify branches
@@ -70,19 +69,19 @@ func TestApplySplitToCommits(t *testing.T) {
 
 		// Verify parent relationships using public API
 		branch1 := eng.GetBranch("branch1")
-		parent1 := branch1.GetParent()
+		parent1 := branch1.Parent()
 		require.NotNil(t, parent1)
-		require.Equal(t, "main", parent1.GetName())
+		require.Equal(t, "main", parent1.Name())
 
 		branch2 := eng.GetBranch("branch2")
-		parent2 := branch2.GetParent()
+		parent2 := branch2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "branch1", parent2.GetName())
+		require.Equal(t, "branch1", parent2.Name())
 
 		feature := eng.GetBranch("feature")
-		parentFeature := feature.GetParent()
+		parentFeature := feature.Parent()
 		require.NotNil(t, parentFeature)
-		require.Equal(t, "branch2", parentFeature.GetName())
+		require.Equal(t, "branch2", parentFeature.Name())
 
 		// Verify commit counts
 		// branch1 should have 1 commit from main (c1)
@@ -116,7 +115,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		err := repo.CreateChangeAndCommit("initial", "file")
 		require.NoError(t, err)
 
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot: scene.Dir,
 			Trunk:    "main",
 		})
@@ -125,7 +124,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		// Original feature branch
 		err = repo.CreateBranch("feature")
 		require.NoError(t, err)
-		err = eng.TrackBranch(context.Background(), "feature", "main")
+		err = eng.TrackBranch(t.Context(), "feature", "main")
 		require.NoError(t, err)
 
 		// Detach and create new commits (simulating splitByHunk)
@@ -136,14 +135,14 @@ func TestApplySplitToCommits(t *testing.T) {
 
 		err = repo.CreateChangeAndCommit("new c1", "file1")
 		require.NoError(t, err)
-		c1SHA, _ := repo.GetCurrentSHA()
+		c1SHA, _ := repo.CurrentSHA()
 
 		err = repo.CreateChangeAndCommit("new c2", "file2")
 		require.NoError(t, err)
-		c2SHA, _ := repo.GetCurrentSHA()
+		c2SHA, _ := repo.CurrentSHA()
 
 		// Update feature ref to point to the new tip (the fix!)
-		err = git.NewRunnerWithPath(scene.Dir, nil).UpdateBranchRef(context.Background(), "feature", c2SHA)
+		err = git.NewRunnerWithPath(scene.Dir, nil).UpdateBranchRef(t.Context(), "feature", c2SHA)
 		require.NoError(t, err)
 
 		// Apply split
@@ -153,7 +152,7 @@ func TestApplySplitToCommits(t *testing.T) {
 			BranchPoints:  []int{0, 1}, // Will be reversed to [1, 0]
 		}
 
-		err = eng.ApplySplitToCommits(context.Background(), opts)
+		err = eng.ApplySplitToCommits(t.Context(), opts)
 		require.NoError(t, err)
 
 		// Verify branch1 points to c1 and feature points to c2
@@ -169,7 +168,7 @@ func TestApplySplitToCommits(t *testing.T) {
 	t.Run("validates branch names and points match", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, testhelpers.BasicSceneSetup)
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot: scene.Dir,
 			Trunk:    "main",
 		})
@@ -181,7 +180,7 @@ func TestApplySplitToCommits(t *testing.T) {
 			BranchPoints:  []int{0, 1},         // 2 points
 		}
 
-		err = eng.ApplySplitToCommits(context.Background(), opts)
+		err = eng.ApplySplitToCommits(t.Context(), opts)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid number of branch names")
 	})
@@ -205,7 +204,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		err := repo.CreateChangeAndCommit("file1 content", "file1")
 		require.NoError(t, err)
 
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot: scene.Dir,
 			Trunk:    "main",
 		})
@@ -227,7 +226,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		// Track feature branch
-		err = eng.TrackBranch(context.Background(), "feature", "main")
+		err = eng.TrackBranch(t.Context(), "feature", "main")
 		require.NoError(t, err)
 
 		// Detach before split to avoid "used by worktree" error
@@ -244,7 +243,7 @@ func TestApplySplitToCommits(t *testing.T) {
 			AsSibling:     true, // All branches should be siblings (same parent)
 		}
 
-		err = eng.ApplySplitToCommits(context.Background(), opts)
+		err = eng.ApplySplitToCommits(t.Context(), opts)
 		require.NoError(t, err)
 
 		// Verify branches exist
@@ -252,19 +251,19 @@ func TestApplySplitToCommits(t *testing.T) {
 
 		// Verify ALL branches have main as parent (siblings)
 		branch1 := eng.GetBranch("branch1")
-		parent1 := branch1.GetParent()
+		parent1 := branch1.Parent()
 		require.NotNil(t, parent1)
-		require.Equal(t, "main", parent1.GetName(), "branch1 should have main as parent")
+		require.Equal(t, "main", parent1.Name(), "branch1 should have main as parent")
 
 		branch2 := eng.GetBranch("branch2")
-		parent2 := branch2.GetParent()
+		parent2 := branch2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName(), "branch2 should have main as parent (sibling)")
+		require.Equal(t, "main", parent2.Name(), "branch2 should have main as parent (sibling)")
 
 		feature := eng.GetBranch("feature")
-		parentFeature := feature.GetParent()
+		parentFeature := feature.Parent()
 		require.NotNil(t, parentFeature)
-		require.Equal(t, "main", parentFeature.GetName(), "feature should have main as parent (sibling)")
+		require.Equal(t, "main", parentFeature.Name(), "feature should have main as parent (sibling)")
 	})
 
 	t.Run("rejects sibling splits below a non-trunk branch in linear mode", func(t *testing.T) {
@@ -281,20 +280,20 @@ func TestApplySplitToCommits(t *testing.T) {
 		require.NoError(t, repo.CreateChangeAndCommit("first commit", "file1"))
 		require.NoError(t, repo.CreateChangeAndCommit("second commit", "file2"))
 
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot:     scene.Dir,
 			Trunk:        "main",
 			LinearStacks: true,
 		})
 		require.NoError(t, err)
-		require.NoError(t, eng.TrackBranch(context.Background(), "base", "main"))
-		require.NoError(t, eng.TrackBranch(context.Background(), "feature", "base"))
+		require.NoError(t, eng.TrackBranch(t.Context(), "base", "main"))
+		require.NoError(t, eng.TrackBranch(t.Context(), "feature", "base"))
 
 		featureSHA, err := repo.GetBranchSHA("feature")
 		require.NoError(t, err)
 		require.NoError(t, repo.CheckoutDetached(featureSHA))
 
-		err = eng.ApplySplitToCommits(context.Background(), engine.ApplySplitOptions{
+		err = eng.ApplySplitToCommits(t.Context(), engine.ApplySplitOptions{
 			BranchToSplit: "feature",
 			BranchNames:   []string{"first", "feature"},
 			BranchPoints:  []int{0, 1},
@@ -314,7 +313,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		err := repo.CreateChangeAndCommit("main content", "mainfile")
 		require.NoError(t, err)
 
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot: scene.Dir,
 			Trunk:    "main",
 		})
@@ -334,7 +333,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		// Track feature
-		err = eng.TrackBranch(context.Background(), "feature", "main")
+		err = eng.TrackBranch(t.Context(), "feature", "main")
 		require.NoError(t, err)
 
 		// Create a child branch of feature
@@ -345,7 +344,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		err = repo.CreateChangeAndCommit("child content", "childfile")
 		require.NoError(t, err)
 
-		err = eng.TrackBranch(context.Background(), "child", "feature")
+		err = eng.TrackBranch(t.Context(), "child", "feature")
 		require.NoError(t, err)
 
 		// Detach before split
@@ -362,19 +361,19 @@ func TestApplySplitToCommits(t *testing.T) {
 			AsSibling:     true,
 		}
 
-		err = eng.ApplySplitToCommits(context.Background(), opts)
+		err = eng.ApplySplitToCommits(t.Context(), opts)
 		require.NoError(t, err)
 
 		// Verify branches are siblings (both have main as parent)
 		branch1 := eng.GetBranch("branch1")
-		require.Equal(t, "main", branch1.GetParent().GetName())
+		require.Equal(t, "main", branch1.Parent().Name())
 
 		feature := eng.GetBranch("feature")
-		require.Equal(t, "main", feature.GetParent().GetName())
+		require.Equal(t, "main", feature.Parent().Name())
 
 		// Verify child is still on feature (the last branch in the list)
 		child := eng.GetBranch("child")
-		require.Equal(t, "feature", child.GetParent().GetName())
+		require.Equal(t, "feature", child.Parent().Name())
 	})
 }
 

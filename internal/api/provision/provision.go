@@ -69,7 +69,7 @@ func BuildEntry(ctx context.Context, p EntryParams) (*registry.RepoEntry, error)
 		}
 	}
 
-	entry := registry.NewEntry(registry.EntryConfig{
+	entry := registry.NewEntry(ctx, registry.EntryConfig{
 		ID:          p.ID,
 		DisplayName: p.DisplayName,
 		RepoRoot:    runtimeCtx.RepoRoot,

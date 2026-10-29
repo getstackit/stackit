@@ -1,9 +1,9 @@
 package branch
 
 import (
+	"github.com/getstackit/stackit/internal/actions/freeze"
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/errors"
@@ -27,7 +27,7 @@ affects the local frozen status and does not affect shared locks.`,
 					return err
 				}
 
-				return actions.UnfreezeAction(ctx, branchName)
+				return freeze.Unfreeze(ctx.Context, freeze.Deps{Engine: ctx.Engine, Out: ctx.Output}, branchName)
 			})
 		},
 	}

@@ -67,14 +67,14 @@ func (g *fastPathGit) ReadDiffs(_ context.Context, mode git.DiffReadMode, ranges
 	return result
 }
 
-func (g *fastPathGit) RunGitCommandWithContext(_ context.Context, args ...string) (string, error) {
+func (g *fastPathGit) Run(_ context.Context, args ...string) (string, error) {
 	g.mergeTreeCalls = append(g.mergeTreeCalls, append([]string(nil), args...))
 	// The tree SHA is derived from the commit being replayed (the last arg) so
 	// assertions can tie a tree back to its source commit.
 	return "tree-of-" + args[len(args)-1] + "\n", nil
 }
 
-func (g *fastPathGit) RunGitCommandWithEnv(_ context.Context, env []string, args ...string) (string, error) {
+func (g *fastPathGit) RunWithEnv(_ context.Context, env []string, args ...string) (string, error) {
 	g.commitTreeCalls = append(g.commitTreeCalls, append([]string(nil), env...))
 	g.commitTreeCalls = append(g.commitTreeCalls, append([]string(nil), args...))
 	g.commitTreeN++
@@ -96,7 +96,7 @@ func TestTryConflictFreeReplaySingleCommitUsesMergeTreeWithExplicitMergeBase(t *
 	}
 	eng := &engineImpl{git: fakeGit}
 
-	newSHA, ok := eng.tryConflictFreeReplay(context.Background(), RebaseSpec{
+	newSHA, ok := eng.tryConflictFreeReplay(t.Context(), RebaseSpec{
 		Branch:      "feature",
 		NewParent:   "new-parent",
 		OldUpstream: "old-base",
@@ -138,7 +138,7 @@ func TestTryConflictFreeReplayUsesFastPathWhenParentChangedNoFiles(t *testing.T)
 	}
 	eng := &engineImpl{git: fakeGit}
 
-	newSHA, ok := eng.tryConflictFreeReplay(context.Background(), RebaseSpec{
+	newSHA, ok := eng.tryConflictFreeReplay(t.Context(), RebaseSpec{
 		Branch:      "feature",
 		NewParent:   "new-parent",
 		OldUpstream: "old-base",
@@ -167,7 +167,7 @@ func TestTryConflictFreeReplayMultiCommitChainsEachCommit(t *testing.T) {
 	}
 	eng := &engineImpl{git: fakeGit}
 
-	newSHA, ok := eng.tryConflictFreeReplay(context.Background(), RebaseSpec{
+	newSHA, ok := eng.tryConflictFreeReplay(t.Context(), RebaseSpec{
 		Branch:      "feature",
 		NewParent:   "new-parent",
 		OldUpstream: "old-base",

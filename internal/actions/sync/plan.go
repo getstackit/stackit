@@ -5,9 +5,10 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/git"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // PlanRequest configures a dry-run sync plan.
@@ -23,7 +24,7 @@ type PlanEngine interface {
 	Trunk() engine.Branch
 	AllBranches() engine.Branches
 	ReadBranchRemoteStatuses(ctx context.Context, branches engine.Branches) engine.BranchRemoteStatuses
-	ReadBranchStatuses(branches engine.Branches) engine.BranchStatuses
+	ReadBranchStatuses(ctx context.Context, branches engine.Branches) engine.BranchStatuses
 	GetDeletionStatuses(ctx context.Context, branchNames []string) (engine.DeletionStatuses, error)
 	GetStackRootForBranch(branch engine.Branch) string
 }
@@ -101,8 +102,8 @@ func PlanDryRun(ctx context.Context, eng PlanEngine, req PlanRequest) DryRunPlan
 		// want of a merge base, not because trunk is current.
 		plan.TrunkStateUnknown = true
 	case remoteStatus.Behind():
-		plan.PullBranch = trunk.GetName()
-		plan.PullRevision = utils.ShortRevision(remoteStatus.RemoteSha, 0)
+		plan.PullBranch = trunk.Name()
+		plan.PullRevision = git.ShortRevision(remoteStatus.RemoteSha, 0)
 	}
 
 	// Collect candidate branches for deletion and restack checks
@@ -115,19 +116,19 @@ func PlanDryRun(ctx context.Context, eng PlanEngine, req PlanRequest) DryRunPlan
 	// which would shell a separate `git rev-parse` for the parent).
 	var statuses engine.BranchStatuses
 	if req.Restack {
-		statuses = eng.ReadBranchStatuses(allBranches)
+		statuses = eng.ReadBranchStatuses(ctx, allBranches)
 	}
 
 	for _, branch := range allBranches {
 		if branch.IsTrunk() || !branch.IsTracked() {
 			continue
 		}
-		candidateNames = append(candidateNames, branch.GetName())
+		candidateNames = append(candidateNames, branch.Name())
 
 		if req.Restack && !statuses.IsUpToDate(branch) {
 			plan.Restack = append(plan.Restack, DryRunRestackItem{
-				Branch: branch.GetName(),
-				Parent: branch.GetParentOrTrunk(),
+				Branch: branch.Name(),
+				Parent: branch.ParentOrTrunk(),
 			})
 			if root := eng.GetStackRootForBranch(branch); root != "" {
 				restackRootSet[root] = struct{}{}

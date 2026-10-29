@@ -1,7 +1,6 @@
 package provision_test
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 
@@ -17,7 +16,7 @@ func TestEnsureClone(t *testing.T) {
 	src := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	dest := filepath.Join(t.TempDir(), "octo", "widget")
 
-	err := provision.EnsureClone(context.Background(), provision.CloneParams{
+	err := provision.EnsureClone(t.Context(), provision.CloneParams{
 		CloneURL: src.Dir,
 		Dest:     dest,
 	})
@@ -30,14 +29,14 @@ func TestEnsureCloneIdempotent(t *testing.T) {
 	src := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	dest := filepath.Join(t.TempDir(), "octo", "widget")
 
-	require.NoError(t, provision.EnsureClone(context.Background(), provision.CloneParams{
+	require.NoError(t, provision.EnsureClone(t.Context(), provision.CloneParams{
 		CloneURL: src.Dir,
 		Dest:     dest,
 	}))
 
 	// Second call with a bogus URL must be a no-op: an existing checkout is
 	// detected before any clone is attempted.
-	require.NoError(t, provision.EnsureClone(context.Background(), provision.CloneParams{
+	require.NoError(t, provision.EnsureClone(t.Context(), provision.CloneParams{
 		CloneURL: "https://github.com/should/not-be-touched.git",
 		Dest:     dest,
 	}))

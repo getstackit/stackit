@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/branchname"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/actions/validation"
@@ -15,7 +17,6 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Options contains options for the create command
@@ -56,15 +57,15 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	defer h.Cleanup()
 
 	// Validate preconditions
-	if err := validation.MustBeOnBranch(eng).Validate(); err != nil {
+	if err := validation.MustBeOnBranch(ctx.Context, eng).Validate(); err != nil {
 		return Result{}, err
 	}
-	currentBranch := eng.CurrentBranch().GetName()
+	currentBranch := eng.CurrentBranch(ctx.Context).Name()
 	requestedParent := currentBranch
 	if opts.Onto != "" {
 		requestedParent = opts.Onto
 	}
-	if ctx.InManagedWorktree && ctx.WorktreeInfo != nil && requestedParent == eng.Trunk().GetName() {
+	if ctx.InManagedWorktree && ctx.WorktreeInfo != nil && requestedParent == eng.Trunk().Name() {
 		return Result{}, fmt.Errorf("cannot create a branch from trunk inside managed worktree %s; first check out a branch owned by this worktree", ctx.WorktreeInfo.Name)
 	}
 	if err := actions.EnsureCanModifyNamesHere(ctx, currentBranch); err != nil {
@@ -219,7 +220,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	// Check if branch already exists
 	allBranches := eng.AllBranches()
@@ -235,7 +236,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	h.OnStep(StepBranchCreate, handler.StatusStarted, fmt.Sprintf("Creating branch %s", branchName))
 	if opts.Onto != "" {
 		ontoBranch := eng.GetBranch(opts.Onto)
-		ontoSHA, err := ontoBranch.GetRevision()
+		ontoSHA, err := ontoBranch.Revision(ctx.Context)
 		if err != nil {
 			h.OnStep(StepBranchCreate, handler.StatusFailed, err.Error())
 			return Result{}, fmt.Errorf("failed to resolve %s: %w", opts.Onto, err)
@@ -389,7 +390,7 @@ func determineBranch(ctx *app.Context, opts *Options, commitMessage string, scop
 		}
 	} else {
 		// Sanitize provided branch name
-		branchName = utils.SanitizeBranchName(branchName)
+		branchName = branchname.Sanitize(branchName)
 	}
 
 	return ctx.Engine.GetBranch(branchName), nil

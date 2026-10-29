@@ -99,7 +99,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		require.Equal(t, "feature", *config.CreatedPRs[0].Head.Ref, "PR should be for feature branch")
 
 		// Verify that metadata was updated with LastModifiedBy after submit
-		meta, err := s.Metadata.ReadMetadata(context.Background(), "feature").One()
+		meta, err := s.Metadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err, "Should be able to read metadata ref after submit")
 		require.NotNil(t, meta.GetLastModifiedBy(), "LastModifiedBy should be set after submit")
 		require.NotEmpty(t, meta.GetLastModifiedBy().GitName, "LastModifiedBy.GitName should not be empty")
@@ -139,7 +139,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 
 		// Store PR info in engine
 		branch := s.Engine.GetBranch(branchName)
-		err = s.Engine.UpsertPrInfo(context.Background(), branch, testhelpers.NewTestPrInfoWithTitle(prNumber, prData.Title).
+		err = s.Engine.UpsertPrInfo(t.Context(), branch, testhelpers.NewTestPrInfoWithTitle(prNumber, prData.Title).
 			WithBody(prData.Body).
 			WithIsDraft(prData.Draft))
 		require.NoError(t, err)
@@ -209,7 +209,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 
 		// Verify that metadata was updated for all submitted branches
 		for _, branchName := range []string{"P", "C1", "C2"} {
-			meta, err := s.Metadata.ReadMetadata(context.Background(), branchName).One()
+			meta, err := s.Metadata.ReadMetadata(t.Context(), branchName).One()
 			require.NoError(t, err, "Should be able to read metadata for %s", branchName)
 			require.NotNil(t, meta.GetLastModifiedBy(), "LastModifiedBy should be set for %s", branchName)
 		}
@@ -231,7 +231,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get the SHA of branch A
-		aSHA, err := s.Engine.GetBranch("A").GetRevision()
+		aSHA, err := s.Engine.GetBranch("A").Revision(t.Context())
 		require.NoError(t, err)
 
 		// Make branch B point to the same commit as A
@@ -258,17 +258,17 @@ func TestActionWithMockedGitHub(t *testing.T) {
 
 		// Store PR info in engine with A as the base (simulating after reorder)
 		branchB := s.Engine.GetBranch("B")
-		err = s.Engine.UpsertPrInfo(context.Background(), branchB, testhelpers.NewTestPrInfoWithTitle(prNumberB, prDataB.Title).
+		err = s.Engine.UpsertPrInfo(t.Context(), branchB, testhelpers.NewTestPrInfoWithTitle(prNumberB, prDataB.Title).
 			WithBody(prDataB.Body).
 			WithBase("main")) // Will be changed to "A" in prepareBranchesForSubmit
 		require.NoError(t, err)
 
 		// Update parent relationship: B's parent is now A
-		err = s.Engine.SetParent(context.Background(), s.Engine.GetBranch("B"), s.Engine.GetBranch("A"), engine.DivergenceRecompute)
+		err = s.Engine.SetParent(t.Context(), s.Engine.GetBranch("B"), s.Engine.GetBranch("A"), engine.DivergenceRecompute)
 		require.NoError(t, err)
 
 		// Verify that B and A have the same SHA (no commits between them)
-		bSHA, err := s.Engine.GetBranch("B").GetRevision()
+		bSHA, err := s.Engine.GetBranch("B").Revision(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, aSHA, bSHA, "B and A should point to the same commit")
 
@@ -346,9 +346,9 @@ func TestSubmitCreatesNativeGitHubStackWhenRequested(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, mockConfig.CreatedStacks, 1)
 
-	basePR, err := s.Engine.GetBranch("base").GetPrInfo()
+	basePR, err := s.Engine.GetBranch("base").PrInfo()
 	require.NoError(t, err)
-	apiPR, err := s.Engine.GetBranch("api").GetPrInfo()
+	apiPR, err := s.Engine.GetBranch("api").PrInfo()
 	require.NoError(t, err)
 	require.Equal(t, []git.PRNumber{*basePR.Number(), *apiPR.Number()}, mockConfig.CreatedStacks[0])
 
@@ -520,7 +520,7 @@ func TestSubmitReadsRemoteStatusOnceForStack(t *testing.T) {
 	// Build a second engine over the same repo with a runner that counts
 	// FetchRemoteShas, then drive submit through it.
 	counting := &countingRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      counting,
@@ -570,7 +570,7 @@ func TestSubmitDryRunCreateOnlySkipsRemoteStatusRead(t *testing.T) {
 	require.NoError(t, err)
 
 	counting := &countingRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      counting,
@@ -613,7 +613,7 @@ func TestSubmitPushesStackInSingleBatch(t *testing.T) {
 	require.NoError(t, err)
 
 	counting := &countingRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      counting,
@@ -669,7 +669,7 @@ func TestSubmitNoOpReadsRemoteOnceAndSkipsPush(t *testing.T) {
 	require.NoError(t, err)
 
 	counting := &countingRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      counting,
@@ -725,7 +725,7 @@ func TestSubmitPreservesLockStatus(t *testing.T) {
 
 	// Lock the branch
 	branch := s.Engine.GetBranch("feature")
-	_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
+	_, err = s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonUser)
 	require.NoError(t, err)
 	require.True(t, branch.IsLocked())
 
@@ -744,7 +744,7 @@ func TestSubmitPreservesLockStatus(t *testing.T) {
 	branch = s.Engine.GetBranch("feature")
 	require.True(t, branch.IsLocked(), "Branch should still be locked after submission")
 
-	meta, err := s.Metadata.ReadMetadata(context.Background(), "feature").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "feature").One()
 	require.NoError(t, err)
 	require.Equal(t, git.LockReasonUser, meta.GetLockReason(), "Metadata LockReason field should be set")
 }
@@ -757,7 +757,7 @@ func TestSubmitDryRunWithWorktreeAnchorParent(t *testing.T) {
 			"feature":   "wt-anchor",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
 	s.Checkout("feature")
@@ -779,7 +779,7 @@ func TestSubmitDisplayTreeSkipsWorktreeAnchorParent(t *testing.T) {
 			"feature":   "wt-anchor",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
 	s.Checkout("feature")
@@ -968,13 +968,13 @@ func TestSubmitGitHubStackSyncsDisjointChainsFromTrunk(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, mockConfig.CreatedStacks, 2)
 
-	oneBottomPR, err := s.Engine.GetBranch("one-bottom").GetPrInfo()
+	oneBottomPR, err := s.Engine.GetBranch("one-bottom").PrInfo()
 	require.NoError(t, err)
-	oneTopPR, err := s.Engine.GetBranch("one-top").GetPrInfo()
+	oneTopPR, err := s.Engine.GetBranch("one-top").PrInfo()
 	require.NoError(t, err)
-	twoBottomPR, err := s.Engine.GetBranch("two-bottom").GetPrInfo()
+	twoBottomPR, err := s.Engine.GetBranch("two-bottom").PrInfo()
 	require.NoError(t, err)
-	twoTopPR, err := s.Engine.GetBranch("two-top").GetPrInfo()
+	twoTopPR, err := s.Engine.GetBranch("two-top").PrInfo()
 	require.NoError(t, err)
 	require.Equal(t, [][]git.PRNumber{
 		{*oneBottomPR.Number(), *oneTopPR.Number()},
@@ -1100,7 +1100,7 @@ func TestSubmitDissolvesNativeGitHubStackToRetargetBase(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Empty(t, mockConfig.CreatedStacks[0], "the stale native Stack should have been dissolved")
-	apiPR, err := s.Engine.GetBranch("api").GetPrInfo()
+	apiPR, err := s.Engine.GetBranch("api").PrInfo()
 	require.NoError(t, err)
 	require.Equal(t, "main", apiPR.Base())
 }
@@ -1140,7 +1140,7 @@ func TestSubmitRetargetsBaseWhenStackKeepsMergedPullRequest(t *testing.T) {
 	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
 	require.NoError(t, err, "a Stack pinned open by a merged PR must not block retargeting the others")
 
-	apiPR, err := s.Engine.GetBranch("api").GetPrInfo()
+	apiPR, err := s.Engine.GetBranch("api").PrInfo()
 	require.NoError(t, err)
 	require.Equal(t, "main", apiPR.Base())
 

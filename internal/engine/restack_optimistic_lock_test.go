@@ -81,25 +81,25 @@ func TestRestackBranchPropagatesRevisionReadFailure(t *testing.T) {
 	t.Parallel()
 
 	dir, realGit := newOptimisticLockTestRepo(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Track "feature" with the real runner first: TrackBranch's divergence
 	// computation reads revisions too, and we only want the fault to fire
 	// once restackBranch itself asks for the branch's current SHA.
-	trackingEngine, err := NewEngine(Options{RepoRoot: dir, Trunk: "main", Git: realGit})
+	trackingEngine, err := NewEngine(t.Context(), Options{RepoRoot: dir, Trunk: "main", Git: realGit})
 	require.NoError(t, err)
 	trackingImpl, ok := trackingEngine.(*engineImpl)
 	require.True(t, ok)
 	require.NoError(t, trackingImpl.TrackBranch(ctx, "feature", "main"))
 
 	metaRef := git.MetadataRefPrefix + "feature"
-	realMetadataSHA, err := realGit.ReadRevisions(context.Background(), metaRef).One()
+	realMetadataSHA, err := realGit.ReadRevisions(t.Context(), metaRef).One()
 	require.NoError(t, err)
-	realBranchSHA, err := realGit.ReadRevisions(context.Background(), "feature").One()
+	realBranchSHA, err := realGit.ReadRevisions(t.Context(), "feature").One()
 	require.NoError(t, err)
 
 	flakyGit := &flakyRevisionRunner{Runner: realGit, failFor: "feature"}
-	eng, err := NewEngine(Options{RepoRoot: dir, Trunk: "main", Git: flakyGit})
+	eng, err := NewEngine(t.Context(), Options{RepoRoot: dir, Trunk: "main", Git: flakyGit})
 	require.NoError(t, err)
 	e, ok := eng.(*engineImpl)
 	require.True(t, ok)
@@ -109,7 +109,7 @@ func TestRestackBranchPropagatesRevisionReadFailure(t *testing.T) {
 	require.Error(t, err, "a failed branch-revision read must fail the restack, not silently bypass the optimistic lock")
 	require.Equal(t, RestackConflict, result.Result)
 
-	afterMetadataSHA, getErr := realGit.ReadRevisions(context.Background(), metaRef).One()
+	afterMetadataSHA, getErr := realGit.ReadRevisions(t.Context(), metaRef).One()
 	require.NoError(t, getErr)
 	require.Equal(t, realMetadataSHA, afterMetadataSHA, "metadata ref must be untouched when the branch revision can't be verified")
 
@@ -118,7 +118,7 @@ func TestRestackBranchPropagatesRevisionReadFailure(t *testing.T) {
 	// branch ref unconditionally). What optimistic locking protects here is
 	// the metadata ref, not whether the rebase itself ran -- so the branch
 	// tip having moved on is expected, not a sign the lock was bypassed.
-	afterBranchSHA, getErr := realGit.ReadRevisions(context.Background(), "feature").One()
+	afterBranchSHA, getErr := realGit.ReadRevisions(t.Context(), "feature").One()
 	require.NoError(t, getErr)
 	require.NotEqual(t, realBranchSHA, afterBranchSHA, "sanity check: the rebase itself should have run")
 }
@@ -132,24 +132,24 @@ func TestApplyBranchAndMetadataPropagatesRevisionReadFailure(t *testing.T) {
 	t.Parallel()
 
 	dir, realGit := newOptimisticLockTestRepo(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
-	trackingEngine, err := NewEngine(Options{RepoRoot: dir, Trunk: "main", Git: realGit})
+	trackingEngine, err := NewEngine(t.Context(), Options{RepoRoot: dir, Trunk: "main", Git: realGit})
 	require.NoError(t, err)
 	trackingImpl, ok := trackingEngine.(*engineImpl)
 	require.True(t, ok)
 	require.NoError(t, trackingImpl.TrackBranch(ctx, "feature", "main"))
 
 	metaRef := git.MetadataRefPrefix + "feature"
-	realMetadataSHA, err := realGit.ReadRevisions(context.Background(), metaRef).One()
+	realMetadataSHA, err := realGit.ReadRevisions(t.Context(), metaRef).One()
 	require.NoError(t, err)
-	featureSHA, err := realGit.ReadRevisions(context.Background(), "feature").One()
+	featureSHA, err := realGit.ReadRevisions(t.Context(), "feature").One()
 	require.NoError(t, err)
-	mainSHA, err := realGit.ReadRevisions(context.Background(), "main").One()
+	mainSHA, err := realGit.ReadRevisions(t.Context(), "main").One()
 	require.NoError(t, err)
 
 	flakyGit := &flakyRevisionRunner{Runner: realGit, failFor: "feature"}
-	eng, err := NewEngine(Options{RepoRoot: dir, Trunk: "main", Git: flakyGit})
+	eng, err := NewEngine(t.Context(), Options{RepoRoot: dir, Trunk: "main", Git: flakyGit})
 	require.NoError(t, err)
 	e, ok := eng.(*engineImpl)
 	require.True(t, ok)
@@ -160,11 +160,11 @@ func TestApplyBranchAndMetadataPropagatesRevisionReadFailure(t *testing.T) {
 	require.Error(t, err, "a failed branch-revision read must fail the update, not silently bypass the optimistic lock")
 	require.Equal(t, RestackConflict, result.Result)
 
-	afterMetadataSHA, getErr := realGit.ReadRevisions(context.Background(), metaRef).One()
+	afterMetadataSHA, getErr := realGit.ReadRevisions(t.Context(), metaRef).One()
 	require.NoError(t, getErr)
 	require.Equal(t, realMetadataSHA, afterMetadataSHA, "metadata ref must be untouched when the branch revision can't be verified")
 
-	afterBranchSHA, getErr := realGit.ReadRevisions(context.Background(), "feature").One()
+	afterBranchSHA, getErr := realGit.ReadRevisions(t.Context(), "feature").One()
 	require.NoError(t, getErr)
 	require.Equal(t, featureSHA, afterBranchSHA, "branch ref must be untouched: applyBranchAndMetadata never rebases, it only applies the given SHAs")
 }

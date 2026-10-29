@@ -171,7 +171,7 @@ func (c *ConsolidateMergeExecutor) createMergeBranch(ctx context.Context) (strin
 
 	splog.Info("📋 Creating merge branch: %s", branchName)
 
-	trunkName := c.engine.Trunk().GetName()
+	trunkName := c.engine.Trunk().Name()
 
 	// Create branch directly at trunk (avoids creating at HEAD then resetting)
 	if err := c.engine.CreateBranch(ctx, branchName, trunkName); err != nil {
@@ -183,7 +183,7 @@ func (c *ConsolidateMergeExecutor) createMergeBranch(ctx context.Context) (strin
 	}
 
 	// Mark as utility branch so it can be auto-deleted without confirmation during sync
-	if err := c.engine.SetBranchType(c.engine.GetBranch(branchName), git.BranchTypeUtility); err != nil {
+	if err := c.engine.SetBranchType(ctx, c.engine.GetBranch(branchName), git.BranchTypeUtility); err != nil {
 		splog.Debug("Failed to set branch type: %v", err)
 	}
 
@@ -211,7 +211,7 @@ func (c *ConsolidateMergeExecutor) createMergeBranch(ctx context.Context) (strin
 		return "", fmt.Errorf("failed to merge branches: %w", err)
 	}
 
-	if err := c.engine.PushBranches(ctx, c.engine.GetRemote(), []git.PushSpec{{BranchName: branchName, LeaseMode: git.PushLeaseNone}}, git.PushOptions{
+	if err := c.engine.PushBranches(ctx, c.engine.GetRemote(ctx), []git.PushSpec{{BranchName: branchName, LeaseMode: git.PushLeaseNone}}, git.PushOptions{
 		Force:    false,
 		NoVerify: true,
 	}).One(); err != nil {
@@ -223,13 +223,13 @@ func (c *ConsolidateMergeExecutor) createMergeBranch(ctx context.Context) (strin
 }
 
 func (c *ConsolidateMergeExecutor) createConsolidationPR(ctx context.Context, branchName string) (*github.PullRequestInfo, error) {
-	content := c.prGenerator.GenerateConsolidationPR(c.plan.BranchesToMerge)
+	content := c.prGenerator.GenerateConsolidationPR(ctx, c.plan.BranchesToMerge)
 
 	opts := github.CreatePROptions{
 		Title: content.Title,
 		Body:  content.Body,
 		Head:  branchName,
-		Base:  c.engine.Trunk().GetName(),
+		Base:  c.engine.Trunk().Name(),
 		Draft: false,
 	}
 
@@ -298,7 +298,7 @@ func (c *ConsolidateMergeExecutor) lockAndNotifyIndividualPRs(consolidationBranc
 type consolidatingLockEngine interface {
 	GetBranch(branchName string) engine.Branch
 	SetLocked(ctx context.Context, branches engine.Branches, reason engine.LockReason) (engine.BatchLockResult, error)
-	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
+	BatchReadMetadataRaw(ctx context.Context, branchNames []string) (engine.MetaMap, map[string]error)
 	BatchUpsertPrInfo(ctx context.Context, updates map[string]*engine.PrInfo) error
 }
 
@@ -326,9 +326,9 @@ func lockAndMarkConsolidating(ctx *app.Context, eng consolidatingLockEngine, bra
 
 	lockNames := make([]string, len(branchesToLock))
 	for i, b := range branchesToLock {
-		lockNames[i] = b.GetName()
+		lockNames[i] = b.Name()
 	}
-	allMeta, metaErrs := eng.BatchReadMetadataRaw(lockNames)
+	allMeta, metaErrs := eng.BatchReadMetadataRaw(ctx.Context, lockNames)
 
 	prUpdates := make(map[string]*engine.PrInfo, len(branchesToLock))
 	for _, name := range lockNames {

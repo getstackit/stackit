@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/actions/foreach"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
@@ -25,7 +27,7 @@ func NewForeachUI(out output.Output, logger output.Logger, parallel bool) (*tui.
 		return nil, NewSimpleForeachHandler(out, true)
 	}
 
-	if tui.IsTTY() {
+	if term.IsInteractive() {
 		model := foreachComponent.NewModel(nil)
 		runner := tui.NewRunner(model, out, logger)
 		runner.Start()

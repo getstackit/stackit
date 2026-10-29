@@ -307,7 +307,7 @@ type BranchRemoteStatuses map[string]BranchRemoteStatus
 
 // ForBranch returns the remote status for the given branch.
 func (s BranchRemoteStatuses) ForBranch(branch Branch) BranchRemoteStatus {
-	return s[branch.GetName()]
+	return s[branch.Name()]
 }
 
 // ValidationResult represents the validation state of a branch

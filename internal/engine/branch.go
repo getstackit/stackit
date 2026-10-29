@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -22,7 +23,7 @@ type branchReader interface {
 	// methods that operate on branch names with versions that take a Branch
 	// value, used by Branch's own getters. Engine is the only implementor.
 	GetParent(branch Branch) *Branch
-	GetCommitAuthor(branch Branch) (string, error)
+	GetCommitAuthor(ctx context.Context, branch Branch) (string, error)
 	GetMergedDownstack(branch Branch) []git.MergedParent
 	GetExplicitScope(branch Branch) Scope
 }
@@ -35,9 +36,9 @@ func NewBranch(name string, reader branchReader) Branch {
 	}
 }
 
-// GetName returns the branch name. This method allows Branch to implement
+// Name returns the branch name. This method allows Branch to implement
 // the engine.Branch interface without creating circular dependencies.
-func (b Branch) GetName() string {
+func (b Branch) Name() string {
 	return b.name
 }
 
@@ -56,80 +57,82 @@ func (b Branch) IsTracked() bool {
 	return b.reader.IsTracked(b)
 }
 
-// GetScope returns the scope for this branch, inheriting from parent if not set
-func (b Branch) GetScope() Scope {
+// Scope returns the scope for this branch, inheriting from parent if not set
+func (b Branch) Scope() Scope {
 	return b.reader.GetScope(b)
 }
 
-// GetParentOrTrunk returns the parent branch name, or trunk if no parent
+// ParentOrTrunk returns the parent branch name, or trunk if no parent
 // This is used for validation where we expect a parent to exist
-func (b Branch) GetParentOrTrunk() string {
+func (b Branch) ParentOrTrunk() string {
 	parent := b.reader.GetParent(b)
 	if parent == nil {
-		return b.reader.Trunk().GetName()
+		return b.reader.Trunk().Name()
 	}
-	return parent.GetName()
+	return parent.Name()
 }
 
 // IsBranchUpToDate checks if this branch is up to date with its parent
 // A branch is up to date if its parent revision matches the stored parent revision
-func (b Branch) IsBranchUpToDate() bool {
-	return b.reader.IsUpToDate(b)
+func (b Branch) IsBranchUpToDate(ctx context.Context) bool {
+	return b.reader.IsUpToDate(ctx, b)
 }
 
 // NeedsRestack returns true if the branch needs to be restacked onto its parent.
 // This is the inverse of IsBranchUpToDate - a branch needs restacking when its
 // parent has moved and the branch is no longer based on the current parent tip.
-func (b Branch) NeedsRestack() bool {
-	return !b.IsBranchUpToDate()
+func (b Branch) NeedsRestack(ctx context.Context) bool {
+	return !b.IsBranchUpToDate(ctx)
 }
 
 // GetCommitDate returns the commit date for this branch
-func (b Branch) GetCommitDate() (time.Time, error) {
-	return b.reader.GetCommitDate(b)
+func (b Branch) CommitDate(ctx context.Context) (time.Time, error) {
+	return b.reader.GetCommitDate(ctx, b)
 }
 
 // GetCommitAuthor returns the commit author for this branch
-func (b Branch) GetCommitAuthor() (string, error) {
-	return b.reader.GetCommitAuthor(b)
+func (b Branch) CommitAuthor(ctx context.Context) (string, error) {
+	return b.reader.GetCommitAuthor(ctx, b)
 }
 
 // GetRevision returns the SHA of this branch
-func (b Branch) GetRevision() (string, error) {
-	return b.reader.GetRevision(b)
+func (b Branch) Revision(ctx context.Context) (string, error) {
+	return b.reader.GetRevision(ctx, b)
 }
 
 // GetAllCommits returns newest-first commit data for this branch.
-func (b Branch) GetAllCommits() (git.Commits, error) {
-	return b.reader.GetAllCommits(b)
+func (b Branch) AllCommits(ctx context.Context) (git.Commits, error) {
+	return b.reader.GetAllCommits(ctx, b)
 }
 
 // GetCommitIDs returns newest-first identities without loading commit messages.
-func (b Branch) GetCommitIDs() ([]string, error) { return b.reader.GetCommitIDs(b) }
+func (b Branch) CommitIDs(ctx context.Context) ([]string, error) {
+	return b.reader.GetCommitIDs(ctx, b)
+}
 
-// GetParent returns the parent branch (nil if no parent)
-func (b Branch) GetParent() *Branch {
+// Parent returns the parent branch (nil if no parent)
+func (b Branch) Parent() *Branch {
 	return b.reader.GetParent(b)
 }
 
-// GetPrInfo returns PR information for this branch
-func (b Branch) GetPrInfo() (*PrInfo, error) {
+// PrInfo returns PR information for this branch
+func (b Branch) PrInfo() (*PrInfo, error) {
 	return b.reader.GetPrInfo(b)
 }
 
 // HasPR reports whether this branch has a submitted PR number recorded.
 func (b Branch) HasPR() bool {
-	prInfo, err := b.GetPrInfo()
+	prInfo, err := b.PrInfo()
 	return err == nil && prInfo != nil && prInfo.Number() != nil
 }
 
-// GetMergedDownstack returns the merged downstack history for this branch
-func (b Branch) GetMergedDownstack() []git.MergedParent {
+// MergedDownstack returns the merged downstack history for this branch
+func (b Branch) MergedDownstack() []git.MergedParent {
 	return b.reader.GetMergedDownstack(b)
 }
 
-// GetExplicitScope returns the explicit scope set for this branch (no inheritance)
-func (b Branch) GetExplicitScope() Scope {
+// ExplicitScope returns the explicit scope set for this branch (no inheritance)
+func (b Branch) ExplicitScope() Scope {
 	return b.reader.GetExplicitScope(b)
 }
 
@@ -138,8 +141,8 @@ func (b Branch) IsLocked() bool {
 	return b.reader.IsLocked(b)
 }
 
-// GetLockReason returns why the branch is locked
-func (b Branch) GetLockReason() LockReason {
+// LockReason returns why the branch is locked
+func (b Branch) LockReason() LockReason {
 	return b.reader.GetLockReason(b)
 }
 
@@ -166,9 +169,9 @@ func (b Branch) ModificationBlocker() string {
 	case b.IsWorktreeAnchor():
 		return "worktree anchor"
 	case b.IsLocked() && b.IsFrozen():
-		return fmt.Sprintf("locked (%s) and frozen", b.GetLockReason())
+		return fmt.Sprintf("locked (%s) and frozen", b.LockReason())
 	case b.IsLocked():
-		return fmt.Sprintf("locked (%s)", b.GetLockReason())
+		return fmt.Sprintf("locked (%s)", b.LockReason())
 	case b.IsFrozen():
 		return "frozen"
 	default:
@@ -184,28 +187,28 @@ func (b Branch) EnsureCanModify() error {
 	if b.CanModify() {
 		return nil
 	}
-	return errors.NewBranchModificationError(b.name, b.GetLockReason(), b.IsFrozen())
+	return errors.NewBranchModificationError(b.name, b.LockReason(), b.IsFrozen())
 }
 
 // DefaultPRTitle returns the default PR title for this branch.
 // Uses the oldest commit subject, falling back to the branch name.
-func (b Branch) DefaultPRTitle() string {
-	commitsData, err := b.GetAllCommits()
+func (b Branch) DefaultPRTitle(ctx context.Context) string {
+	commitsData, err := b.AllCommits(ctx)
 	return defaultPRTitle(b.name, commitsData, err)
 }
 
 // DefaultPRBody returns the default PR body for this branch.
 // For single commit: uses the commit body (skips subject line).
 // For multiple commits: creates a bulleted list of subjects in chronological order.
-func (b Branch) DefaultPRBody() string {
-	commitsData, err := b.GetAllCommits()
+func (b Branch) DefaultPRBody(ctx context.Context) string {
+	commitsData, err := b.AllCommits(ctx)
 	return defaultPRBody(commitsData, err)
 }
 
 // DefaultPRTitleAndBody returns the default PR title and body for this
 // branch, reading commits once instead of once per field.
-func (b Branch) DefaultPRTitleAndBody() (string, string) {
-	commitsData, err := b.GetAllCommits()
+func (b Branch) DefaultPRTitleAndBody(ctx context.Context) (string, string) {
+	commitsData, err := b.AllCommits(ctx)
 	return defaultPRTitle(b.name, commitsData, err), defaultPRBody(commitsData, err)
 }
 

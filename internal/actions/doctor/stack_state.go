@@ -18,9 +18,9 @@ type stackStateEngine interface {
 	Trunk() engine.Branch
 	AllBranches() engine.Branches
 	GetAllBranchNames(ctx context.Context) ([]string, error)
-	BatchIsBranchEmpty(branchNames []string) engine.BranchNameSet
-	ListMetadataRefs() (map[string]string, error)
-	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
+	BatchIsBranchEmpty(ctx context.Context, branchNames []string) engine.BranchNameSet
+	ListMetadataRefs(ctx context.Context) (map[string]string, error)
+	BatchReadMetadataRaw(ctx context.Context, branchNames []string) (engine.MetaMap, map[string]error)
 	DeleteMetadataRefsBatch(ctx context.Context, branchNames []string) error
 }
 
@@ -35,7 +35,7 @@ func checkStackState(ctx context.Context, eng stackStateEngine, handler Handler,
 	}
 
 	// Get all metadata refs
-	metadataRefs, err := eng.ListMetadataRefs()
+	metadataRefs, err := eng.ListMetadataRefs(ctx)
 	if err != nil {
 		errors++
 		handler.OnCheck("metadata_list", CheckError, fmt.Sprintf("failed to get metadata refs: %v", err))
@@ -92,7 +92,7 @@ func checkStackState(ctx context.Context, eng stackStateEngine, handler Handler,
 
 	// Check for corrupted metadata
 	metadataRefNames := slices.Collect(maps.Keys(metadataRefs))
-	allMeta, allMetaErrs := eng.BatchReadMetadataRaw(metadataRefNames)
+	allMeta, allMetaErrs := eng.BatchReadMetadataRaw(ctx, metadataRefNames)
 
 	corruptedCount := 0
 	for _, branchName := range metadataRefNames {
@@ -135,7 +135,7 @@ func checkStackState(ctx context.Context, eng stackStateEngine, handler Handler,
 	}
 
 	// Check for empty branches (branches with no commits vs their parent)
-	emptyBranches := checkEmptyBranches(eng)
+	emptyBranches := checkEmptyBranches(ctx, eng)
 	if len(emptyBranches) > 0 {
 		warnings += len(emptyBranches)
 		branchList := strings.Join(emptyBranches, ", ")
@@ -148,19 +148,19 @@ func checkStackState(ctx context.Context, eng stackStateEngine, handler Handler,
 }
 
 // checkEmptyBranches finds branches that have no commits compared to their parent
-func checkEmptyBranches(eng stackStateEngine) []string {
+func checkEmptyBranches(ctx context.Context, eng stackStateEngine) []string {
 	trunk := eng.Trunk()
-	trunkName := trunk.GetName()
+	trunkName := trunk.Name()
 
 	allBranches := eng.AllBranches()
 	branchNames := make([]string, 0, len(allBranches))
 	for _, branch := range allBranches {
-		if branch.GetName() != trunkName {
-			branchNames = append(branchNames, branch.GetName())
+		if branch.Name() != trunkName {
+			branchNames = append(branchNames, branch.Name())
 		}
 	}
 
-	emptyStatuses := eng.BatchIsBranchEmpty(branchNames)
+	emptyStatuses := eng.BatchIsBranchEmpty(ctx, branchNames)
 
 	var emptyBranches []string
 	for _, branchName := range branchNames {
@@ -181,14 +181,14 @@ func detectCycles(eng stackStateEngine) [][]string {
 	recStack := make(map[string]bool)
 	parentMap := make(map[string]string)
 	trunk := eng.Trunk()
-	trunkName := trunk.GetName()
+	trunkName := trunk.Name()
 
 	// Build parent map
 	for _, branch := range allBranches {
-		branchName := branch.GetName()
-		parent := branch.GetParent()
-		if parent != nil && parent.GetName() != trunkName {
-			parentMap[branchName] = parent.GetName()
+		branchName := branch.Name()
+		parent := branch.Parent()
+		if parent != nil && parent.Name() != trunkName {
+			parentMap[branchName] = parent.Name()
 		}
 	}
 
@@ -238,7 +238,7 @@ func checkMissingParents(eng stackStateEngine, allBranches []string) []string {
 	var missing []string
 	branchSet := make(map[string]bool)
 	trunk := eng.Trunk()
-	trunkName := trunk.GetName()
+	trunkName := trunk.Name()
 
 	for _, branch := range allBranches {
 		branchSet[branch] = true
@@ -249,9 +249,9 @@ func checkMissingParents(eng stackStateEngine, allBranches []string) []string {
 			continue
 		}
 		branchObj := eng.GetBranch(branch)
-		parent := branchObj.GetParent()
-		if parent != nil && parent.GetName() != trunkName {
-			if !branchSet[parent.GetName()] {
+		parent := branchObj.Parent()
+		if parent != nil && parent.Name() != trunkName {
+			if !branchSet[parent.Name()] {
 				missing = append(missing, branch)
 			}
 		}

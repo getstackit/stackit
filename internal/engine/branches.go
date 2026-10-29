@@ -31,7 +31,7 @@ func (b *BranchesBuilder) Add(branch Branch) {
 	if b == nil {
 		return
 	}
-	name := branch.GetName()
+	name := branch.Name()
 	if _, exists := b.seen[name]; exists {
 		return
 	}
@@ -172,7 +172,7 @@ func (b Branches) All() []Branch {
 func (b Branches) Names() []string {
 	names := make([]string, 0, len(b))
 	for _, branch := range b {
-		names = append(names, branch.GetName())
+		names = append(names, branch.Name())
 	}
 	return names
 }
@@ -180,7 +180,7 @@ func (b Branches) Names() []string {
 // Contains returns true if the branch set contains name.
 func (b Branches) Contains(name string) bool {
 	return slices.ContainsFunc(b, func(branch Branch) bool {
-		return branch.GetName() == name
+		return branch.Name() == name
 	})
 }
 
@@ -202,7 +202,7 @@ func newBranchStatuses(upToDate map[string]bool) BranchStatuses {
 
 // IsUpToDate returns true when branch is up to date with its parent.
 func (s BranchStatuses) IsUpToDate(branch Branch) bool {
-	return s.IsUpToDateByName(branch.GetName())
+	return s.IsUpToDateByName(branch.Name())
 }
 
 // IsUpToDateByName returns true when branchName is up to date with its parent.

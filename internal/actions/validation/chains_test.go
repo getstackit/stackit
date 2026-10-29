@@ -18,7 +18,7 @@ func TestModifyBranchChain(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithLinearStack3().Checkout("b")
 
-		chain := validation.ModifyBranchChain(s.Engine, "rename")
+		chain := validation.ModifyBranchChain(t.Context(), s.Engine, "rename")
 		err := chain.Validate()
 		require.NoError(t, err)
 	})
@@ -28,7 +28,7 @@ func TestModifyBranchChain(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithLinearStack3().Checkout("main")
 
-		chain := validation.ModifyBranchChain(s.Engine, "rename")
+		chain := validation.ModifyBranchChain(t.Context(), s.Engine, "rename")
 		err := chain.Validate()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "trunk")

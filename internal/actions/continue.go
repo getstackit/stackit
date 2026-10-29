@@ -3,6 +3,8 @@ package actions
 import (
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/actions/restack"
+
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
@@ -36,22 +38,22 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		out.Info("No continuation state found. Continuing rebase only.")
 		// Try to continue the rebase anyway (user might have started it manually)
 		// But we need a rebasedBranchBase - try to get it from current branch's parent
-		currentBranch := eng.CurrentBranch()
+		currentBranch := eng.CurrentBranch(ctx.Context)
 		if currentBranch == nil {
 			return errors.ErrNotOnBranch
 		}
-		parentName := currentBranch.GetParentOrTrunk()
+		parentName := currentBranch.ParentOrTrunk()
 		parentBranch := eng.GetBranch(parentName)
-		parentRev, err := parentBranch.GetRevision()
+		parentRev, err := parentBranch.Revision(ctx.Context)
 		if err != nil {
 			return fmt.Errorf("failed to get parent revision: %w", err)
 		}
 		continuation = &config.ContinuationState{
 			RebasedBranchBase:     parentRev,
 			BranchesToRestack:     []string{},
-			CurrentBranchOverride: currentBranch.GetName(),
+			CurrentBranchOverride: currentBranch.Name(),
 		}
-		expectedBranchRevision, err := currentBranch.GetRevision()
+		expectedBranchRevision, err := currentBranch.Revision(ctx.Context)
 		if err != nil {
 			return fmt.Errorf("failed to get current branch revision: %w", err)
 		}
@@ -84,11 +86,11 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		// Get current branch name for conflict status
 		branchName := result.BranchName
 		if branchName == "" {
-			currentBranch := eng.CurrentBranch()
+			currentBranch := eng.CurrentBranch(ctx.Context)
 			if currentBranch == nil {
 				return errors.ErrNotOnBranch
 			}
-			branchName = currentBranch.GetName()
+			branchName = currentBranch.Name()
 		}
 		if result.RerereResolvedCount > 0 {
 			printRerereResolved(ctx, result.RerereResolvedCount)
@@ -137,7 +139,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	// Continue with remaining branches to restack
 	if len(continuation.BranchesToRestack) > 0 {
 		branches := engine.BranchesFromNames(eng, continuation.BranchesToRestack)
-		if err := restackBranchesWithPlan(ctx, branches, nil, nil, ConflictModeEnterWorkflow, continuation); err != nil {
+		if err := restackBranchesWithPlan(ctx, branches, nil, nil, restack.ConflictEnterWorkflow, continuation); err != nil {
 			return err
 		}
 	}
@@ -165,7 +167,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		trunk := eng.Trunk()
 		if err := eng.CheckoutBranch(ctx.Context, trunk); err == nil {
 			out.Info("Switched to %s; %s lives in its own worktree.",
-				output.BranchName(trunk.GetName()), output.BranchName(result.BranchName))
+				output.BranchName(trunk.Name()), output.BranchName(result.BranchName))
 		} else {
 			out.Warn("HEAD is detached here. Run 'stackit checkout <branch>' to get back onto a branch.")
 		}

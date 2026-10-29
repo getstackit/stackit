@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/cli/branch"
@@ -11,7 +12,6 @@ import (
 	"github.com/getstackit/stackit/internal/cli/shell"
 	"github.com/getstackit/stackit/internal/cli/stack"
 	"github.com/getstackit/stackit/internal/cli/worktree"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewRootCmd creates the root cobra command
@@ -51,7 +51,7 @@ Commit:  ` + commit + `
 				interactive = false
 			case cmd.Flags().Changed("interactive"):
 				// honor the explicit --interactive value already in `interactive`
-			case utils.NonInteractiveEnv() || !utils.TerminalDetected():
+			case term.NonInteractiveEnv() || !term.TerminalDetected():
 				interactive = false
 			}
 

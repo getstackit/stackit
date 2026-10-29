@@ -39,18 +39,18 @@ func TestManagedWorktreeHoldReason(t *testing.T) {
 
 	t.Run("clean worktree is safe", func(t *testing.T) {
 		t.Parallel()
-		require.Empty(t, ManagedWorktreeHoldReason(context.Background(), stubInspector{}, existing))
+		require.Empty(t, ManagedWorktreeHoldReason(t.Context(), stubInspector{}, existing))
 	})
 
 	t.Run("dirty worktree is skipped", func(t *testing.T) {
 		t.Parallel()
-		reason := ManagedWorktreeHoldReason(context.Background(), stubInspector{hasChanges: true}, existing)
+		reason := ManagedWorktreeHoldReason(t.Context(), stubInspector{hasChanges: true}, existing)
 		require.Contains(t, reason, "uncommitted changes")
 	})
 
 	t.Run("uninspectable worktree is skipped", func(t *testing.T) {
 		t.Parallel()
-		reason := ManagedWorktreeHoldReason(context.Background(),
+		reason := ManagedWorktreeHoldReason(t.Context(),
 			stubInspector{err: errors.New("index.lock exists")}, existing)
 		require.Contains(t, reason, "could not be inspected")
 		require.Contains(t, reason, "index.lock")
@@ -60,7 +60,7 @@ func TestManagedWorktreeHoldReason(t *testing.T) {
 		t.Parallel()
 		// stackit's own conflict workflow leaves the worktree mid-rebase with a
 		// clean index; resetting it would abandon the rebase the user is in.
-		reason := ManagedWorktreeHoldReason(context.Background(), stubInspector{rebasing: true}, existing)
+		reason := ManagedWorktreeHoldReason(t.Context(), stubInspector{rebasing: true}, existing)
 		require.Equal(t, restackWorktreeHoldReasonRebase, reason)
 	})
 
@@ -70,7 +70,7 @@ func TestManagedWorktreeHoldReason(t *testing.T) {
 		// whose whole job is retiring this registration. The probe would fail
 		// here, so this must not be lumped in with uninspectable worktrees.
 		missing := engine.WorktreePath(filepath.Join(t.TempDir(), "gone"))
-		reason := ManagedWorktreeHoldReason(context.Background(),
+		reason := ManagedWorktreeHoldReason(t.Context(),
 			stubInspector{err: errors.New("no such file or directory")}, missing)
 		require.Empty(t, reason)
 	})

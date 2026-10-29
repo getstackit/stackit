@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -20,15 +19,15 @@ func TestBatchBranchStats(t *testing.T) {
 	s.WithLinearStack3()
 
 	branches := s.Engine.AllBranches()
-	stats := s.Engine.BatchBranchStats(branches)
+	stats := s.Engine.BatchBranchStats(t.Context(), branches)
 
 	for _, b := range branches {
-		name := b.GetName()
+		name := b.Name()
 		stat, ok := stats[name]
 		require.True(t, ok, "missing stat for %s", name)
 
 		// Short SHA matches GetRevision for every branch, including trunk.
-		if rev, err := s.Engine.GetRevision(b); err == nil && len(rev) >= 7 {
+		if rev, err := s.Engine.GetRevision(t.Context(), b); err == nil && len(rev) >= 7 {
 			require.Equal(t, rev[:7], stat.ShortSHA, "ShortSHA for %s", name)
 		}
 
@@ -36,7 +35,7 @@ func TestBatchBranchStats(t *testing.T) {
 			continue
 		}
 
-		parent := b.GetParent().GetName()
+		parent := b.Parent().Name()
 
 		wantCount, err := s.Scene.Repo.GetCommitCount(parent, name)
 		require.NoError(t, err)
@@ -60,14 +59,14 @@ func TestBatchChangedFileCountsUsesDivergenceBase(t *testing.T) {
 
 	b := engine.BranchesOf(s.Engine.GetBranch("b"))
 
-	before := s.Engine.BatchChangedFileCounts(context.Background(), b)["b"]
+	before := s.Engine.BatchChangedFileCounts(t.Context(), b)["b"]
 	require.GreaterOrEqual(t, before, 1)
 
 	// Advance b's parent (a) with a new commit touching a different file, without
 	// restacking b, so a's current tip moves past b's divergence point.
 	s.Checkout("a").CommitChange("a-advanced.txt", "advance a past b's divergence")
 
-	after := s.Engine.BatchChangedFileCounts(context.Background(), b)["b"]
+	after := s.Engine.BatchChangedFileCounts(t.Context(), b)["b"]
 	require.Equal(t, before, after,
 		"files-changed must use the divergence base, not the parent's current tip")
 }
@@ -80,26 +79,26 @@ func TestPerConcernBatchReaders(t *testing.T) {
 	s.WithLinearStack3()
 
 	branches := s.Engine.AllBranches()
-	diffs := s.Engine.BatchDiffStats(branches)
-	commits := s.Engine.BatchCommits(branches)
-	divergence := s.Engine.BatchDivergencePoints(branches)
+	diffs := s.Engine.BatchDiffStats(t.Context(), branches)
+	commits := s.Engine.BatchCommits(t.Context(), branches)
+	divergence := s.Engine.BatchDivergencePoints(t.Context(), branches)
 
 	for _, b := range branches {
-		name := b.GetName()
+		name := b.Name()
 
 		if b.IsTrunk() {
 			continue
 		}
 
-		wantDiv, err := s.Engine.GetDivergencePoint(name)
+		wantDiv, err := s.Engine.GetDivergencePoint(t.Context(), name)
 		require.NoError(t, err)
 		require.Equal(t, wantDiv, divergence[name], "divergence for %s", name)
 
-		wantAdded, wantDeleted, err := s.Scene.Repo.GetDiffStats(b.GetParent().GetName(), name)
+		wantAdded, wantDeleted, err := s.Scene.Repo.GetDiffStats(b.Parent().Name(), name)
 		require.NoError(t, err)
 		require.Equal(t, engine.DiffStat{Added: wantAdded, Deleted: wantDeleted, FilesChanged: 1}, diffs[name], "diff for %s", name)
 
-		wantCommitsData, err := s.Engine.GetAllCommits(b)
+		wantCommitsData, err := s.Engine.GetAllCommits(t.Context(), b)
 		wantCommits := wantCommitsData.Onelines()
 		require.NoError(t, err)
 		require.Equal(t, wantCommits, commits[name].Onelines(), "commits for %s", name)
@@ -114,18 +113,18 @@ func TestBatchCommitInfo(t *testing.T) {
 	s.WithLinearStack3()
 
 	branches := s.Engine.AllBranches()
-	info := s.Engine.BatchCommitInfo(branches)
+	info := s.Engine.BatchCommitInfo(t.Context(), branches)
 
 	for _, b := range branches {
-		name := b.GetName()
+		name := b.Name()
 		got, ok := info[name]
 		require.True(t, ok, "missing commit info for %s", name)
 
-		wantDate, err := s.Engine.GetCommitDate(b)
+		wantDate, err := s.Engine.GetCommitDate(t.Context(), b)
 		require.NoError(t, err)
 		require.True(t, wantDate.Equal(got.Date), "CommitDate for %s", name)
 
-		wantAuthor, err := engine.Impl(s.Engine).GetCommitAuthor(b)
+		wantAuthor, err := engine.Impl(s.Engine).GetCommitAuthor(t.Context(), b)
 		require.NoError(t, err)
 		require.Equal(t, wantAuthor, got.Author, "CommitAuthor for %s", name)
 	}
@@ -143,26 +142,26 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 
 	// Clear b's stored divergence point but keep its parent (a), so the commit
 	// base must fall back to the parent tip rather than an empty base.
-	meta, err := s.Metadata.ReadMetadata(context.Background(), "b").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "b").One()
 	require.NoError(t, err)
-	require.NoError(t, s.Metadata.WriteMetadata("b", meta.WithParentBranchRevision(nil)))
-	require.NoError(t, s.Engine.Rebuild("main"))
+	require.NoError(t, s.Metadata.WriteMetadata(t.Context(), "b", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 
 	b := s.Engine.GetBranch("b")
 
-	commitsData, err := s.Engine.GetAllCommits(b)
+	commitsData, err := s.Engine.GetAllCommits(t.Context(), b)
 	commits := commitsData.Onelines()
 	require.NoError(t, err)
 
 	// Without the fallback, GetAllCommits walks b's whole history to the repo
 	// root while a parent..b walk covers only b's own commits, so the two
 	// disagree. The raw-git count against the parent tip is the oracle here.
-	count, err := s.Scene.Repo.GetCommitCount(b.GetParent().GetName(), "b")
+	count, err := s.Scene.Repo.GetCommitCount(b.Parent().Name(), "b")
 	require.NoError(t, err)
 	require.Len(t, commits, count,
 		"commit messages and count must use the same base when no divergence is stored")
 
-	batched := s.Engine.BatchCommits(engine.BranchesOf(b))["b"]
+	batched := s.Engine.BatchCommits(t.Context(), engine.BranchesOf(b))["b"]
 	require.Equal(t, commits, batched.Onelines(), "batched commits must match the single-branch accessor")
 }
 
@@ -174,7 +173,7 @@ func TestReadBranchCommitsRetainsErrorsAndEmptyBranches(t *testing.T) {
 	meta, err := s.Metadata.ReadMetadata(t.Context(), "b").One()
 	require.NoError(t, err)
 	missing := "missing-base"
-	require.NoError(t, s.Metadata.WriteMetadata("b", meta.WithParentBranchRevision(&missing)))
+	require.NoError(t, s.Metadata.WriteMetadata(t.Context(), "b", meta.WithParentBranchRevision(&missing)))
 	branches := engine.BranchesFromNames(s.Engine, []string{"a", "b", "empty", "missing-branch"})
 	data := s.Engine.ReadBranchCommits(t.Context(), branches)
 	valid, err := data.Get("a")
@@ -212,7 +211,7 @@ func TestBranchSnapshotStoredBaseSurvivesMissingParent(t *testing.T) {
 
 	meta, err := s.Metadata.ReadMetadata(t.Context(), "c").One()
 	require.NoError(t, err)
-	require.NoError(t, s.Metadata.WriteMetadata("c", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Metadata.WriteMetadata(t.Context(), "c", meta.WithParentBranchRevision(nil)))
 	_, err = s.Engine.ReadBranchCommits(t.Context(), branches).One()
 	require.Error(t, err, "without a stored base the missing parent must not become unbounded history")
 	_, err = s.Engine.ReadBranchCommitNodes(t.Context(), branches).One()

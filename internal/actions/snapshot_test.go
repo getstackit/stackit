@@ -23,7 +23,7 @@ func TestDisabledSnapshotClearsPreviousBinding(t *testing.T) {
 	s.Context.Config = cfg
 	actions.TakeBestEffortSnapshot(s.Context, actions.NewSnapshot("modify"))
 	require.Empty(t, s.Engine.LastSnapshotID())
-	snapshots, err := s.Engine.GetSnapshots()
+	snapshots, err := s.Engine.Snapshots()
 	require.NoError(t, err)
 	require.Len(t, snapshots, 1)
 }

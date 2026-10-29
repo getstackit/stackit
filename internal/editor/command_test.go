@@ -1,4 +1,4 @@
-package utils
+package editor
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildEditorCommand(t *testing.T) {
+func TestCommand(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -51,7 +51,7 @@ func TestBuildEditorCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			cmd, err := BuildEditorCommand(tt.editor, tt.file)
+			cmd, err := Command(tt.editor, tt.file)
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				require.ErrorContains(t, err, tt.wantErr)

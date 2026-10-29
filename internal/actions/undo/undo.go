@@ -23,7 +23,7 @@ type Options struct {
 // undoEngine lists exactly the engine methods undo calls.
 type undoEngine interface {
 	actions.RecoveryEngine
-	GetSnapshots() ([]engine.SnapshotInfo, error)
+	Snapshots() ([]engine.SnapshotInfo, error)
 	WorktreeHasTrackedChanges(ctx context.Context, worktreePath engine.WorktreePath) (bool, error)
 }
 
@@ -40,7 +40,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	h.Start()
 
 	// Get all available snapshots
-	snapshots, err := eng.GetSnapshots()
+	snapshots, err := eng.Snapshots()
 	if err != nil {
 		return fmt.Errorf("failed to get snapshots: %w", err)
 	}

@@ -23,26 +23,26 @@ and seeing which branch the current branch is based on.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.RunReadOnlyCurrentBranch(cmd, func(ctx *app.Context) error {
 				// Get current branch
-				currentBranch := ctx.Engine.CurrentBranch()
+				currentBranch := ctx.Engine.CurrentBranch(ctx.Context)
 				if currentBranch == nil {
 					return errors.ErrNotOnBranch
 				}
 
 				// Check if on trunk
 				if currentBranch.IsTrunk() {
-					ctx.Output.Info("%s is trunk and has no parent.", style.ColorCurrentBranch(currentBranch.GetName()))
+					ctx.Output.Info("%s is trunk and has no parent.", style.ColorCurrentBranch(currentBranch.Name()))
 					return nil
 				}
 
 				// Get parent
-				parent := currentBranch.GetParent()
+				parent := currentBranch.Parent()
 				if parent == nil {
-					ctx.Output.Info("%s has no parent (untracked branch).", style.ColorCurrentBranch(currentBranch.GetName()))
+					ctx.Output.Info("%s has no parent (untracked branch).", style.ColorCurrentBranch(currentBranch.Name()))
 					return nil
 				}
 
 				// Print parent
-				ctx.Output.Info("%s", parent.GetName())
+				ctx.Output.Info("%s", parent.Name())
 				return nil
 			})
 		},

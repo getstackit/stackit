@@ -9,8 +9,8 @@ import (
 	"github.com/getstackit/stackit/internal/tui/components/tree"
 )
 
-func registerLargeTreeStories() {
-	RegisterStory(Story{
+func (r *storyRegistry) registerLargeTreeStories() {
+	r.add(Story{
 		Name:        "Large Tree",
 		Category:    "Tree",
 		Description: "A large, deep, and wide tree for testing scrolling and collapsing",

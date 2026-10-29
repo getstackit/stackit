@@ -75,7 +75,7 @@ func handleOrphanedMetadata(ctx *app.Context, opts *Options, handler Handler) er
 	eng := ctx.Engine
 	out := ctx.Output
 
-	orphaned, err := eng.FindOrphanedLocalMetadata()
+	orphaned, err := eng.FindOrphanedLocalMetadata(ctx.Context)
 	if err != nil {
 		out.Debug("Failed to find orphaned metadata: %v", err)
 		return nil

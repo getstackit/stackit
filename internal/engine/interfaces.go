@@ -12,20 +12,20 @@ import (
 type StackNavigator interface {
 	AllBranches() Branches
 	BranchNames() *BranchSet
-	CurrentBranch() *Branch
+	CurrentBranch(ctx context.Context) *Branch
 	// CurrentBranchName returns the current branch name, or "" when HEAD is not
 	// on a branch (e.g. a detached-HEAD server mirror). Nil-safe alternative to
-	// CurrentBranch().GetName().
-	CurrentBranchName() string
+	// CurrentBranch().Name().
+	CurrentBranchName(ctx context.Context) string
 	Trunk() Branch
 	GetBranch(branchName string) Branch
-	Graph(strategy SortStrategy) *StackGraph
+	Graph(ctx context.Context, strategy SortStrategy) *StackGraph
 	BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, int]
-	SortBranchesTopologically(branches Branches) Branches
-	FindBranchesForCommits(commitSHAs []string) CommitBranchMap
+	SortBranchesTopologically(ctx context.Context, branches Branches) Branches
+	FindBranchesForCommits(ctx context.Context, commitSHAs []string) CommitBranchMap
 	// RefDecorations returns local branch and tag refs grouped by the commit SHA
 	// they point at (annotated tags dereferenced), for git-log-style annotations.
-	RefDecorations() (map[string][]git.RefDecoration, error)
+	RefDecorations(ctx context.Context) (map[string][]git.RefDecoration, error)
 	// GetAllBranchNames returns the names of all local branches, including ones
 	// not tracked by stackit. Used by diagnostics that must see untracked or
 	// orphaned branches.
@@ -34,11 +34,11 @@ type StackNavigator interface {
 	// and returns the first ancestor for which isExcluded returns false. Falls
 	// back to trunk if every ancestor up the chain is excluded.
 	FindNearestNonExcludedAncestor(startParent string, isExcluded func(name string) bool) string
-	ValidateOnBranch() (string, error)
+	ValidateOnBranch(ctx context.Context) (string, error)
 	GetScope(branch Branch) Scope
-	GetRemote() string
+	GetRemote(ctx context.Context) string
 	GetRepoInfo(ctx context.Context) (git.RemoteRepository, error)
-	GetRepoRoot() string
+	RepoRoot() string
 	GetUserName(ctx context.Context) (string, error)
 	// GitVersion reports the installed Git's version, for diagnostics.
 	GitVersion(ctx context.Context) (git.Version, error)
@@ -49,16 +49,16 @@ type StackNavigator interface {
 type BranchStatus interface {
 	IsTrunk(branch Branch) bool
 	IsTracked(branch Branch) bool
-	IsUpToDate(branch Branch) bool
-	ReadBranchStatuses(branches Branches) BranchStatuses
+	IsUpToDate(ctx context.Context, branch Branch) bool
+	ReadBranchStatuses(ctx context.Context, branches Branches) BranchStatuses
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
 	// BatchIsBranchEmpty reports emptiness for many branches, resolving all tree
 	// SHAs in one batched rev-parse instead of a diff per branch.
-	BatchIsBranchEmpty(branchNames []string) BranchNameSet
+	BatchIsBranchEmpty(ctx context.Context, branchNames []string) BranchNameSet
 	GetDeletionStatuses(ctx context.Context, branchNames []string) (DeletionStatuses, error)
 	// GetStackDescription returns the stack description for a branch's stack.
 	// It first checks the stack ref, then falls back to legacy branch metadata.
-	GetStackDescription(branch Branch) *git.StackDescription
+	GetStackDescription(ctx context.Context, branch Branch) *git.StackDescription
 	IsLocked(branch Branch) bool
 	GetLockReason(branch Branch) LockReason
 	IsFrozen(branch Branch) bool
@@ -84,39 +84,39 @@ type BranchStatus interface {
 
 // BranchInfo provides commit and diff metadata
 type BranchInfo interface {
-	GetCommitDate(branch Branch) (time.Time, error)
+	GetCommitDate(ctx context.Context, branch Branch) (time.Time, error)
 	// BatchCommitInfo resolves each branch's tip commit date and author in one
 	// batched pass instead of two `git log` processes per branch.
-	BatchCommitInfo(branches Branches) map[string]git.CommitInfo
-	GetRevision(branch Branch) (string, error)
-	GetAllCommits(branch Branch) (git.Commits, error)
-	GetCommitIDs(branch Branch) ([]string, error)
-	GetCommitSHA(branchName string, offset int) (string, error)
+	BatchCommitInfo(ctx context.Context, branches Branches) map[string]git.CommitInfo
+	GetRevision(ctx context.Context, branch Branch) (string, error)
+	GetAllCommits(ctx context.Context, branch Branch) (git.Commits, error)
+	GetCommitIDs(ctx context.Context, branch Branch) ([]string, error)
+	GetCommitSHA(ctx context.Context, branchName string, offset int) (string, error)
 	// BatchRevisions resolves every branch's tip SHA in one batched pass,
 	// keyed by branch name.
-	BatchRevisions(branches Branches) RevisionMap
+	BatchRevisions(ctx context.Context, branches Branches) RevisionMap
 	GetCurrentRevision(ctx context.Context) (string, error)
-	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
-	GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit, error)
+	GetRecentTrunkCommits(ctx context.Context, count int) ([]git.RecentCommit, error)
+	GetTrunkCommitsInRange(ctx context.Context, rr git.RevRange) ([]git.RecentCommit, error)
 	GetReflog(ctx context.Context, count int, format string) (string, error)
 	// GetDivergencePoint returns the divergence point of a branch from its parent.
 	// Returns the ParentBranchRevision from metadata if valid, otherwise the parent's current revision.
-	GetDivergencePoint(branchName string) (string, error)
+	GetDivergencePoint(ctx context.Context, branchName string) (string, error)
 	// BatchDivergencePoints returns the divergence point for every branch in one
 	// batched (git-free when metadata is cached) pass, keyed by branch name.
-	BatchDivergencePoints(branches Branches) RevisionMap
+	BatchDivergencePoints(ctx context.Context, branches Branches) RevisionMap
 	// BatchDiffStats, BatchCommits, and BatchChangedFileCounts each resolve one
 	// per-branch concern across the whole set in a single batched pass, returning
 	// a value map.
-	BatchDiffStats(branches Branches) map[string]DiffStat
-	BatchCommits(branches Branches) map[string]git.Commits
+	BatchDiffStats(ctx context.Context, branches Branches) map[string]DiffStat
+	BatchCommits(ctx context.Context, branches Branches) map[string]git.Commits
 	ReadBranchCommits(ctx context.Context, branches Branches) git.ReadResults[BranchCommitRange]
 	ReadBranchCommitNodes(ctx context.Context, branches Branches) git.ReadResults[[]git.CommitNode]
 	BatchChangedFileCounts(ctx context.Context, branches Branches) map[string]int
 	// BatchBranchStats resolves annotation stats (short SHA, commit count,
 	// additions/deletions) for every branch in one batched pass — a use-case
 	// bundle over the per-concern readers, for annotation builders.
-	BatchBranchStats(branches Branches) map[string]BranchStat
+	BatchBranchStats(ctx context.Context, branches Branches) map[string]BranchStat
 }
 
 // GitDiffer handles diff and merge operations
@@ -150,7 +150,7 @@ type WorkingTree interface {
 	ListWorktrees(ctx context.Context) (git.WorktreeList, error)
 	IsRebaseInProgress(ctx context.Context) bool
 	IsMergeInProgress(ctx context.Context) bool
-	GetRebaseHead() (string, error)
+	GetRebaseHead(ctx context.Context) (string, error)
 	HasUncommittedChanges(ctx context.Context) bool
 	CheckoutPaths(ctx context.Context, branch string, pathspecs []string) error
 	StashList(ctx context.Context) (string, error)
@@ -163,14 +163,14 @@ type WorkingTree interface {
 // adapters.
 type StackView interface {
 	Trunk() Branch
-	CurrentBranch() *Branch
-	CurrentBranchName() string
+	CurrentBranch(ctx context.Context) *Branch
+	CurrentBranchName(ctx context.Context) string
 	GetBranch(branchName string) Branch
 	AllBranches() Branches
-	Graph(strategy SortStrategy) *StackGraph
+	Graph(ctx context.Context, strategy SortStrategy) *StackGraph
 	BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, int]
 	GetScope(branch Branch) Scope
-	ReadBranchStatuses(branches Branches) BranchStatuses
+	ReadBranchStatuses(ctx context.Context, branches Branches) BranchStatuses
 	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses
 }
 
@@ -218,7 +218,7 @@ type BranchTracking interface {
 	// SetScopeAndMarkForUpdate sets the scope and marks the branch as needing a
 	// PR body update in one atomic transaction instead of two separate ref writes.
 	SetScopeAndMarkForUpdate(ctx context.Context, branch Branch, scope Scope) error
-	SetBranchType(branch Branch, branchType git.BranchType) error
+	SetBranchType(ctx context.Context, branch Branch, branchType git.BranchType) error
 	SetLocked(ctx context.Context, branches Branches, reason LockReason) (BatchLockResult, error)
 	SetFrozen(ctx context.Context, branches Branches, state FreezeState) (BatchFreezeResult, error)
 
@@ -226,9 +226,9 @@ type BranchTracking interface {
 	// update in a single atomic operation.
 	MarkBranchesForPRBodyUpdate(ctx context.Context, branchNames []string) error
 	// ClearNeedsPRBodyUpdate clears the PR body update flag for a branch
-	ClearNeedsPRBodyUpdate(branchName string) error
+	ClearNeedsPRBodyUpdate(ctx context.Context, branchName string) error
 	// GetBranchesNeedingPRBodyUpdate returns all branches that need PR body updates
-	GetBranchesNeedingPRBodyUpdate() []string
+	BranchesNeedingPRBodyUpdate() []string
 
 	// MarkBranchesSubmitPending records that a submit is about to push these
 	// branches and write their pull requests, so an interrupted submit is
@@ -362,29 +362,29 @@ type WorktreeRegistry interface {
 	// UnregisterWorktree removes worktree registration for a stack root
 	UnregisterWorktree(ctx context.Context, stackRoot string) error
 	// GetWorktreeForStack returns worktree info for a stack root, or nil if none
-	GetWorktreeForStack(stackRoot string) (*WorktreeInfo, error)
+	GetWorktreeForStack(ctx context.Context, stackRoot string) (*WorktreeInfo, error)
 	// OwningWorktree returns the managed worktree that owns branch's stack, or
 	// nil when the branch belongs to an ordinary stack in the main repository.
 	// A malformed registration is returned as an error rather than being treated
 	// as unowned, so callers can fail closed before mutating the stack.
-	OwningWorktree(branch Branch) (*WorktreeInfo, error)
+	OwningWorktree(ctx context.Context, branch Branch) (*WorktreeInfo, error)
 	// WorktreeOwnershipByStackRoot resolves OwningWorktree for every stack
 	// root from one listing, with the same fail-closed treatment of malformed
 	// registrations.
-	WorktreeOwnershipByStackRoot() (map[string]WorktreeOwnership, error)
+	WorktreeOwnershipByStackRoot(ctx context.Context) (map[string]WorktreeOwnership, error)
 	// ListManagedWorktrees returns all stackit-managed worktrees
-	ListManagedWorktrees() ([]WorktreeInfo, error)
+	ListManagedWorktrees(ctx context.Context) ([]WorktreeInfo, error)
 	// GetStackRootForBranch returns the stack root for a given branch
 	GetStackRootForBranch(branch Branch) string
 	// IsInManagedWorktree checks if the current directory is a stackit-managed worktree
 	// Returns true and worktree info if in a managed worktree, false otherwise
-	IsInManagedWorktree() (bool, *WorktreeInfo, error)
+	IsInManagedWorktree(ctx context.Context) (bool, *WorktreeInfo, error)
 }
 
 // Initializer handles repository initialization operations
 type Initializer interface {
-	Reset(newTrunkName string) error
-	Rebuild(newTrunkName string) error
+	Reset(ctx context.Context, newTrunkName string) error
+	Rebuild(ctx context.Context, newTrunkName string) error
 	// RebuildBranches refreshes cached state for only the named branches,
 	// merging into the existing graph instead of re-reading every branch.
 	RebuildBranches(branchNames []string) error
@@ -409,13 +409,13 @@ type BranchWriter interface {
 type MetadataInspector interface {
 	// ListMetadataRefs returns a map of branch name to metadata-ref SHA for
 	// every stackit metadata ref, including refs whose branches no longer exist.
-	ListMetadataRefs() (map[string]string, error)
+	ListMetadataRefs(ctx context.Context) (map[string]string, error)
 	// ReadMetadataRaw reads a single branch's metadata directly from its ref,
 	// bypassing the engine's tracked-branch cache.
-	ReadMetadataRaw(branchName string) (*git.Meta, error)
+	ReadMetadataRaw(ctx context.Context, branchName string) (*git.Meta, error)
 	// BatchReadMetadataRaw reads raw metadata for many branches in one pass,
 	// returning per-branch errors so callers can detect corrupted refs.
-	BatchReadMetadataRaw(branchNames []string) (MetaMap, map[string]error)
+	BatchReadMetadataRaw(ctx context.Context, branchNames []string) (MetaMap, map[string]error)
 	// DeleteMetadataRefsBatch deletes many branches' metadata refs in a single
 	// atomic git call, without the transactional rebuild performed by
 	// DeleteMetadata. Intended for pruning refs whose branches no longer exist.
@@ -426,12 +426,12 @@ type MetadataInspector interface {
 // that only need config access (e.g. rerere setup) can take the engine instead
 // of the raw git runner.
 type GitConfig interface {
-	GetConfig(key string) (string, error)
+	GetConfig(ctx context.Context, key string) (string, error)
 	SetConfig(key, value string) error
 }
 
 // Absorber applies staged hunks to appropriate commits
 type Absorber interface {
 	ApplyHunksToBranch(ctx context.Context, branch Branch, hunksByCommit map[string][]git.Hunk) error
-	FindTargetCommitForHunk(hunk git.Hunk, commitSHAs []string) (string, int, error)
+	FindTargetCommitForHunk(ctx context.Context, hunk git.Hunk, commitSHAs []string) (string, int, error)
 }

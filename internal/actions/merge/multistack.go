@@ -20,7 +20,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 
 	// 1. Discover available stacks
 	out.Debug("multistack: discovering available stacks")
-	stacks, err := DiscoverStacks(eng)
+	stacks, err := DiscoverStacks(ctx.Context, eng)
 	if err != nil {
 		out.Debug("multistack: failed to discover stacks: %v", err)
 		return nil, fmt.Errorf("failed to discover stacks: %w", err)
@@ -236,7 +236,7 @@ func unlockConsolidatingStacks(ctx *app.Context, eng engine.Engine, stacks []Mul
 	for _, stack := range stacks {
 		for _, name := range stack.AllBranches {
 			branch := eng.GetBranch(name)
-			if branch.GetLockReason() == engine.LockReasonConsolidating {
+			if branch.LockReason() == engine.LockReasonConsolidating {
 				branches.Add(branch)
 			}
 		}

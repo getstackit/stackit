@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,7 +23,7 @@ func TestResetTrunkToRemote(t *testing.T) {
 	newEngine := func(t *testing.T) (*testhelpers.Scene, engine.Engine) {
 		t.Helper()
 		scene := testhelpers.NewRemoteSceneParallel(t)
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot: scene.Dir,
 			Trunk:    "main",
 			Git:      git.NewRunnerWithPath(scene.Dir, nil),
@@ -47,7 +46,7 @@ func TestResetTrunkToRemote(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, remoteSHA, aheadSHA)
 
-		require.NoError(t, eng.ResetTrunkToRemote(context.Background()))
+		require.NoError(t, eng.ResetTrunkToRemote(t.Context()))
 
 		got, err := scene.Repo.GetRevision("main")
 		require.NoError(t, err)
@@ -75,7 +74,7 @@ func TestResetTrunkToRemote(t *testing.T) {
 		require.FileExists(t, tracked, "CreateChangeAndCommit should have committed this path")
 		require.NoError(t, os.WriteFile(tracked, []byte("work in progress"), 0o600))
 
-		err = eng.ResetTrunkToRemote(context.Background())
+		err = eng.ResetTrunkToRemote(t.Context())
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "refusing to move main")
 		require.Contains(t, err.Error(), "uncommitted changes")

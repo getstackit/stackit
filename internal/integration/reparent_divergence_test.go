@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -45,13 +44,13 @@ func TestReparentDivergencePreservation(t *testing.T) {
 		sh := NewTestShellInProcess(t)
 		sh.Run("config set stack.shape linear").CreateLinearStack3()
 
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot:     sh.Dir(),
 			Trunk:        "main",
 			LinearStacks: true,
 		})
 		require.NoError(t, err)
-		require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("b"), testhelpers.NewTestPrInfoMerged(1, "a")))
+		require.NoError(t, eng.UpsertPrInfo(t.Context(), eng.GetBranch("b"), testhelpers.NewTestPrInfoMerged(1, "a")))
 
 		sh.Run("delete b")
 		sh.ExpectBranchParent("c", "a")

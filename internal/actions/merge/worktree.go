@@ -41,10 +41,10 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	// Since we are currently in the main engine, we can get it from there.
 	trunk := eng.Trunk()
 	worktreeGit := git.NewRunnerWithPath(worktreePath.String(), nil)
-	worktreeEng, err := engine.NewEngine(engine.Options{
+	worktreeEng, err := engine.NewEngine(ctx.Context, engine.Options{
 		RepoRoot:          worktreePath.String(),
 		Git:               worktreeGit,
-		Trunk:             trunk.GetName(),
+		Trunk:             trunk.Name(),
 		MaxUndoStackDepth: maxUndoDepth,
 		LinearStacks:      opts.LinearStacks,
 	})
@@ -70,7 +70,7 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 				return fmt.Errorf("failed to auto-reset diverged trunk: %w", err)
 			}
 		} else {
-			return fmt.Errorf("trunk could not be fast-forwarded (diverged from remote). This usually happens when local trunk has commits not on remote. To fix:\n  1. Sync your trunk: git checkout %s && git pull\n  2. Or use --force to overwrite local trunk changes", trunk.GetName())
+			return fmt.Errorf("trunk could not be fast-forwarded (diverged from remote). This usually happens when local trunk has commits not on remote. To fix:\n  1. Sync your trunk: git checkout %s && git pull\n  2. Or use --force to overwrite local trunk changes", trunk.Name())
 		}
 	}
 

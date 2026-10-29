@@ -99,7 +99,7 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 	prNumbers := make([]git.PRNumber, 0, len(branchNames))
 	for _, branchName := range branchNames {
 		branch := c.engine.GetBranch(branchName)
-		prInfo, err := branch.GetPrInfo()
+		prInfo, err := branch.PrInfo()
 		if err != nil || prInfo == nil || prInfo.Number() == nil {
 			continue
 		}
@@ -121,7 +121,7 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		// Get current PR state/body from the batched fetch
 		existingPR, ok := prDetails[prNumber]
 		if !ok {
-			out.Debug("Failed to get PR #%d for %s", prNumber, branch.GetName())
+			out.Debug("Failed to get PR #%d for %s", prNumber, branch.Name())
 			continue
 		}
 
@@ -152,9 +152,9 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		}
 
 		// Queue PR info for a single batched metadata write below
-		prInfoUpdates[branch.GetName()] = prInfo
+		prInfoUpdates[branch.Name()] = prInfo
 
-		affectedBranches = append(affectedBranches, branch.GetName())
+		affectedBranches = append(affectedBranches, branch.Name())
 	}
 
 	// Upsert all PR info in one batched write instead of one ref write per branch

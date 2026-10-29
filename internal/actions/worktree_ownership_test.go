@@ -1,12 +1,10 @@
 package actions
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
@@ -21,14 +19,14 @@ func TestEnsureCanModifyHere(t *testing.T) { //nolint:tparallel // subtests shar
 	s.CreateBranch("feature").Commit("feature change")
 	s.TrackBranch("feature", "main")
 	worktreePath := t.TempDir()
-	require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreePath), Name: "feature-wt"}))
+	require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreePath), Name: "feature-wt"}))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
 	t.Run("refuses managed stack mutation from main repository", func(t *testing.T) {
 		err := EnsureCanModifyHere(s.Context, s.Engine.GetBranch("feature"))
 		require.Error(t, err)
 		require.ErrorContains(t, err, "belongs to worktree feature-wt")
-		assert.ErrorContains(t, err, "cd "+worktreePath)
+		require.ErrorContains(t, err, "cd "+worktreePath)
 	})
 
 	// Telling someone to cd into a directory that no longer exists strands
@@ -40,13 +38,13 @@ func TestEnsureCanModifyHere(t *testing.T) { //nolint:tparallel // subtests shar
 		gone.CreateBranch("feature").Commit("feature change")
 		gone.TrackBranch("feature", "main")
 		missing := filepath.Join(t.TempDir(), "deleted-worktree")
-		require.NoError(t, gone.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(missing), Name: "feature-wt"}))
+		require.NoError(t, gone.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(missing), Name: "feature-wt"}))
 
 		err := EnsureCanModifyHere(gone.Context, gone.Engine.GetBranch("feature"))
 		require.Error(t, err)
 		require.ErrorContains(t, err, "no longer exists")
 		require.ErrorContains(t, err, "worktree detach feature-wt")
-		assert.NotContains(t, err.Error(), "cd "+missing)
+		require.NotContains(t, err.Error(), "cd "+missing)
 	})
 
 	t.Run("allows mutation from owning worktree", func(t *testing.T) {
@@ -71,7 +69,7 @@ func TestEnsureCanModifyHere(t *testing.T) { //nolint:tparallel // subtests shar
 		}
 		err := EnsureCanModifyHere(&ctx, s.Engine.Trunk())
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "belongs to the main repository stack")
+		require.ErrorContains(t, err, "belongs to the main repository stack")
 	})
 }
 

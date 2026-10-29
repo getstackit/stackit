@@ -36,7 +36,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	out.Debug("split wizard: starting with opts=%+v", opts)
 
 	// Get current branch
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	if currentBranch == nil {
 		return errors.ErrNotOnBranch
 	}
@@ -62,16 +62,16 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	}
 
 	// Ensure branch is tracked
-	currentBranchObj := eng.GetBranch(currentBranch.GetName())
+	currentBranchObj := eng.GetBranch(currentBranch.Name())
 	if !currentBranchObj.IsTracked() {
-		parentName := currentBranch.GetParentOrTrunk()
-		if err := eng.TrackBranch(ctx.Context, currentBranch.GetName(), parentName); err != nil {
+		parentName := currentBranch.ParentOrTrunk()
+		if err := eng.TrackBranch(ctx.Context, currentBranch.Name(), parentName); err != nil {
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 	}
 
 	// Get commit count to determine available options
-	commits, err := currentBranch.GetCommitIDs()
+	commits, err := currentBranch.CommitIDs(ctx.Context)
 	if err != nil {
 		return fmt.Errorf("failed to get commits: %w", err)
 	}
@@ -88,7 +88,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		if style == "" {
 			handler.OnStep(StepChoosingType, handlerBase.StatusStarted, "Choose split type")
 
-			selectedStyle, err := handler.PromptSplitType(availableTypes)
+			selectedStyle, err := handler.PromptSplitType(ctx.Context, availableTypes)
 			if err != nil {
 				return err
 			}
@@ -104,24 +104,24 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 
 			// Build context for direction prompt
 			parentName := ""
-			if parent := currentBranch.GetParent(); parent != nil {
-				parentName = parent.GetName()
+			if parent := currentBranch.Parent(); parent != nil {
+				parentName = parent.Name()
 			} else {
-				parentName = eng.Trunk().GetName()
+				parentName = eng.Trunk().Name()
 			}
 
 			// Get children of current branch
-			graph := eng.Graph(engine.SortStrategyAlphabetical)
+			graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 			childNames := graph.Children(*currentBranch)
 
 			dirCtx := DirectionContext{
 				Engine:        eng,
-				CurrentBranch: currentBranch.GetName(),
+				CurrentBranch: currentBranch.Name(),
 				ParentBranch:  parentName,
 				Children:      childNames,
 			}
 
-			selectedDirection, err := handler.PromptDirection(dirCtx)
+			selectedDirection, err := handler.PromptDirection(ctx.Context, dirCtx)
 			if errors.Is(err, errors.ErrBack) {
 				// User wants to go back to type selection
 				style = ""
@@ -142,7 +142,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	}
 
 	// Start handler with branch info and style
-	handler.Start(currentBranch.GetName(), style)
+	handler.Start(currentBranch.Name(), style)
 
 	// Take snapshot before any modifications
 	snapshotArgs := []string{string(style), string(direction)}
@@ -178,7 +178,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		// Get the original commit message from the first commit on this branch
 		// GetAllCommits returns newest to oldest, so the first commit is the last element
 		var originalCommitMessage string
-		commitMessagesData, err := currentBranch.GetAllCommits()
+		commitMessagesData, err := currentBranch.AllCommits(ctx.Context)
 		commitMessages := commitMessagesData.Messages()
 		if err == nil && len(commitMessages) > 0 {
 			// Use the first (oldest) commit's message
@@ -190,7 +190,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		commitMsgCtx := CommitMessageContext{
 			Files:                 pathspecs,
 			Direction:             direction,
-			CurrentBranch:         currentBranch.GetName(),
+			CurrentBranch:         currentBranch.Name(),
 			OriginalCommitMessage: originalCommitMessage,
 		}
 		commitMessage, err := handler.PromptCommitMessageWithContext(commitMsgCtx)
@@ -206,12 +206,12 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		}
 		if opts.BranchPattern == "" || err != nil {
 			// Fallback to simpler default if pattern fails
-			defaultBranchName = currentBranch.GetName() + splitSuffix
+			defaultBranchName = currentBranch.Name() + splitSuffix
 		}
 
 		// Prompt for branch name
 		handler.OnStep(StepBranchName, handlerBase.StatusStarted, "Enter branch name")
-		branchName, err := handler.PromptBranchName(defaultBranchName, []string{}, eng.BranchNames(), currentBranch.GetName())
+		branchName, err := handler.PromptBranchName(defaultBranchName, []string{}, eng.BranchNames(), currentBranch.Name())
 		if err != nil {
 			return err
 		}
@@ -235,7 +235,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 				IncludeCurrent:    false,
 				RecursiveChildren: true,
 			}
-			graph := eng.Graph(engine.SortStrategyAlphabetical)
+			graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 			upstackBranches := graph.Range(*currentBranch, rng)
 			if len(upstackBranches) > 0 {
 				if err := actions.RestackBranches(ctx, upstackBranches); err != nil {
@@ -245,7 +245,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		}
 
 		handler.Complete(ActionResult{
-			OriginalBranch: currentBranch.GetName(),
+			OriginalBranch: currentBranch.Name(),
 			NewBranches:    fileResult.BranchNames,
 			Style:          style,
 		})

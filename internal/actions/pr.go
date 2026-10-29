@@ -1,14 +1,16 @@
 package actions
 
 import (
+	"context"
 	"fmt"
 	"strconv"
+
+	"github.com/getstackit/stackit/internal/browser"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // OpenPROptions configures which pull request to open.
@@ -24,13 +26,13 @@ type OpenPROptions struct {
 // openBrowser is the function OpenPRAction uses to open a URL in the user's
 // default browser. Overridable via SetBrowserOpener so tests don't launch
 // real browser windows.
-var openBrowser = utils.OpenBrowser
+var openBrowser = browser.Open
 
 // SetBrowserOpener overrides the function OpenPRAction uses to open a URL in
 // the browser. Intended for tests; pass nil to restore the default.
 func SetBrowserOpener(fn func(url string) error) {
 	if fn == nil {
-		fn = utils.OpenBrowser
+		fn = browser.Open
 	}
 	openBrowser = fn
 }
@@ -40,7 +42,7 @@ func SetBrowserOpener(fn func(url string) error) {
 func OpenPRAction(ctx *app.Context, opts OpenPROptions) error {
 	eng := ctx.Engine
 
-	branchName, err := resolvePRBranch(eng, opts.Target)
+	branchName, err := resolvePRBranch(ctx.Context, eng, opts.Target)
 	if err != nil {
 		return err
 	}
@@ -51,7 +53,7 @@ func OpenPRAction(ctx *app.Context, opts OpenPROptions) error {
 		}
 	}
 
-	prInfo, err := eng.GetBranch(branchName).GetPrInfo()
+	prInfo, err := eng.GetBranch(branchName).PrInfo()
 	if err != nil {
 		return fmt.Errorf("reading pull request info for %q: %w", branchName, err)
 	}
@@ -71,13 +73,13 @@ func OpenPRAction(ctx *app.Context, opts OpenPROptions) error {
 // resolvePRBranch turns target into a branch name. An empty target resolves to
 // the current branch; a numeric target resolves to whichever tracked branch
 // has that PR number; anything else is used as a branch name directly.
-func resolvePRBranch(eng engine.Engine, target string) (string, error) {
+func resolvePRBranch(ctx context.Context, eng engine.Engine, target string) (string, error) {
 	if target == "" {
-		current := eng.CurrentBranch()
+		current := eng.CurrentBranch(ctx)
 		if current == nil {
 			return "", errors.ErrNotOnBranch
 		}
-		return current.GetName(), nil
+		return current.Name(), nil
 	}
 
 	number, convErr := strconv.Atoi(target)
@@ -88,7 +90,7 @@ func resolvePRBranch(eng engine.Engine, target string) (string, error) {
 		return target, nil
 	}
 
-	branchName, found := findBranchByPRNumber(eng, git.PRNumber(number))
+	branchName, found := findBranchByPRNumber(ctx, eng, git.PRNumber(number))
 	if !found {
 		return "", fmt.Errorf("no tracked branch found for pull request #%d", number)
 	}
@@ -98,9 +100,9 @@ func resolvePRBranch(eng engine.Engine, target string) (string, error) {
 // findBranchByPRNumber searches tracked branches for the one whose recorded PR
 // number matches number, reading all metadata in a single batched pass rather
 // than once per branch.
-func findBranchByPRNumber(eng engine.Engine, number git.PRNumber) (string, bool) {
+func findBranchByPRNumber(ctx context.Context, eng engine.Engine, number git.PRNumber) (string, bool) {
 	branchNames := eng.AllBranches().Names()
-	metas, _ := eng.BatchReadMetadataRaw(branchNames)
+	metas, _ := eng.BatchReadMetadataRaw(ctx, branchNames)
 	for _, name := range branchNames {
 		meta := metas[name]
 		if meta == nil {

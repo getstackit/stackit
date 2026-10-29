@@ -1,12 +1,10 @@
 package engine_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
@@ -20,10 +18,10 @@ func TestIsInManagedWorktree_MainRepo(t *testing.T) {
 	s.WithInitialCommit()
 
 	// When running from the main repo, IsInManagedWorktree should return false
-	isManaged, info, err := s.Engine.IsInManagedWorktree()
+	isManaged, info, err := s.Engine.IsInManagedWorktree(t.Context())
 	require.NoError(t, err)
-	assert.False(t, isManaged)
-	assert.Nil(t, info)
+	require.False(t, isManaged)
+	require.Nil(t, info)
 }
 
 func TestWorktreeRegistry_StackRootForBranch(t *testing.T) {
@@ -38,18 +36,18 @@ func TestWorktreeRegistry_StackRootForBranch(t *testing.T) {
 	s.TrackBranch("branch2", "branch1")
 
 	// Register a worktree for branch1 (as if it were the stack root)
-	err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "branch1", Path: "/tmp/test-worktree-branch1"})
+	err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "branch1", Path: "/tmp/test-worktree-branch1"})
 	require.NoError(t, err)
 
 	// Stack root for branch2 should be branch1 (the first branch whose parent is trunk)
 	branch2 := s.Engine.GetBranch("branch2")
 	stackRoot := s.Engine.GetStackRootForBranch(branch2)
-	assert.Equal(t, "branch1", stackRoot)
+	require.Equal(t, "branch1", stackRoot)
 
 	// Stack root for branch1 should be branch1 itself (its parent is trunk)
 	branch1 := s.Engine.GetBranch("branch1")
 	stackRoot = s.Engine.GetStackRootForBranch(branch1)
-	assert.Equal(t, "branch1", stackRoot)
+	require.Equal(t, "branch1", stackRoot)
 
 	// Clean up
 	_ = s.Engine.UnregisterWorktree(s.Context, "branch1")
@@ -65,18 +63,18 @@ func TestWorktreeRegistry_OwningWorktree(t *testing.T) {
 	s.CreateBranch("feature-child").Commit("feature child change")
 	s.TrackBranch("feature-child", "feature")
 
-	require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: "/tmp/feature-worktree", Name: "feature"}))
+	require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: "/tmp/feature-worktree", Name: "feature"}))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
-	owner, err := s.Engine.OwningWorktree(s.Engine.GetBranch("feature-child"))
+	owner, err := s.Engine.OwningWorktree(t.Context(), s.Engine.GetBranch("feature-child"))
 	require.NoError(t, err)
 	require.NotNil(t, owner)
-	assert.Equal(t, "feature", owner.AnchorBranch)
-	assert.Equal(t, "/tmp/feature-worktree", owner.Path.String())
+	require.Equal(t, "feature", owner.AnchorBranch)
+	require.Equal(t, "/tmp/feature-worktree", owner.Path.String())
 
-	owner, err = s.Engine.OwningWorktree(s.Engine.Trunk())
+	owner, err = s.Engine.OwningWorktree(t.Context(), s.Engine.Trunk())
 	require.NoError(t, err)
-	assert.Nil(t, owner)
+	require.Nil(t, owner)
 }
 
 func TestWorktreeRegistry_RejectsDuplicatePathAndAnchor(t *testing.T) {
@@ -84,16 +82,16 @@ func TestWorktreeRegistry_RejectsDuplicatePathAndAnchor(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit()
 
-	require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-a", Path: "/tmp/shared-worktree", Name: "feature-a"}))
+	require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-a", Path: "/tmp/shared-worktree", Name: "feature-a"}))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature-a") })
 
-	err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-b", Path: "/tmp/shared-worktree", Name: "feature-b"})
+	err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-b", Path: "/tmp/shared-worktree", Name: "feature-b"})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "already registered to anchor feature-a")
 
-	err = s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-a", Path: "/tmp/other-worktree", Name: "feature-a"})
+	err = s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-a", Path: "/tmp/other-worktree", Name: "feature-a"})
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "anchor feature-a is already registered")
+	require.ErrorContains(t, err, "anchor feature-a is already registered")
 }
 
 func TestCreateTemporaryWorktree(t *testing.T) {
@@ -105,7 +103,7 @@ func TestCreateTemporaryWorktree(t *testing.T) {
 		Commit("feature change").
 		Checkout("main")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	typedWorktreePath, cleanup, err := s.Engine.CreateTemporaryWorktree(ctx, "feature", "stackit-test-*", engine.WorktreePruneAuto)
 	worktreePath := typedWorktreePath.String()
 	require.NoError(t, err)
@@ -115,12 +113,12 @@ func TestCreateTemporaryWorktree(t *testing.T) {
 	// Verify worktree exists
 	info, err := os.Stat(worktreePath)
 	require.NoError(t, err)
-	assert.True(t, info.IsDir())
+	require.True(t, info.IsDir())
 
 	// Verify it's a git worktree by checking for .git file (not directory)
 	gitFile, err := os.Stat(worktreePath + "/.git")
 	require.NoError(t, err)
-	assert.False(t, gitFile.IsDir())
+	require.False(t, gitFile.IsDir())
 
 	// Run cleanup
 	cleanup()
@@ -133,7 +131,7 @@ func TestCreateTemporaryWorktree(t *testing.T) {
 	// worktreePath is filepath.Join(tmpDir, "worktree")
 	tmpDir := worktreePath[:len(worktreePath)-9] // "/worktree" is 9 chars
 	_, err = os.Stat(tmpDir)
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestCreateTemporaryWorktree_FastCleanup_AllowsNextCreate(t *testing.T) {
@@ -143,7 +141,7 @@ func TestCreateTemporaryWorktree_FastCleanup_AllowsNextCreate(t *testing.T) {
 		Commit("feature change").
 		Checkout("main")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	typedWorktreePath, cleanup, err := s.Engine.CreateTemporaryWorktree(ctx, "feature", "stackit-test-*", engine.WorktreePruneAuto)
 	worktreePath := typedWorktreePath.String()
 	require.NoError(t, err)
@@ -163,7 +161,7 @@ func TestCreateTemporaryWorktree_RetryAfterStaleEntry(t *testing.T) {
 		Commit("feature change").
 		Checkout("main")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	worktreePath, _, err := s.Engine.CreateTemporaryWorktree(ctx, "feature", "stackit-test-*", engine.WorktreePruneAuto)
 	require.NoError(t, err)
 	require.NotEmpty(t, worktreePath)
@@ -182,7 +180,7 @@ func TestWorktreeOwnershipByStackRoot_FailsClosedOnMalformedRegistrations(t *tes
 	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit()
-	require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: "/tmp/feature-worktree", Name: "feature"}))
+	require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: "/tmp/feature-worktree", Name: "feature"}))
 
 	// A registration that is not JSON, and one whose anchor differs from the
 	// stack root it is registered under. Both used to read as "no worktree".
@@ -197,11 +195,11 @@ func TestWorktreeOwnershipByStackRoot_FailsClosedOnMalformedRegistrations(t *tes
 		s.RunGit("update-ref", "refs/stackit/worktrees/"+stackRoot, sha)
 	}
 
-	ownership, err := s.Engine.WorktreeOwnershipByStackRoot()
+	ownership, err := s.Engine.WorktreeOwnershipByStackRoot(t.Context())
 	require.NoError(t, err)
 	require.NoError(t, ownership["feature"].Err)
 	require.NotNil(t, ownership["feature"].Worktree)
-	assert.Equal(t, "/tmp/feature-worktree", ownership["feature"].Worktree.Path.String())
+	require.Equal(t, "/tmp/feature-worktree", ownership["feature"].Worktree.Path.String())
 	require.ErrorContains(t, ownership["broken"].Err, "unmarshal")
 	require.Nil(t, ownership["broken"].Worktree)
 	require.ErrorContains(t, ownership["mismatched"].Err, "metadata anchor is elsewhere")

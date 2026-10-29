@@ -1,7 +1,6 @@
 package provision_test
 
 import (
-	"context"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -35,13 +34,13 @@ func TestMirrorFetchPullsNewBranchesAndDetachesHead(t *testing.T) {
 	t.Parallel()
 	src := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	dest := filepath.Join(t.TempDir(), "mirror")
-	require.NoError(t, provision.EnsureClone(context.Background(), provision.CloneParams{CloneURL: src.Dir, Dest: dest}))
+	require.NoError(t, provision.EnsureClone(t.Context(), provision.CloneParams{CloneURL: src.Dir, Dest: dest}))
 
 	// A new branch appears upstream.
 	require.NoError(t, src.Repo.RunGitCommand("checkout", "-b", "feature"))
 	require.NoError(t, src.Repo.CreateChangeAndCommit("more", "more"))
 
-	require.NoError(t, provision.MirrorFetch(context.Background(), dest, "origin", ""))
+	require.NoError(t, provision.MirrorFetch(t.Context(), dest, "origin", ""))
 
 	requireBranch(t, dest, "feature", true)
 
@@ -54,17 +53,17 @@ func TestMirrorFetchPrunesDeletedBranches(t *testing.T) {
 	t.Parallel()
 	src := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	dest := filepath.Join(t.TempDir(), "mirror")
-	require.NoError(t, provision.EnsureClone(context.Background(), provision.CloneParams{CloneURL: src.Dir, Dest: dest}))
+	require.NoError(t, provision.EnsureClone(t.Context(), provision.CloneParams{CloneURL: src.Dir, Dest: dest}))
 
 	require.NoError(t, src.Repo.RunGitCommand("checkout", "-b", "feature"))
 	require.NoError(t, src.Repo.CreateChangeAndCommit("x", "x"))
-	require.NoError(t, provision.MirrorFetch(context.Background(), dest, "origin", ""))
+	require.NoError(t, provision.MirrorFetch(t.Context(), dest, "origin", ""))
 	requireBranch(t, dest, "feature", true)
 
 	// Delete it upstream (switch off it first), then re-mirror.
 	require.NoError(t, src.Repo.RunGitCommand("checkout", "-"))
 	require.NoError(t, src.Repo.RunGitCommand("branch", "-D", "feature"))
-	require.NoError(t, provision.MirrorFetch(context.Background(), dest, "origin", ""))
+	require.NoError(t, provision.MirrorFetch(t.Context(), dest, "origin", ""))
 
 	requireBranch(t, dest, "feature", false)
 }
@@ -73,13 +72,13 @@ func TestMirrorFetchPullsStackMetadata(t *testing.T) {
 	t.Parallel()
 	src := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	dest := filepath.Join(t.TempDir(), "mirror")
-	require.NoError(t, provision.EnsureClone(context.Background(), provision.CloneParams{CloneURL: src.Dir, Dest: dest}))
+	require.NoError(t, provision.EnsureClone(t.Context(), provision.CloneParams{CloneURL: src.Dir, Dest: dest}))
 
 	blob, err := src.Repo.RunGitCommandAndGetOutput("hash-object", "-w", "--stdin")
 	require.NoError(t, err)
 	require.NoError(t, src.Repo.RunGitCommand("update-ref", "refs/stackit/stacks/test-stack", blob))
 
-	require.NoError(t, provision.MirrorFetch(context.Background(), dest, "origin", ""))
+	require.NoError(t, provision.MirrorFetch(t.Context(), dest, "origin", ""))
 
 	requireRef(t, dest, "refs/stackit/stacks/test-stack", true)
 }

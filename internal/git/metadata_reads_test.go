@@ -15,12 +15,12 @@ func TestMetadataReadsPreservePartialFailures(t *testing.T) {
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 	runnerMetadata := git.NewMetadataStore(runner)
-	require.NoError(t, runnerMetadata.WriteMetadata("valid", git.NewMeta()))
-	require.NoError(t, runnerMetadata.WriteLocalMetadata("valid", &git.LocalMeta{Frozen: true}))
-	corrupt, err := git.One(runner.CreateBlobs(context.Background(), "{bad JSON"))
+	require.NoError(t, runnerMetadata.WriteMetadata(t.Context(), "valid", git.NewMeta()))
+	require.NoError(t, runnerMetadata.WriteLocalMetadata(t.Context(), "valid", &git.LocalMeta{Frozen: true}))
+	corrupt, err := git.One(runner.CreateBlobs(t.Context(), "{bad JSON"))
 	require.NoError(t, err)
 	for _, prefix := range []string{git.MetadataRefPrefix, git.LocalMetadataRefPrefix} {
-		require.NoError(t, runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: prefix + "corrupt", NewSHA: corrupt}}, ""))
+		require.NoError(t, runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: prefix + "corrupt", NewSHA: corrupt}}, ""))
 	}
 	shared := runnerMetadata.ReadMetadata(t.Context(), "valid", "missing", "corrupt")
 	require.Len(t, shared.Values(), 2)

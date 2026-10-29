@@ -23,7 +23,7 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 	// Validate branches exist (under lock for consistent reads)
 	e.mu.Lock()
 	// Update current branch if it changed
-	if current, err := e.git.GetCurrentBranch(); err == nil {
+	if current, err := e.git.GetCurrentBranch(ctx); err == nil {
 		e.currentBranch = current
 		e.normalizeCurrentBranchLocked()
 	}
@@ -133,7 +133,7 @@ func (e *engineImpl) UntrackBranch(ctx context.Context, branchName string) error
 	}
 
 	// Rebuild cache
-	return e.rebuild()
+	return e.rebuild(ctx)
 }
 
 // UntrackBranches stops tracking multiple branches with a single metadata deletion
@@ -153,7 +153,7 @@ func (e *engineImpl) UntrackBranches(ctx context.Context, branchNames []string) 
 	if err := e.git.DeleteRefs(ctx, refNames...); err != nil {
 		return fmt.Errorf("failed to delete metadata refs: %w", err)
 	}
-	return e.rebuild()
+	return e.rebuild(ctx)
 }
 
 // DivergenceMode controls how SetParent updates a branch's recorded divergence
@@ -178,19 +178,19 @@ const (
 // divergence point is preserved or recomputed; see DivergenceMode for the
 // trade-off. Retries on concurrent modification.
 func (e *engineImpl) SetParent(ctx context.Context, branch Branch, parentBranch Branch, mode DivergenceMode) error {
-	branchName := branch.GetName()
-	parentBranchName := parentBranch.GetName()
+	branchName := branch.Name()
+	parentBranchName := parentBranch.Name()
 
 	if branchName == parentBranchName {
 		return fmt.Errorf("branch %s cannot be its own parent", branchName)
 	}
-	if err := e.validateLinearParentMoves([]BranchParentMove{{Branch: branchName, NewParent: parentBranchName}}); err != nil {
+	if err := e.validateLinearParentMoves(ctx, []BranchParentMove{{Branch: branchName, NewParent: parentBranchName}}); err != nil {
 		return err
 	}
 
 	switch mode {
 	case DivergencePreserve:
-		div, err := e.GetDivergencePoint(branchName)
+		div, err := e.GetDivergencePoint(ctx, branchName)
 		if err != nil {
 			return fmt.Errorf("failed to determine divergence point for %s: %w", branchName, err)
 		}
@@ -206,8 +206,8 @@ func (e *engineImpl) SetParent(ctx context.Context, branch Branch, parentBranch 
 // divergence point by computing a new merge-base. Retries on concurrent
 // modification.
 func (e *engineImpl) setParentRecomputingDivergence(ctx context.Context, branch Branch, parentBranch Branch) error {
-	branchName := branch.GetName()
-	parentBranchName := parentBranch.GetName()
+	branchName := branch.Name()
+	parentBranchName := parentBranch.Name()
 	squashCache := git.NewSquashMergeCache()
 
 	return e.WithRetry(ctx, func() error {
@@ -269,8 +269,8 @@ func (e *engineImpl) setParentRecomputingDivergence(ctx context.Context, branch 
 // setParentName updates only the parent branch name in metadata without
 // modifying ParentBranchRevision.
 func (e *engineImpl) setParentName(ctx context.Context, branch Branch, parentBranch Branch) error {
-	branchName := branch.GetName()
-	parentBranchName := parentBranch.GetName()
+	branchName := branch.Name()
+	parentBranchName := parentBranch.Name()
 
 	if branchName == parentBranchName {
 		return fmt.Errorf("branch %s cannot be its own parent", branchName)
@@ -306,15 +306,15 @@ func (e *engineImpl) setParentPreservingDivergence(ctx context.Context, branch B
 
 	// Set the correct divergence point so restacking replays only this
 	// branch's commits, not commits from the old parent.
-	isAncestor, err := e.git.IsAncestor(ctx, oldDivergencePoint, branch.GetName())
+	isAncestor, err := e.git.IsAncestor(ctx, oldDivergencePoint, branch.Name())
 	if err != nil {
-		return fmt.Errorf("failed to check ancestry of divergence point %s for %s: %w", oldDivergencePoint, branch.GetName(), err)
+		return fmt.Errorf("failed to check ancestry of divergence point %s for %s: %w", oldDivergencePoint, branch.Name(), err)
 	}
 	if !isAncestor {
-		return fmt.Errorf("divergence point %s is not an ancestor of %s: cannot preserve divergence point", oldDivergencePoint, branch.GetName())
+		return fmt.Errorf("divergence point %s is not an ancestor of %s: cannot preserve divergence point", oldDivergencePoint, branch.Name())
 	}
 
-	return e.updateParentRevision(ctx, branch.GetName(), oldDivergencePoint)
+	return e.updateParentRevision(ctx, branch.Name(), oldDivergencePoint)
 }
 
 // ReparentBranch changes a branch's parent while automatically preserving its
@@ -325,18 +325,18 @@ func (e *engineImpl) setParentPreservingDivergence(ctx context.Context, branch B
 // when the move crosses a stack boundary; same-stack reparenting is a no-op
 // for stack ID.
 func (e *engineImpl) ReparentBranch(ctx context.Context, branch Branch, newParent Branch) error {
-	if err := e.validateLinearParentMoves([]BranchParentMove{{Branch: branch.GetName(), NewParent: newParent.GetName()}}); err != nil {
+	if err := e.validateLinearParentMoves(ctx, []BranchParentMove{{Branch: branch.Name(), NewParent: newParent.Name()}}); err != nil {
 		return err
 	}
-	div, err := e.GetDivergencePoint(branch.GetName())
+	div, err := e.GetDivergencePoint(ctx, branch.Name())
 	if err != nil {
-		return fmt.Errorf("failed to determine divergence point for %s: %w", branch.GetName(), err)
+		return fmt.Errorf("failed to determine divergence point for %s: %w", branch.Name(), err)
 	}
 	if err := e.setParentPreservingDivergence(ctx, branch, newParent, div); err != nil {
 		return err
 	}
 	// Fetch the post-reparent branch so syncStackIDFromParent sees the new parent.
-	return e.syncStackIDFromParent(ctx, e.GetBranch(branch.GetName()))
+	return e.syncStackIDFromParent(ctx, e.GetBranch(branch.Name()))
 }
 
 // BranchParentMove pairs a branch with the name of the new parent it should
@@ -394,11 +394,11 @@ func (e *engineImpl) ApplyParentUpdatesAfterRemovals(ctx context.Context, update
 			preserveBranches = append(preserveBranches, e.GetBranch(update.Branch))
 		}
 	}
-	if err := e.validateLinearParentMovesAfterRemovals(moves, removed); err != nil {
+	if err := e.validateLinearParentMovesAfterRemovals(ctx, moves, removed); err != nil {
 		return err
 	}
 
-	divPoints := e.BatchDivergencePoints(preserveBranches)
+	divPoints := e.BatchDivergencePoints(ctx, preserveBranches)
 	for _, update := range updates {
 		branch := e.GetBranch(update.Branch)
 		parent := e.GetBranch(update.NewParent)
@@ -439,7 +439,7 @@ func (e *engineImpl) ApplyParentUpdatesAfterRemovals(ctx context.Context, update
 // Automatically propagates each new parent's stack ID when a move crosses a
 // stack boundary.
 func (e *engineImpl) ReparentBranchesToParents(ctx context.Context, moves []BranchParentMove, opts ReparentOpts) error {
-	if err := e.validateLinearParentMoves(moves); err != nil {
+	if err := e.validateLinearParentMoves(ctx, moves); err != nil {
 		return err
 	}
 
@@ -468,7 +468,7 @@ func (e *engineImpl) reparentPreservingDivergence(ctx context.Context, moves []B
 	for i, m := range moves {
 		branches[i] = e.GetBranch(m.Branch)
 	}
-	divPoints := e.BatchDivergencePoints(branches)
+	divPoints := e.BatchDivergencePoints(ctx, branches)
 	for _, m := range moves {
 		// The batch reader returns "" where the individual lookup would error;
 		// reparenting must not proceed with an unknown divergence point.
@@ -494,20 +494,20 @@ func (e *engineImpl) reparentPreservingDivergence(ctx context.Context, moves []B
 // a fork below a non-trunk branch. It evaluates the final topology as a batch
 // so valid reorder operations do not fail merely because of an intermediate
 // shape during their rewrite.
-func (e *engineImpl) validateLinearParentMoves(moves []BranchParentMove) error {
-	return e.validateLinearParentMovesAfterRemovals(moves, nil)
+func (e *engineImpl) validateLinearParentMoves(ctx context.Context, moves []BranchParentMove) error {
+	return e.validateLinearParentMovesAfterRemovals(ctx, moves, nil)
 }
 
 // validateLinearParentMovesAfterRemovals evaluates parent changes after the
 // named branches have been removed. Deletion paths use it to avoid rejecting a
 // valid chain collapse solely because the soon-to-be-deleted branch is still
 // present in the in-memory graph.
-func (e *engineImpl) validateLinearParentMovesAfterRemovals(moves []BranchParentMove, removed []string) error {
+func (e *engineImpl) validateLinearParentMovesAfterRemovals(ctx context.Context, moves []BranchParentMove, removed []string) error {
 	if !e.linearStacks || len(moves) == 0 {
 		return nil
 	}
 
-	graph := e.Graph(SortStrategyAlphabetical)
+	graph := e.Graph(ctx, SortStrategyAlphabetical)
 	children := make(map[string]map[string]struct{})
 	for _, branch := range e.AllBranches() {
 		parent := graph.Parent(branch)
@@ -517,7 +517,7 @@ func (e *engineImpl) validateLinearParentMovesAfterRemovals(moves []BranchParent
 		if children[parent] == nil {
 			children[parent] = make(map[string]struct{})
 		}
-		children[parent][branch.GetName()] = struct{}{}
+		children[parent][branch.Name()] = struct{}{}
 	}
 
 	// Remove all moving branches first, then apply their proposed parents. This
@@ -556,12 +556,12 @@ func (e *engineImpl) validateLinearParentMovesAfterRemovals(moves []BranchParent
 // validateLinearSiblingSplit checks the final shape of a sibling commit split.
 // ApplySplitToCommits creates metadata directly, so these new children cannot
 // be represented as ordinary parent moves until after the mutation.
-func (e *engineImpl) validateLinearSiblingSplit(parent, branchToSplit string, branchNames []string) error {
+func (e *engineImpl) validateLinearSiblingSplit(ctx context.Context, parent, branchToSplit string, branchNames []string) error {
 	if !e.linearStacks || parent == e.trunk {
 		return nil
 	}
 
-	graph := e.Graph(SortStrategyAlphabetical)
+	graph := e.Graph(ctx, SortStrategyAlphabetical)
 	children := make(map[string]struct{})
 	for _, child := range graph.Children(e.GetBranch(parent)) {
 		children[child] = struct{}{}
@@ -606,7 +606,7 @@ func (e *engineImpl) updateParentRevision(ctx context.Context, branchName string
 
 // SetScope updates a branch's scope with retry logic for concurrent modification resilience.
 func (e *engineImpl) SetScope(ctx context.Context, branch Branch, scope Scope) error {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	return e.WithRetry(ctx, func() error {
 		// Read existing metadata (outside lock for performance)
@@ -636,7 +636,7 @@ func (e *engineImpl) SetScope(ctx context.Context, branch Branch, scope Scope) e
 // body update in a single atomic transaction, saving one git ref write compared
 // to calling SetScope + MarkBranchesForPRBodyUpdate separately.
 func (e *engineImpl) SetScopeAndMarkForUpdate(ctx context.Context, branch Branch, scope Scope) error {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	return e.WithRetry(ctx, func() error {
 		tx := e.BeginTx(fmt.Sprintf("set scope+mark: %s", branchName))

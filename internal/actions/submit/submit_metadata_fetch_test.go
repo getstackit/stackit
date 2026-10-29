@@ -1,7 +1,6 @@
 package submit_test
 
 import (
-	"context"
 	"testing"
 
 	gh "github.com/google/go-github/v93/github"
@@ -24,7 +23,7 @@ func TestPreparePRMetadata_FetchFromGitHub(t *testing.T) {
 
 		// 1. Setup branch with PR info but EMPTY body in local metadata
 		branch := s.Engine.GetBranch(branchName)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, testhelpers.NewTestPrInfoEmpty().
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, testhelpers.NewTestPrInfoEmpty().
 			WithNumber(&prNumber).
 			WithTitle("Existing Title").
 			WithBody("")) // Empty locally
@@ -61,7 +60,7 @@ func TestPreparePRMetadata_FetchFromGitHub(t *testing.T) {
 		branch := s.Engine.GetBranch("main") // just need a branch object
 
 		existing := "Already have this body"
-		body, err := submit.GetPRBody(branch, false, existing)
+		body, err := submit.GetPRBody(t.Context(), branch, false, existing)
 		require.NoError(t, err)
 		require.Equal(t, existing, body)
 	})

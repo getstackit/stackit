@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	mergeAction "github.com/getstackit/stackit/internal/actions/merge"
 	sterrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
@@ -21,7 +23,7 @@ import (
 // The runner manages terminal state; the handler processes events.
 // Caller must defer runner.Cleanup() to restore terminal on exit.
 func NewMergeUI(out output.Output, logger output.Logger) (*tui.Runner, mergeAction.EventHandler) {
-	if tui.IsTTY() {
+	if term.IsInteractive() {
 		model := mergeComponent.NewModel()
 		runner := tui.NewRunner(model, out, logger)
 		runner.Start()
@@ -606,7 +608,7 @@ func DisplayMergeStatus(out output.Output, result *shippable.AnalysisResult) {
 	out.Print(style.ColorMagenta("📦 Your Mergeable Work") + "\n")
 
 	// Ready stacks
-	if ready := result.GetShippable(); len(ready) > 0 {
+	if ready := result.Shippable(); len(ready) > 0 {
 		out.Print("\n")
 		out.Print(styles.Done.Render(fmt.Sprintf("Ready (%d):", len(ready))) + "\n")
 		for _, s := range ready {
@@ -620,7 +622,7 @@ func DisplayMergeStatus(out output.Output, result *shippable.AnalysisResult) {
 	}
 
 	// Pending stacks
-	if pending := result.GetPending(); len(pending) > 0 {
+	if pending := result.Pending(); len(pending) > 0 {
 		out.Print("\n")
 		out.Print(style.ColorYellow(fmt.Sprintf("Pending (%d):", len(pending))) + "\n")
 		for _, s := range pending {
@@ -629,7 +631,7 @@ func DisplayMergeStatus(out output.Output, result *shippable.AnalysisResult) {
 	}
 
 	// Blocked stacks
-	if blocked := result.GetBlocked(); len(blocked) > 0 {
+	if blocked := result.Blocked(); len(blocked) > 0 {
 		out.Print("\n")
 		out.Print(styles.Error.Render(fmt.Sprintf("Blocked (%d):", len(blocked))) + "\n")
 		for _, s := range blocked {
@@ -638,7 +640,7 @@ func DisplayMergeStatus(out output.Output, result *shippable.AnalysisResult) {
 	}
 
 	// Incomplete stacks
-	if incomplete := result.GetIncomplete(); len(incomplete) > 0 {
+	if incomplete := result.Incomplete(); len(incomplete) > 0 {
 		out.Print("\n")
 		out.Print(style.ColorDim(fmt.Sprintf("Incomplete (%d):", len(incomplete))) + "\n")
 		for _, s := range incomplete {

@@ -24,7 +24,7 @@ func (r RemoteRepository) IsHosted() bool {
 
 // GetRepoInfo reads and parses the default remote repository identity.
 func (r *runner) GetRepoInfo(ctx context.Context) (RemoteRepository, error) {
-	out, err := r.RunGitCommandWithContext(ctx, "remote", "get-url", DefaultRemote)
+	out, err := r.Run(ctx, "remote", "get-url", DefaultRemote)
 	if err != nil {
 		return RemoteRepository{}, nil //nolint:nilerr // missing remote is non-fatal here
 	}

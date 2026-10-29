@@ -8,7 +8,6 @@ package tui
 
 import (
 	"github.com/getstackit/stackit/internal/tui/core"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Key constants re-exported from core for backwards compatibility.
@@ -21,16 +20,3 @@ const (
 	KeyDown  = core.KeyDown
 	KeyTab   = core.KeyTab
 )
-
-// IsTTY returns true if we can use a TTY for interactive TUI.
-// Re-export from utils for backward compatibility.
-func IsTTY() bool {
-	return utils.IsTTY()
-}
-
-// SetInteractive sets whether the TUI should be interactive.
-// Re-export from utils for backward compatibility.
-// This function is thread-safe and can be called from concurrent goroutines.
-func SetInteractive(interactive bool) {
-	utils.SetInteractive(interactive)
-}

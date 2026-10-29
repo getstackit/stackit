@@ -36,7 +36,7 @@ func TestModifyAction_Stdin(t *testing.T) {
 			_ = w.Close()
 		}()
 
-		// Scenario already calls tui.SetInteractive(false)
+		// Scenario already calls term.SetInteractive(false)
 
 		opts := actions.ModifyOptions{
 			All: true,

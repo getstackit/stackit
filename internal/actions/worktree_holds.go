@@ -68,7 +68,7 @@ func CollectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
 			Reason:       reason,
 		})
 	}
-	trunk := eng.Trunk().GetName()
+	trunk := eng.Trunk().Name()
 	if worktrees, err := eng.ListWorktrees(ctx.Context); err == nil {
 		for _, wt := range worktrees {
 			if wt.Branch == "" || report.blocksStack(wt.Branch) || wt.Branch == trunk {
@@ -88,14 +88,14 @@ func CollectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
 // ManagedWorktreeSource is the engine surface ManagedWorktreeHolds needs.
 type ManagedWorktreeSource interface {
 	ManagedWorktreeInspector
-	ListManagedWorktrees() ([]engine.WorktreeInfo, error)
+	ListManagedWorktrees(ctx context.Context) ([]engine.WorktreeInfo, error)
 }
 
 // ManagedWorktreeHolds returns a stack-scoped hold for every managed worktree
 // whose checkout cannot be safely reset, in registry order. sync's --dry-run
 // preview calls it directly so the preview cannot promise work the run skips.
 func ManagedWorktreeHolds(ctx context.Context, eng ManagedWorktreeSource) ([]RestackWorktreeHold, error) {
-	managed, err := eng.ListManagedWorktrees()
+	managed, err := eng.ListManagedWorktrees(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func (r RestackWorktreeHoldReport) Filter(eng engine.Engine, branches engine.Bra
 		return branches
 	}
 	return branches.Filter(func(branch engine.Branch) bool {
-		return !r.blocks(branch.GetName(), eng.GetStackRootForBranch(branch))
+		return !r.blocks(branch.Name(), eng.GetStackRootForBranch(branch))
 	})
 }
 

@@ -22,12 +22,12 @@ type Options struct {
 // flattenEngine lists exactly the engine methods flatten calls.
 type flattenEngine interface {
 	engine.BranchLookup
-	CurrentBranch() *engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
 	Trunk() engine.Branch
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
-	SortBranchesTopologically(branches engine.Branches) engine.Branches
-	BatchRevisions(branches engine.Branches) engine.RevisionMap
-	BatchDivergencePoints(branches engine.Branches) engine.RevisionMap
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+	SortBranchesTopologically(ctx context.Context, branches engine.Branches) engine.Branches
+	BatchRevisions(ctx context.Context, branches engine.Branches) engine.RevisionMap
+	BatchDivergencePoints(ctx context.Context, branches engine.Branches) engine.RevisionMap
 	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec) (*engine.RebaseValidation, error)
 	ReparentBranchesToParents(ctx context.Context, moves []engine.BranchParentMove, opts engine.ReparentOpts) error
 }
@@ -43,7 +43,7 @@ type flattenEngine interface {
 // the handler.Complete summary path.
 func HasFlattenWork(ctx *app.Context, opts Options) (bool, error) {
 	var eng flattenEngine = ctx.Engine
-	branchName, err := actions.ResolveBranchName(eng, opts.BranchName)
+	branchName, err := actions.ResolveBranchName(ctx.Context, eng, opts.BranchName)
 	if err != nil {
 		return false, err
 	}
@@ -52,11 +52,11 @@ func HasFlattenWork(ctx *app.Context, opts Options) (bool, error) {
 		return false, fmt.Errorf("branch %q is not tracked by stackit", branchName)
 	}
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	branches := graph.FullStack(branch)
 	trunk := eng.Trunk()
 	for _, b := range branches {
-		if !b.IsTrunk() && b.GetName() != trunk.GetName() {
+		if !b.IsTrunk() && b.Name() != trunk.Name() {
 			return true, nil
 		}
 	}
@@ -78,7 +78,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	defer handler.Cleanup()
 
 	// Resolve branch name
-	branchName, err := actions.ResolveBranchName(eng, opts.BranchName)
+	branchName, err := actions.ResolveBranchName(ctx.Context, eng, opts.BranchName)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Build stack graph to get all related branches
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	branches := graph.FullStack(branch)
 
 	if len(branches) == 0 {
@@ -99,13 +99,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Sort topologically (parents before children)
-	sortedBranches := eng.SortBranchesTopologically(branches)
+	sortedBranches := eng.SortBranchesTopologically(ctx.Context, branches)
 
 	// Filter out trunk - we only flatten feature branches
 	trunk := eng.Trunk()
 	featureBranches := engine.Branches{}
 	for _, b := range sortedBranches {
-		if !b.IsTrunk() && b.GetName() != trunk.GetName() {
+		if !b.IsTrunk() && b.Name() != trunk.Name() {
 			featureBranches = featureBranches.Append(b)
 		}
 	}
@@ -156,10 +156,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	for _, name := range allBranchesToValidate {
 		branchObjects = branchObjects.Append(eng.GetBranch(name))
 	}
-	sortedForValidation := eng.SortBranchesTopologically(branchObjects)
+	sortedForValidation := eng.SortBranchesTopologically(ctx.Context, branchObjects)
 
 	// Build rebase specs for all branches in topological order
-	allRebaseSpecs := buildRebaseSpecsForAll(eng, plan, sortedForValidation)
+	allRebaseSpecs := buildRebaseSpecsForAll(ctx.Context, eng, plan, sortedForValidation)
 
 	// Report progress for validation
 	handler.OnValidationProgress(0, len(allRebaseSpecs), "validating...")
@@ -254,7 +254,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.OnStep(StepRestacking, basehandler.StatusStarted, "Restacking branches...")
 
 	// Rebuild graph after parent changes
-	graph = eng.Graph(engine.SortStrategyAlphabetical)
+	graph = eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Collect all branches that need restacking (moved branches and their descendants)
 	branchesToRestack := engine.Branches{}
@@ -267,7 +267,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			RecursiveParents:  false,
 		})
 		for _, branch := range descendants {
-			name := branch.GetName()
+			name := branch.Name()
 			if seenRestackBranches[name] {
 				continue
 			}
@@ -275,7 +275,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			branchesToRestack = branchesToRestack.Append(branch)
 		}
 	}
-	branchesToRestack = eng.SortBranchesTopologically(branchesToRestack)
+	branchesToRestack = eng.SortBranchesTopologically(ctx.Context, branchesToRestack)
 
 	if err := actions.RestackBranches(ctx, branchesToRestack); err != nil {
 		handler.OnStep(StepRestacking, basehandler.StatusFailed, err.Error())
@@ -309,7 +309,7 @@ func collectAllBranchesToRestack(eng engine.BranchLookup, graph *engine.StackGra
 		})
 
 		for _, b := range descendants {
-			name := b.GetName()
+			name := b.Name()
 			if !seen[name] {
 				seen[name] = true
 				result = append(result, name)
@@ -322,7 +322,7 @@ func collectAllBranchesToRestack(eng engine.BranchLookup, graph *engine.StackGra
 
 // buildRebaseSpecsForAll builds rebase specs for all branches that will be affected,
 // accounting for cascading parent changes when ancestors are moved.
-func buildRebaseSpecsForAll(eng flattenEngine, plan *flattenPlan, branches engine.Branches) []engine.RebaseSpec {
+func buildRebaseSpecsForAll(ctx context.Context, eng flattenEngine, plan *flattenPlan, branches engine.Branches) []engine.RebaseSpec {
 	// Build a map of existing rebase specs from the plan
 	existingSpecs := make(map[string]engine.RebaseSpec)
 	for _, spec := range plan.RebaseSpecs {
@@ -331,19 +331,19 @@ func buildRebaseSpecsForAll(eng flattenEngine, plan *flattenPlan, branches engin
 
 	// Resolve divergence points and parent revisions for every branch up front
 	// in batched reads, instead of one git process pair per branch below.
-	divergence := eng.BatchDivergencePoints(branches)
+	divergence := eng.BatchDivergencePoints(ctx, branches)
 	parents := make(engine.Branches, 0, len(branches))
 	for _, b := range branches {
-		if parent := b.GetParent(); parent != nil {
+		if parent := b.Parent(); parent != nil {
 			parents = append(parents, *parent)
 		}
 	}
-	parentRevisions := eng.BatchRevisions(parents)
+	parentRevisions := eng.BatchRevisions(ctx, parents)
 
 	specs := make([]engine.RebaseSpec, 0, len(branches))
 
 	for _, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 
 		// If we already have a spec from the plan, use it
 		if spec, ok := existingSpecs[branchName]; ok {
@@ -352,7 +352,7 @@ func buildRebaseSpecsForAll(eng flattenEngine, plan *flattenPlan, branches engin
 		}
 
 		// This is a descendant branch - build its spec based on its parent's new position
-		parent := branch.GetParent()
+		parent := branch.Parent()
 		if parent == nil {
 			continue
 		}
@@ -365,7 +365,7 @@ func buildRebaseSpecsForAll(eng flattenEngine, plan *flattenPlan, branches engin
 
 		// The new parent revision is the tip of the parent branch
 		// (which will be its rebased position after the flatten)
-		newParentRev, ok := parentRevisions[parent.GetName()]
+		newParentRev, ok := parentRevisions[parent.Name()]
 		if !ok || newParentRev == "" {
 			continue
 		}
@@ -400,7 +400,7 @@ func filterPlanExcludingConflicts(plan *flattenPlan, conflicts map[string]string
 		})
 
 		for _, desc := range descendants {
-			descName := desc.GetName()
+			descName := desc.Name()
 			if errMsg, hasConflict := conflicts[descName]; hasConflict {
 				if descName == move.Branch {
 					movesToExclude[move.Branch] = "needs resolution: " + errMsg
@@ -468,19 +468,19 @@ func buildFlattenPlan(ctx *app.Context, eng flattenEngine, branches engine.Branc
 	// batched reads up front (passed-around values, no engine-global cache). The
 	// revision map doubles as the parent-revision lookup the planning loop used
 	// to accumulate one entry at a time.
-	revisions := eng.BatchRevisions(engine.Branches{trunk}.Concat(branches))
-	divergence := eng.BatchDivergencePoints(branches)
+	revisions := eng.BatchRevisions(ctx.Context, engine.Branches{trunk}.Concat(branches))
+	divergence := eng.BatchDivergencePoints(ctx.Context, branches)
 
-	if revisions[trunk.GetName()] == "" {
+	if revisions[trunk.Name()] == "" {
 		return nil, errors.New("failed to get trunk revision")
 	}
 
 	// potentialParents tracks branches that can serve as parents for subsequent branches
 	// Starts with trunk, and grows as we process branches
-	potentialParents := []string{trunk.GetName()}
+	potentialParents := []string{trunk.Name()}
 
 	for i, b := range branches {
-		bName := b.GetName()
+		bName := b.Name()
 
 		// Report progress
 		if onProgress != nil {
@@ -488,7 +488,7 @@ func buildFlattenPlan(ctx *app.Context, eng flattenEngine, branches engine.Branc
 		}
 
 		// Get current parent info
-		origParentName := b.GetParentOrTrunk()
+		origParentName := b.ParentOrTrunk()
 
 		// The branch's base (divergence point from parent). bName is always in
 		// the map (the loop iterates the same branch set), so a missing key here

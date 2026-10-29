@@ -12,18 +12,18 @@ import (
 )
 
 func (r *runner) StageAll(ctx context.Context) error {
-	if _, err := r.RunGitCommandWithContext(ctx, "add", "-A"); err != nil {
+	if _, err := r.Run(ctx, "add", "-A"); err != nil {
 		return fmt.Errorf("failed to stage all changes: %w", err)
 	}
 	return nil
 }
 
-func (r *runner) StagePatch(_ context.Context) error {
-	return r.RunGitCommandInteractive("add", "-p")
+func (r *runner) StagePatch(ctx context.Context) error {
+	return r.RunInteractive(ctx, "add", "-p")
 }
 
 func (r *runner) StageTracked(ctx context.Context) error {
-	if _, err := r.RunGitCommandWithContext(ctx, "add", "-u"); err != nil {
+	if _, err := r.Run(ctx, "add", "-u"); err != nil {
 		return fmt.Errorf("failed to stage tracked changes: %w", err)
 	}
 	return nil
@@ -31,7 +31,7 @@ func (r *runner) StageTracked(ctx context.Context) error {
 
 func (r *runner) StageChanges(ctx context.Context, opts StagingOptions) error {
 	if opts.Patch && !opts.All {
-		return r.RunGitCommandInteractive("add", "-p")
+		return r.RunInteractive(ctx, "add", "-p")
 	}
 
 	if opts.All {
@@ -60,7 +60,7 @@ func (r *runner) HasUnstagedChanges(ctx context.Context) (bool, error) {
 }
 
 func diffHasChanges(r *runner, ctx context.Context, args ...string) (bool, error) {
-	_, err := r.RunGitCommandWithContext(ctx, args...)
+	_, err := r.Run(ctx, args...)
 	if err == nil {
 		return false, nil
 	}
@@ -94,7 +94,7 @@ func (r *runner) GetUntrackedFiles(ctx context.Context) ([]string, error) {
 // `git ls-files --others --exclude-standard -z` so paths with newlines or
 // shell metacharacters round-trip cleanly.
 func (r *runner) listUntrackedFiles(ctx context.Context) ([]string, error) {
-	out, err := r.RunGitCommandRawWithContext(ctx, "ls-files", "--others", "--exclude-standard", "-z")
+	out, err := r.RunRaw(ctx, "ls-files", "--others", "--exclude-standard", "-z")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list untracked files: %w", err)
 	}
@@ -105,7 +105,7 @@ func (r *runner) listUntrackedFiles(ctx context.Context) ([]string, error) {
 // worktree, as repository-relative paths. Ignored files are excluded, so
 // gitignored build output never counts as work to protect.
 func (r *runner) GetUntrackedFilesIn(ctx context.Context, worktreePath WorktreePath) ([]string, error) {
-	out, err := r.RunGitCommandRawWithContext(ctx,
+	out, err := r.RunRaw(ctx,
 		"-C", worktreePath.String(),
 		"ls-files", "--others", "--exclude-standard", "-z",
 	)
@@ -116,7 +116,7 @@ func (r *runner) GetUntrackedFilesIn(ctx context.Context, worktreePath WorktreeP
 }
 
 func (r *runner) ParseStagedHunks(ctx context.Context) ([]Hunk, error) {
-	diffOutput, err := r.RunGitCommandRawWithContext(ctx, "diff", "--cached")
+	diffOutput, err := r.RunRaw(ctx, "diff", "--cached")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get staged diff: %w", err)
 	}
@@ -157,10 +157,10 @@ func (r *runner) StageHunks(ctx context.Context, hunks []Hunk) error {
 		if patch != "" {
 			// Apply the patch to the index using git apply --cached
 			// We use --3way to handle conflicts better
-			_, err := r.runGitInternal(ctx, patch, nil, true, "apply", "--cached", "--3way")
+			_, err := r.runStdin(ctx, patch, "apply", "--cached", "--3way")
 			if err != nil {
 				// Try without --3way as a fallback (some git versions have issues with --3way)
-				_, fallbackErr := r.runGitInternal(ctx, patch, nil, true, "apply", "--cached")
+				_, fallbackErr := r.runStdin(ctx, patch, "apply", "--cached")
 				if fallbackErr != nil {
 					// Check if any files are misdetected new files and handle them
 					rescuedHunks, remainingHunks := r.rescueMisdetectedNewFiles(ctx, modHunks)
@@ -175,7 +175,7 @@ func (r *runner) StageHunks(ctx context.Context, hunks []Hunk) error {
 						if len(remainingHunks) > 0 {
 							remainingPatch := Hunks(remainingHunks).Patch()
 							if remainingPatch != "" {
-								_, retryErr := r.runGitInternal(ctx, remainingPatch, nil, true, "apply", "--cached")
+								_, retryErr := r.runStdin(ctx, remainingPatch, "apply", "--cached")
 								if retryErr != nil {
 									return fmt.Errorf("failed to apply patch after rescuing new files: %w", retryErr)
 								}
@@ -223,7 +223,7 @@ func (r *runner) stageNewFileHunk(ctx context.Context, h Hunk) error {
 		}
 	}
 
-	if _, err := r.RunGitCommandWithContext(ctx, "add", "--", h.File); err != nil {
+	if _, err := r.Run(ctx, "add", "--", h.File); err != nil {
 		return fmt.Errorf("failed to stage new file %s: %w", h.File, err)
 	}
 	return nil
@@ -268,7 +268,7 @@ func (r *runner) rescueMisdetectedNewFiles(ctx context.Context, modHunks []Hunk)
 // for "not a git repo" or argument errors) surface as real errors so callers
 // don't silently treat them as "not tracked".
 func (r *runner) fileExistsInIndex(ctx context.Context, file string) (bool, error) {
-	_, err := r.RunGitCommandWithContext(ctx, "ls-files", "--error-unmatch", "-z", "--", file)
+	_, err := r.Run(ctx, "ls-files", "--error-unmatch", "-z", "--", file)
 	if err == nil {
 		return true, nil
 	}
@@ -316,7 +316,7 @@ func (r *runner) ApplyPatchToWorktree(ctx context.Context, patch string) error {
 	if strings.TrimSpace(patch) == "" {
 		return nil
 	}
-	if _, err := r.runGitInternal(ctx, patch, nil, true, "apply"); err != nil {
+	if _, err := r.runStdin(ctx, patch, "apply"); err != nil {
 		return fmt.Errorf("failed to apply patch to worktree: %w", err)
 	}
 	return nil
@@ -324,7 +324,7 @@ func (r *runner) ApplyPatchToWorktree(ctx context.Context, patch string) error {
 
 // UnstageAll removes all changes from the staging area.
 func (r *runner) UnstageAll(ctx context.Context) error {
-	if _, err := r.RunGitCommandWithContext(ctx, "reset"); err != nil {
+	if _, err := r.Run(ctx, "reset"); err != nil {
 		return fmt.Errorf("failed to unstage changes: %w", err)
 	}
 	return nil

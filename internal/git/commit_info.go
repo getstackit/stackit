@@ -17,8 +17,8 @@ const stackitRefPrefix = "refs/stackit/"
 //
 // On failure the returned error string contains "reference not found" so
 // downstream callers that match on that legacy phrase continue to work.
-func (r *runner) resolveRefSHA(ref string) (string, error) {
-	return r.resolveRefSHAContext(context.Background(), ref)
+func (r *runner) resolveRefSHA(ctx context.Context, ref string) (string, error) {
+	return r.resolveRefSHAContext(ctx, ref)
 }
 
 func (r *runner) resolveRefSHAContext(ctx context.Context, ref string) (string, error) {
@@ -31,14 +31,14 @@ func (r *runner) resolveRefSHAContext(ctx context.Context, ref string) (string, 
 	// blobs too: peeling is only load-bearing for annotated tags, and no tag
 	// lives in this namespace.
 	if !strings.HasPrefix(ref, stackitRefPrefix) {
-		out, err = r.RunGitCommandWithContext(ctx, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
+		out, err = r.Run(ctx, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
 	}
 	if err != nil || out == "" {
 		// Fall back to the non-commit form: tags pointing at trees/blobs, or
 		// generic ref lookups that aren't commits. Most stackit call sites
 		// only care about commits, so try ^{commit} first to fail fast on
 		// nonsense input.
-		out, err = r.RunGitCommandWithContext(ctx, "rev-parse", "--verify", "--end-of-options", ref)
+		out, err = r.Run(ctx, "rev-parse", "--verify", "--end-of-options", ref)
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve ref %s: reference not found: %w", ref, err)
 		}
@@ -73,7 +73,7 @@ func (r *runner) ReadRevisions(ctx context.Context, names ...string) ReadResults
 	if len(names) == 1 {
 		name := names[0]
 		if name == "HEAD" {
-			if sha, ok := r.readHeadRevision(); ok {
+			if sha, ok := r.readHeadRevision(ctx); ok {
 				result.Set(name, sha)
 				return result
 			}
@@ -108,8 +108,8 @@ func (r *runner) ReadRevisions(ctx context.Context, names ...string) ReadResults
 		return result
 	}
 	offsets = append(offsets, len(queries))
-	out, err := r.runGitInternal(ctx, strings.Join(queries, "\n")+"\n",
-		nil, false, "cat-file", "--batch-check=%(objectname)")
+	out, err := r.runStdinRaw(ctx, strings.Join(queries, "\n")+"\n",
+		"cat-file", "--batch-check=%(objectname)")
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
 	if err == nil && len(lines) != len(queries) {
 		err = fmt.Errorf("batch cat-file returned %d lines for %d queries", len(lines), len(queries))

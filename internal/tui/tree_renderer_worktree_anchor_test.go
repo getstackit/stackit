@@ -22,10 +22,10 @@ func TestNewStackTreeRendererHidesWorktreeAnchorKeepsDescendants(t *testing.T) {
 			"feature":   "wt-anchor",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
-	renderer := tui.NewStackTreeRenderer(s.Engine)
+	renderer := tui.NewStackTreeRenderer(t.Context(), s.Engine)
 	lines := renderer.RenderStack("main", tree.RenderOptions{
 		Mode:                tree.RenderModeCompact,
 		NoStyleBranchName:   true,
@@ -49,12 +49,12 @@ func TestNewStackTreeRendererHidesNestedWorktreeAnchorsKeepsDescendants(t *testi
 			"feature": "anchor2",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("anchor1"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("anchor1"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
-	err = s.Engine.SetBranchType(s.Engine.GetBranch("anchor2"), git.BranchTypeWorktreeAnchor)
+	err = s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("anchor2"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
-	renderer := tui.NewStackTreeRenderer(s.Engine)
+	renderer := tui.NewStackTreeRenderer(t.Context(), s.Engine)
 	lines := renderer.RenderStack("main", tree.RenderOptions{
 		Mode:                tree.RenderModeCompact,
 		NoStyleBranchName:   true,

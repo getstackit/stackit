@@ -19,7 +19,7 @@ func TestValidateRebases(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		result, err := s.Engine.ValidateRebases(context.Background(), []engine.RebaseSpec{})
+		result, err := s.Engine.ValidateRebases(t.Context(), []engine.RebaseSpec{})
 		require.NoError(t, err)
 		require.True(t, result.Success)
 		require.Empty(t, result.FailedBranch)
@@ -40,9 +40,9 @@ func TestValidateRebases(t *testing.T) {
 			Checkout("branch1")
 
 		// Get revisions
-		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
+		mainRev, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 		require.NoError(t, err)
-		branch1OldBase, err := s.Git.GetMergeBase(context.Background(), "main", "branch1")
+		branch1OldBase, err := s.Git.GetMergeBase(t.Context(), "main", "branch1")
 		require.NoError(t, err)
 
 		specs := []engine.RebaseSpec{
@@ -53,7 +53,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.True(t, result.Success, "validation failed for branch %q: %s (error type: %d, conflicting files: %v)",
 			result.FailedBranch, result.ErrorMessage, result.ErrorType, result.ConflictingFiles)
@@ -64,7 +64,7 @@ func TestValidateRebases(t *testing.T) {
 		// Validation moves no refs, so the same spec must also pass while the
 		// branch under validation is not the one checked out.
 		s.Checkout("main")
-		result, err = s.Engine.ValidateRebases(context.Background(), specs)
+		result, err = s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.True(t, result.Success, "validation from trunk failed for branch %q: %s",
 			result.FailedBranch, result.ErrorMessage)
@@ -84,12 +84,12 @@ func TestValidateRebases(t *testing.T) {
 		s.Checkout("main").
 			Commit("main update")
 
-		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
+		mainRev, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 		require.NoError(t, err)
 
-		branch1OldBase, _ := s.Git.GetMergeBase(context.Background(), "main", "branch1")
-		branch1Rev, _ := s.Engine.GetRevision(s.Engine.GetBranch("branch1"))
-		branch2Rev, _ := s.Engine.GetRevision(s.Engine.GetBranch("branch2"))
+		branch1OldBase, _ := s.Git.GetMergeBase(t.Context(), "main", "branch1")
+		branch1Rev, _ := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("branch1"))
+		branch2Rev, _ := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("branch2"))
 
 		specs := []engine.RebaseSpec{
 			{
@@ -109,7 +109,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.True(t, result.Success)
 		require.NotEmpty(t, result.NewSHAs["branch1"])
@@ -123,7 +123,7 @@ func TestValidateRebases(t *testing.T) {
 
 		// branch1 forks from main's current tip and gets THREE commits, each
 		// touching a distinct file. Capture the fork point as the old upstream.
-		branch1OldBase, err := s.Engine.GetRevision(s.Engine.Trunk())
+		branch1OldBase, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 		require.NoError(t, err)
 
 		s.CreateBranch("branch1").
@@ -138,7 +138,7 @@ func TestValidateRebases(t *testing.T) {
 			CommitChange("parent", "parent change").
 			Checkout("branch1")
 
-		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
+		mainRev, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 		require.NoError(t, err)
 
 		specs := []engine.RebaseSpec{
@@ -149,7 +149,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.True(t, result.Success)
 		newTip := result.NewSHAs["branch1"]
@@ -157,7 +157,7 @@ func TestValidateRebases(t *testing.T) {
 
 		// The rebased tip must sit directly on the advanced main and carry exactly
 		// the branch's three original commits.
-		replayed, err := s.Git.ReadCommitRanges(context.Background(), git.RevRange{Base: mainRev, Head: newTip}).One()
+		replayed, err := s.Git.ReadCommitRanges(t.Context(), git.RevRange{Base: mainRev, Head: newTip}).One()
 		require.NoError(t, err)
 		require.Len(t, replayed, 3, "all three branch commits should be replayed onto new main")
 
@@ -168,7 +168,7 @@ func TestValidateRebases(t *testing.T) {
 
 		// The rebased tip's tree contains both the parent's change and all three
 		// branch changes (4 distinct files relative to the fork point).
-		diffFromBase, err := s.Git.ReadDiffs(context.Background(), git.DiffNames, git.RevRange{Base: branch1OldBase, Head: newTip}).One()
+		diffFromBase, err := s.Git.ReadDiffs(t.Context(), git.DiffNames, git.RevRange{Base: branch1OldBase, Head: newTip}).One()
 		require.NoError(t, err)
 		require.Len(t, diffFromBase.Files, 4)
 	})
@@ -177,7 +177,7 @@ func TestValidateRebases(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		oldBase, err := s.Engine.GetRevision(s.Engine.Trunk())
+		oldBase, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 		require.NoError(t, err)
 
 		s.CreateBranch("feature").
@@ -195,10 +195,10 @@ func TestValidateRebases(t *testing.T) {
 			CommitChange("parent.txt", "parent change").
 			Checkout("feature")
 
-		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
+		mainRev, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 		require.NoError(t, err)
 
-		result, err := s.Engine.ValidateRebases(context.Background(), []engine.RebaseSpec{{
+		result, err := s.Engine.ValidateRebases(t.Context(), []engine.RebaseSpec{{
 			Branch:      "feature",
 			NewParent:   mainRev,
 			OldUpstream: oldBase,
@@ -208,7 +208,7 @@ func TestValidateRebases(t *testing.T) {
 		newTip := result.NewSHAs["feature"]
 		require.NotEmpty(t, newTip)
 
-		records, err := s.Git.ReadCommitRanges(context.Background(), git.RevRange{Base: mainRev, Head: newTip}).One()
+		records, err := s.Git.ReadCommitRanges(t.Context(), git.RevRange{Base: mainRev, Head: newTip}).One()
 		require.NoError(t, err)
 		replayedSubjects := git.Commits(records).Subjects()
 		require.ElementsMatch(t, []string{"feature change", "side change"}, replayedSubjects)
@@ -223,14 +223,14 @@ func TestValidateRebases(t *testing.T) {
 		s.Checkout("main").
 			CommitChange("file.txt", "original")
 
-		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
+		mainRev, _ := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 
 		// branch1 modifies the same file - will conflict
 		s.CreateBranch("branch1").
 			CommitChange("file.txt", "branch1 change").
 			TrackBranch("branch1", "main")
 
-		branch1Rev, _ := s.Engine.GetRevision(s.Engine.GetBranch("branch1"))
+		branch1Rev, _ := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("branch1"))
 
 		// branch2 is clean, no conflict
 		s.CreateBranch("branch2").
@@ -241,7 +241,7 @@ func TestValidateRebases(t *testing.T) {
 		s.Checkout("main").
 			CommitChange("file.txt", "main conflicting change")
 
-		newMainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
+		newMainRev, _ := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 
 		specs := []engine.RebaseSpec{
 			{
@@ -256,7 +256,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.False(t, result.Success)
 		require.Equal(t, "branch1", result.FailedBranch)
@@ -280,9 +280,9 @@ func TestValidateRebases(t *testing.T) {
 			Commit("main update")
 
 		// Get SHAs (this is what move.go does - resolves to SHAs before validation)
-		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		branch1OldSHA, _ := s.Engine.GetRevision(s.Engine.GetBranch("branch1"))
-		branch1OldBase, _ := s.Git.GetMergeBase(context.Background(), "main", "branch1")
+		mainRev, _ := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
+		branch1OldSHA, _ := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("branch1"))
+		branch1OldBase, _ := s.Git.GetMergeBase(t.Context(), "main", "branch1")
 
 		// Build specs using SHAs (not branch names) - mimicking what move.go does
 		specs := []engine.RebaseSpec{
@@ -298,7 +298,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.True(t, result.Success)
 
@@ -318,15 +318,15 @@ func TestValidateRebases(t *testing.T) {
 			})
 
 		// Get original SHA
-		originalSHA, err := s.Engine.GetRevision(s.Engine.GetBranch("branch1"))
+		originalSHA, err := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("branch1"))
 		require.NoError(t, err)
 
 		// Add commit to main
 		s.Checkout("main").
 			Commit("main update")
 
-		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		branch1OldBase, _ := s.Git.GetMergeBase(context.Background(), "main", "branch1")
+		mainRev, _ := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
+		branch1OldBase, _ := s.Git.GetMergeBase(t.Context(), "main", "branch1")
 
 		specs := []engine.RebaseSpec{
 			{
@@ -336,12 +336,12 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.True(t, result.Success)
 
 		// Verify branch1 SHA is unchanged
-		currentSHA, err := s.Engine.GetRevision(s.Engine.GetBranch("branch1"))
+		currentSHA, err := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("branch1"))
 		require.NoError(t, err)
 		require.Equal(t, originalSHA, currentSHA, "branch ref should not be modified by validation")
 	})
@@ -355,7 +355,7 @@ func TestValidateRebases(t *testing.T) {
 			CommitChange("conflicting-file.txt", "original version")
 
 		// Save this as the old base
-		oldBase, err := s.Engine.GetRevision(s.Engine.Trunk())
+		oldBase, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 		require.NoError(t, err)
 
 		// Create branch1 from main and modify the file
@@ -367,7 +367,7 @@ func TestValidateRebases(t *testing.T) {
 		s.Checkout("main").
 			CommitChange("conflicting-file.txt", "main conflicting version")
 
-		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
+		mainRev, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 		require.NoError(t, err)
 
 		specs := []engine.RebaseSpec{
@@ -378,7 +378,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.False(t, result.Success)
 		require.Equal(t, "branch1", result.FailedBranch)
@@ -397,7 +397,7 @@ func TestValidateRebasesUsesRerereResolvedConflicts(t *testing.T) {
 	s.Checkout("main").
 		CommitChange("conflicting-file.txt", "original version")
 
-	oldBase, err := s.Engine.GetRevision(s.Engine.Trunk())
+	oldBase, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 	require.NoError(t, err)
 
 	s.CreateBranch("branch1").
@@ -406,14 +406,14 @@ func TestValidateRebasesUsesRerereResolvedConflicts(t *testing.T) {
 	s.Checkout("main").
 		CommitChange("conflicting-file.txt", "main version")
 
-	result, err := g.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: oldBase})
+	result, err := g.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: oldBase})
 	require.NoError(t, err)
 	require.Equal(t, git.RebaseConflict, result.Result)
-	require.True(t, g.IsRebaseInProgress(context.Background()))
+	require.True(t, g.IsRebaseInProgress(t.Context()))
 
 	require.NoError(t, s.Scene.Repo.ResolveMergeConflicts())
 	require.NoError(t, s.Scene.Repo.MarkMergeConflictsAsResolved())
-	result, err = g.RebaseContinue(context.Background())
+	result, err = g.RebaseContinue(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, git.RebaseDone, result.Result)
 
@@ -421,7 +421,7 @@ func TestValidateRebasesUsesRerereResolvedConflicts(t *testing.T) {
 	require.NoError(t, s.Scene.Repo.RunGitCommand("checkout", "-b", "branch2", oldBase))
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("branch version", "conflicting-file.txt"))
 
-	validation, err := s.Engine.ValidateRebases(context.Background(), []engine.RebaseSpec{
+	validation, err := s.Engine.ValidateRebases(t.Context(), []engine.RebaseSpec{
 		{
 			Branch:      "branch2",
 			NewParent:   "main",
@@ -443,7 +443,7 @@ func TestRestackBranchesPropagatesRerereResolvedCount(t *testing.T) {
 	s.Checkout("main").
 		CommitChange("conflicting-file.txt", "original version")
 
-	oldBase, err := s.Engine.GetRevision(s.Engine.Trunk())
+	oldBase, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 	require.NoError(t, err)
 
 	s.CreateBranch("branch2").
@@ -457,12 +457,12 @@ func TestRestackBranchesPropagatesRerereResolvedCount(t *testing.T) {
 	// branch created off oldBase with the same content as branch2.
 	require.NoError(t, s.Scene.Repo.RunGitCommand("checkout", "-b", "branch1", oldBase))
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("branch version", "conflicting-file.txt"))
-	rebaseResult, err := g.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: oldBase})
+	rebaseResult, err := g.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: oldBase})
 	require.NoError(t, err)
 	require.Equal(t, git.RebaseConflict, rebaseResult.Result)
 	require.NoError(t, s.Scene.Repo.ResolveMergeConflicts())
 	require.NoError(t, s.Scene.Repo.MarkMergeConflictsAsResolved())
-	rebaseResult, err = g.RebaseContinue(context.Background())
+	rebaseResult, err = g.RebaseContinue(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, git.RebaseDone, rebaseResult.Result)
 
@@ -471,7 +471,7 @@ func TestRestackBranchesPropagatesRerereResolvedCount(t *testing.T) {
 	// RestackBranchResult.
 	branch2 := s.Engine.GetBranch("branch2")
 	require.NotNil(t, branch2)
-	batchResult, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2), engine.RestackOpts{})
+	batchResult, err := s.Engine.RestackBranches(t.Context(), engine.BranchesOf(branch2), engine.RestackOpts{})
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackDone, batchResult.Results["branch2"].Result)
 	require.Positive(t, batchResult.Results["branch2"].RerereResolvedCount)
@@ -488,12 +488,12 @@ func TestRestackBranchesWithValidatedRebasesUsesValidationSHA(t *testing.T) {
 		Commit("main update").
 		Checkout("branch1")
 
-	mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
+	mainRev, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 	require.NoError(t, err)
-	oldBase, err := s.Git.GetMergeBase(context.Background(), "main", "branch1")
+	oldBase, err := s.Git.GetMergeBase(t.Context(), "main", "branch1")
 	require.NoError(t, err)
 
-	validation, err := s.Engine.ValidateRebases(context.Background(), []engine.RebaseSpec{{
+	validation, err := s.Engine.ValidateRebases(t.Context(), []engine.RebaseSpec{{
 		Branch:      "branch1",
 		NewParent:   "main",
 		OldUpstream: oldBase,
@@ -503,19 +503,19 @@ func TestRestackBranchesWithValidatedRebasesUsesValidationSHA(t *testing.T) {
 	require.NotEmpty(t, validation.NewSHAs["branch1"])
 
 	branch1 := s.Engine.GetBranch("branch1")
-	oldBranchRev, err := branch1.GetRevision()
+	oldBranchRev, err := branch1.Revision(t.Context())
 	require.NoError(t, err)
 	require.NotEqual(t, validation.NewSHAs["branch1"], oldBranchRev)
 
-	result, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch1), engine.RestackOpts{Validation: validation})
+	result, err := s.Engine.RestackBranches(t.Context(), engine.BranchesOf(branch1), engine.RestackOpts{Validation: validation})
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackDone, result.Results["branch1"].Result)
 
-	newBranchRev, err := s.Engine.GetBranch("branch1").GetRevision()
+	newBranchRev, err := s.Engine.GetBranch("branch1").Revision(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, validation.NewSHAs["branch1"], newBranchRev)
 
-	meta, err := s.Metadata.ReadMetadata(context.Background(), "branch1").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "branch1").One()
 	require.NoError(t, err)
 	require.NotNil(t, meta.GetParentBranchRevision())
 	require.Equal(t, mainRev, *meta.GetParentBranchRevision())
@@ -530,26 +530,26 @@ func TestRestackBranchesWithValidatedPlanAppliesFrozenBranch(t *testing.T) {
 		CreateBranch("child").
 		Commit("child change")
 
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "parent", "main"))
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "child", "parent"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "parent", "main"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "child", "parent"))
 
 	child := s.Engine.GetBranch("child")
-	_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(child), engine.BranchFrozen)
+	_, err := s.Engine.SetFrozen(t.Context(), engine.BranchesOf(child), engine.BranchFrozen)
 	require.NoError(t, err)
 
 	s.CreateBranch("remote-child").
 		Commit("remote child")
-	remoteSHA, err := s.Engine.GetBranch("remote-child").GetRevision()
+	remoteSHA, err := s.Engine.GetBranch("remote-child").Revision(t.Context())
 	require.NoError(t, err)
 	s.RunGit("update-ref", "refs/heads/origin/child", remoteSHA)
 
-	plan, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(child))
+	plan, err := s.Engine.PlanRestack(t.Context(), engine.BranchesOf(child))
 	require.NoError(t, err)
 	require.Empty(t, plan.Specs)
 	require.True(t, plan.ApplyMap["child"])
 
 	validation := &engine.RebaseValidation{Success: true, NewSHAs: map[string]string{}, RerereResolved: map[string]int{}}
-	result, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(child), engine.RestackOpts{Validation: validation, Plan: plan})
+	result, err := s.Engine.RestackBranches(t.Context(), engine.BranchesOf(child), engine.RestackOpts{Validation: validation, Plan: plan})
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackDone, result.Results["child"].Result)
 
@@ -566,23 +566,23 @@ func TestRestackBranchesWithValidatedPlanAppliesAnchorBranch(t *testing.T) {
 		})
 
 	anchor := s.Engine.GetBranch("anchor")
-	require.NoError(t, s.Engine.SetBranchType(anchor, git.BranchTypeWorktreeAnchor))
-	oldSHA, err := anchor.GetRevision()
+	require.NoError(t, s.Engine.SetBranchType(t.Context(), anchor, git.BranchTypeWorktreeAnchor))
+	oldSHA, err := anchor.Revision(t.Context())
 	require.NoError(t, err)
 
 	s.Checkout("main").
 		Commit("main update")
-	trunkSHA, err := s.Engine.Trunk().GetRevision()
+	trunkSHA, err := s.Engine.Trunk().Revision(t.Context())
 	require.NoError(t, err)
 	require.NotEqual(t, oldSHA, trunkSHA)
 
-	plan, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(anchor))
+	plan, err := s.Engine.PlanRestack(t.Context(), engine.BranchesOf(anchor))
 	require.NoError(t, err)
 	require.Empty(t, plan.Specs)
 	require.True(t, plan.ApplyMap["anchor"])
 
 	validation := &engine.RebaseValidation{Success: true, NewSHAs: map[string]string{}, RerereResolved: map[string]int{}}
-	result, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(anchor), engine.RestackOpts{Validation: validation, Plan: plan})
+	result, err := s.Engine.RestackBranches(t.Context(), engine.BranchesOf(anchor), engine.RestackOpts{Validation: validation, Plan: plan})
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackDone, result.Results["anchor"].Result)
 
@@ -604,25 +604,25 @@ func TestPlanRestackRefreshesMetadataWithoutRebaseWhenRecordedRevisionMissing(t 
 			"child":  "parent",
 		})
 
-	parentRev, err := s.Engine.GetBranch("parent").GetRevision()
+	parentRev, err := s.Engine.GetBranch("parent").Revision(t.Context())
 	require.NoError(t, err)
 	childSHA, err := s.Scene.Repo.GetBranchSHA("child")
 	require.NoError(t, err)
 
-	meta, err := s.Metadata.ReadMetadata(context.Background(), "child").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "child").One()
 	require.NoError(t, err)
-	require.NoError(t, s.Metadata.WriteMetadata("child", meta.WithParentBranchRevision(nil)))
-	require.NoError(t, s.Engine.Rebuild("main"))
+	require.NoError(t, s.Metadata.WriteMetadata(t.Context(), "child", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 
 	child := s.Engine.GetBranch("child")
-	plan, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(child))
+	plan, err := s.Engine.PlanRestack(t.Context(), engine.BranchesOf(child))
 	require.NoError(t, err)
 	require.Empty(t, plan.Specs, "child is already correctly based on parent; no rebase should be planned")
 	require.True(t, plan.ApplyMap["child"])
 	require.Equal(t, engine.RestackPlanApplyMetadataRefresh, plan.Items["child"].Action)
 
 	validation := &engine.RebaseValidation{Success: true, NewSHAs: map[string]string{}, RerereResolved: map[string]int{}}
-	result, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(child), engine.RestackOpts{Validation: validation, Plan: plan})
+	result, err := s.Engine.RestackBranches(t.Context(), engine.BranchesOf(child), engine.RestackOpts{Validation: validation, Plan: plan})
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackUnneeded, result.Results["child"].Result)
 
@@ -630,13 +630,13 @@ func TestPlanRestackRefreshesMetadataWithoutRebaseWhenRecordedRevisionMissing(t 
 	require.NoError(t, err)
 	require.Equal(t, childSHA, newChildSHA, "restack must not mint a new SHA when nothing needed replaying")
 
-	updatedMeta, err := s.Metadata.ReadMetadata(context.Background(), "child").One()
+	updatedMeta, err := s.Metadata.ReadMetadata(t.Context(), "child").One()
 	require.NoError(t, err)
 	require.NotNil(t, updatedMeta.GetParentBranchRevision())
 	require.Equal(t, parentRev, *updatedMeta.GetParentBranchRevision(), "recorded parent revision should catch up")
 
 	// A second restack should now find the record fully caught up.
-	plan2, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(child))
+	plan2, err := s.Engine.PlanRestack(t.Context(), engine.BranchesOf(child))
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackPlanSkip, plan2.Items["child"].Action)
 	require.Equal(t, engine.RestackUnneeded, plan2.PlannedResults["child"].Result)
@@ -655,7 +655,7 @@ func TestPlanRestackRefreshesMetadataAfterManualRebaseOutsideStackit(t *testing.
 			"b": "a",
 		})
 
-	oldARev, err := s.Engine.GetBranch("a").GetRevision()
+	oldARev, err := s.Engine.GetBranch("a").Revision(t.Context())
 	require.NoError(t, err)
 
 	// Amend "a" outside stackit so its tip moves without stackit updating
@@ -663,7 +663,7 @@ func TestPlanRestackRefreshesMetadataAfterManualRebaseOutsideStackit(t *testing.
 	// otherwise an amend moments after the original commit can produce a
 	// byte-identical (and thus identically-SHA'd) commit object.
 	s.Checkout("a").RunGit("commit", "--amend", "-m", "a, amended outside stackit")
-	newARev, err := s.Engine.GetBranch("a").GetRevision()
+	newARev, err := s.Engine.GetBranch("a").Revision(t.Context())
 	require.NoError(t, err)
 	require.NotEqual(t, oldARev, newARev)
 
@@ -671,19 +671,19 @@ func TestPlanRestackRefreshesMetadataAfterManualRebaseOutsideStackit(t *testing.
 	// stackit entirely -- "b" ends up correctly based on "a", but its
 	// recorded parent revision still names the pre-amend SHA.
 	s.RunGit("rebase", "--onto", "a", oldARev, "b")
-	require.NoError(t, s.Engine.Rebuild("main"))
+	require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 
 	bSHA, err := s.Scene.Repo.GetBranchSHA("b")
 	require.NoError(t, err)
 
 	b := s.Engine.GetBranch("b")
-	plan, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(b))
+	plan, err := s.Engine.PlanRestack(t.Context(), engine.BranchesOf(b))
 	require.NoError(t, err)
 	require.Empty(t, plan.Specs, "b is already correctly based on a; no rebase should replay its commits")
 	require.Equal(t, engine.RestackPlanApplyMetadataRefresh, plan.Items["b"].Action)
 
 	validation := &engine.RebaseValidation{Success: true, NewSHAs: map[string]string{}, RerereResolved: map[string]int{}}
-	result, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(b), engine.RestackOpts{Validation: validation, Plan: plan})
+	result, err := s.Engine.RestackBranches(t.Context(), engine.BranchesOf(b), engine.RestackOpts{Validation: validation, Plan: plan})
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackUnneeded, result.Results["b"].Result)
 
@@ -691,7 +691,7 @@ func TestPlanRestackRefreshesMetadataAfterManualRebaseOutsideStackit(t *testing.
 	require.NoError(t, err)
 	require.Equal(t, bSHA, newBSHA, "restack must not mint a new SHA when the branch was already correctly based")
 
-	meta, err := s.Metadata.ReadMetadata(context.Background(), "b").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "b").One()
 	require.NoError(t, err)
 	require.NotNil(t, meta.GetParentBranchRevision())
 	require.Equal(t, newARev, *meta.GetParentBranchRevision(), "recorded parent revision should catch up to a's current tip")
@@ -708,10 +708,10 @@ func TestRestackBranchesWithValidatedPlanReparentsMergedParent(t *testing.T) {
 	s.Checkout("main").
 		RunGit("merge", "branch1", "--no-ff", "-m", "Merge branch1")
 	s.RunGit("branch", "-D", "branch1")
-	require.NoError(t, s.Engine.Rebuild("main"))
+	require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 
 	branch2 := s.Engine.GetBranch("branch2")
-	plan, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(branch2))
+	plan, err := s.Engine.PlanRestack(t.Context(), engine.BranchesOf(branch2))
 	require.NoError(t, err)
 	require.Len(t, plan.Specs, 1)
 	require.True(t, plan.ApplyMap["branch2"])
@@ -719,21 +719,21 @@ func TestRestackBranchesWithValidatedPlanReparentsMergedParent(t *testing.T) {
 	require.Equal(t, "branch1", plan.Items["branch2"].OldParent)
 	require.Equal(t, "main", plan.Items["branch2"].NewParent)
 
-	validation, err := s.Engine.ValidateRebases(context.Background(), plan.Specs)
+	validation, err := s.Engine.ValidateRebases(t.Context(), plan.Specs)
 	require.NoError(t, err)
 	require.True(t, validation.Success)
 
-	result, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2), engine.RestackOpts{Validation: validation, Plan: plan})
+	result, err := s.Engine.RestackBranches(t.Context(), engine.BranchesOf(branch2), engine.RestackOpts{Validation: validation, Plan: plan})
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackDone, result.Results["branch2"].Result)
 	require.True(t, result.Results["branch2"].Reparented)
 	require.Equal(t, "branch1", result.Results["branch2"].OldParent)
 	require.Equal(t, "main", result.Results["branch2"].NewParent)
 
-	require.NoError(t, s.Engine.Rebuild("main"))
+	require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 	branch2 = s.Engine.GetBranch("branch2")
-	require.Equal(t, "main", branch2.GetParentOrTrunk())
-	history := branch2.GetMergedDownstack()
+	require.Equal(t, "main", branch2.ParentOrTrunk())
+	history := branch2.MergedDownstack()
 	require.Len(t, history, 1)
 	require.Equal(t, "branch1", history[0].BranchName)
 }
@@ -747,7 +747,7 @@ func TestRestackBranchesWithValidatedPlanRejectsForkInLinearMode(t *testing.T) {
 			"child":  "middle",
 		})
 
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot:     s.Scene.Dir,
 		Trunk:        "main",
 		LinearStacks: true,
@@ -755,7 +755,7 @@ func TestRestackBranchesWithValidatedPlanRejectsForkInLinearMode(t *testing.T) {
 	require.NoError(t, err)
 
 	child := eng.GetBranch("child")
-	childSHA, err := child.GetRevision()
+	childSHA, err := child.Revision(t.Context())
 	require.NoError(t, err)
 	plan := &engine.RestackPlan{
 		Items: map[string]engine.RestackPlanItem{
@@ -771,10 +771,10 @@ func TestRestackBranchesWithValidatedPlanRejectsForkInLinearMode(t *testing.T) {
 		NewSHAs: map[string]string{"child": childSHA},
 	}
 
-	_, err = eng.RestackBranches(context.Background(), engine.BranchesOf(child), engine.RestackOpts{Validation: validation, Plan: plan})
+	_, err = eng.RestackBranches(t.Context(), engine.BranchesOf(child), engine.RestackOpts{Validation: validation, Plan: plan})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "linear stacks are enabled")
-	require.Equal(t, "middle", eng.GetBranch("child").GetParentOrTrunk())
+	require.Equal(t, "middle", eng.GetBranch("child").ParentOrTrunk())
 }
 
 func TestValidateRebasesParallel(t *testing.T) {
@@ -796,11 +796,11 @@ func TestValidateRebasesParallel(t *testing.T) {
 		s.Checkout("main").
 			Commit("main update")
 
-		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
+		mainRev, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 		require.NoError(t, err)
 
 		// Get old bases for all branches (they all share the same old main)
-		oldBase, _ := s.Git.GetMergeBase(context.Background(), "main", "feature-a")
+		oldBase, _ := s.Git.GetMergeBase(t.Context(), "main", "feature-a")
 
 		// Build specs for all branches
 		specs := []engine.RebaseSpec{
@@ -811,7 +811,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			{Branch: "feature-e", NewParent: mainRev, OldUpstream: oldBase},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.True(t, result.Success, "validation failed for branch %q: %s (error type: %d, conflicting files: %v)",
 			result.FailedBranch, result.ErrorMessage, result.ErrorType, result.ConflictingFiles)
@@ -846,12 +846,12 @@ func TestValidateRebasesParallel(t *testing.T) {
 		s.Checkout("main").
 			Commit("main update")
 
-		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		oldMainBase, _ := s.Git.GetMergeBase(context.Background(), "main", "feature-a")
+		mainRev, _ := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
+		oldMainBase, _ := s.Git.GetMergeBase(t.Context(), "main", "feature-a")
 
 		// Get SHAs for depth-1 branches (for depth-2 rebases)
-		featureARev, _ := s.Engine.GetRevision(s.Engine.GetBranch("feature-a"))
-		featureBRev, _ := s.Engine.GetRevision(s.Engine.GetBranch("feature-b"))
+		featureARev, _ := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("feature-a"))
+		featureBRev, _ := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("feature-b"))
 
 		specs := []engine.RebaseSpec{
 			// Depth 1: feature-a and feature-b (can run in parallel)
@@ -863,7 +863,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			{Branch: "feature-b1", NewParent: featureBRev, OldUpstream: featureBRev},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.True(t, result.Success, "validation failed for branch %q: %s (error type: %d, conflicting files: %v)",
 			result.FailedBranch, result.ErrorMessage, result.ErrorType, result.ConflictingFiles)
@@ -884,7 +884,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 		s.Checkout("main").
 			CommitChange("file.txt", "original")
 
-		oldBase, _ := s.Engine.GetRevision(s.Engine.Trunk())
+		oldBase, _ := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 
 		// Create two branches that both modify the same file
 		s.CreateBranch("branch1").
@@ -900,14 +900,14 @@ func TestValidateRebasesParallel(t *testing.T) {
 		s.Checkout("main").
 			CommitChange("file.txt", "main conflicting version")
 
-		newMainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
+		newMainRev, _ := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 
 		specs := []engine.RebaseSpec{
 			{Branch: "branch1", NewParent: newMainRev, OldUpstream: oldBase},
 			{Branch: "branch2", NewParent: newMainRev, OldUpstream: oldBase},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.False(t, result.Success)
 		require.Equal(t, "branch1", result.FailedBranch)
@@ -928,10 +928,10 @@ func TestValidateRebasesParallel(t *testing.T) {
 		s.Checkout("main").
 			Commit("main update")
 
-		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		oldBase, _ := s.Git.GetMergeBase(context.Background(), "main", "branch1")
-		branch1Rev, _ := s.Engine.GetRevision(s.Engine.GetBranch("branch1"))
-		branch3Rev, _ := s.Engine.GetRevision(s.Engine.GetBranch("branch3"))
+		mainRev, _ := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
+		oldBase, _ := s.Git.GetMergeBase(t.Context(), "main", "branch1")
+		branch1Rev, _ := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("branch1"))
+		branch3Rev, _ := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("branch3"))
 
 		specs := []engine.RebaseSpec{
 			{Branch: "branch1", NewParent: mainRev, OldUpstream: oldBase},
@@ -940,7 +940,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			{Branch: "branch4", NewParent: branch3Rev, OldUpstream: branch3Rev},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.True(t, result.Success, "validation failed for branch %q: %s (error type: %d, conflicting files: %v)",
 			result.FailedBranch, result.ErrorMessage, result.ErrorType, result.ConflictingFiles)
@@ -963,8 +963,8 @@ func TestValidateRebasesParallel(t *testing.T) {
 
 		s.Checkout("main").Commit("main update")
 
-		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		oldBase, _ := s.Git.GetMergeBase(context.Background(), "main", "branch1")
+		mainRev, _ := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
+		oldBase, _ := s.Git.GetMergeBase(t.Context(), "main", "branch1")
 
 		specs := []engine.RebaseSpec{
 			{Branch: "branch1", NewParent: mainRev, OldUpstream: oldBase},
@@ -972,7 +972,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			{Branch: "branch3", NewParent: mainRev, OldUpstream: oldBase},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.True(t, result.Success, "validation failed for branch %q: %s (error type: %d, conflicting files: %v)",
 			result.FailedBranch, result.ErrorMessage, result.ErrorType, result.ConflictingFiles)
@@ -981,7 +981,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 		// ValidateRebases never moves refs, so the same scenario can be reused to
 		// check that a canceled context aborts validation. The successful call
 		// runs first so the cancellation cannot influence it.
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		cancel() // Cancel immediately
 
 		canceled, err := s.Engine.ValidateRebases(ctx, specs)
@@ -998,7 +998,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 		s.Checkout("main").
 			CommitChange("file.txt", "original")
 
-		oldBase, _ := s.Engine.GetRevision(s.Engine.Trunk())
+		oldBase, _ := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 
 		// Create three siblings, one will conflict
 		s.CreateBranch("branch1").
@@ -1019,7 +1019,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 		s.Checkout("main").
 			CommitChange("file.txt", "main conflicting")
 
-		newMainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
+		newMainRev, _ := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 
 		specs := []engine.RebaseSpec{
 			{Branch: "branch1", NewParent: newMainRev, OldUpstream: oldBase},
@@ -1027,7 +1027,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			{Branch: "branch3", NewParent: newMainRev, OldUpstream: oldBase},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.False(t, result.Success)
 		require.Equal(t, "branch1", result.FailedBranch)
@@ -1041,15 +1041,15 @@ func TestValidateRebasesParallel(t *testing.T) {
 				"branch1": "main",
 			})
 
-		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		oldBase, _ := s.Git.GetMergeBase(context.Background(), "main", "branch1")
+		mainRev, _ := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
+		oldBase, _ := s.Git.GetMergeBase(t.Context(), "main", "branch1")
 
 		specs := []engine.RebaseSpec{
 			{Branch: "branch1", NewParent: mainRev, OldUpstream: oldBase},
 			{Branch: "branch1", NewParent: mainRev, OldUpstream: oldBase}, // Duplicate!
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.Error(t, err)
 		require.Nil(t, result)
 		require.Contains(t, err.Error(), "duplicate branch")
@@ -1065,14 +1065,14 @@ func TestValidateRebasesIsolatesFailuresPerStack(t *testing.T) {
 
 		// Shared file on main that stack A will conflict on.
 		s.Checkout("main").CommitChange("shared.txt", "original")
-		oldBase, err := s.Engine.GetRevision(s.Engine.Trunk())
+		oldBase, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 		require.NoError(t, err)
 
 		// Stack A: a1 (will conflict with main's coming change) -> a2.
 		s.CreateBranch("a1").
 			CommitChange("shared.txt", "a1 version").
 			TrackBranch("a1", "main")
-		a1Rev, err := s.Engine.GetRevision(s.Engine.GetBranch("a1"))
+		a1Rev, err := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("a1"))
 		require.NoError(t, err)
 		s.CreateBranch("a2").
 			CommitChange("a2.txt", "a2 change").
@@ -1083,7 +1083,7 @@ func TestValidateRebasesIsolatesFailuresPerStack(t *testing.T) {
 			CreateBranch("b1").
 			CommitChange("b1.txt", "b1 change").
 			TrackBranch("b1", "main")
-		b1Rev, err := s.Engine.GetRevision(s.Engine.GetBranch("b1"))
+		b1Rev, err := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("b1"))
 		require.NoError(t, err)
 		s.CreateBranch("b2").
 			CommitChange("b2.txt", "b2 change").
@@ -1091,7 +1091,7 @@ func TestValidateRebasesIsolatesFailuresPerStack(t *testing.T) {
 
 		// main advances with a conflicting version of stack A's file.
 		s.Checkout("main").CommitChange("shared.txt", "main conflicting version")
-		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
+		mainRev, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 		require.NoError(t, err)
 
 		specs := []engine.RebaseSpec{
@@ -1101,7 +1101,7 @@ func TestValidateRebasesIsolatesFailuresPerStack(t *testing.T) {
 			{Branch: "b2", NewParent: "b1", OldUpstream: b1Rev},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.False(t, result.Success)
 
@@ -1123,7 +1123,7 @@ func TestValidateRebasesIsolatesFailuresPerStack(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		s.Checkout("main").CommitChange("shared.txt", "original")
-		oldBase, err := s.Engine.GetRevision(s.Engine.Trunk())
+		oldBase, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 		require.NoError(t, err)
 
 		s.CreateBranch("a1").
@@ -1135,7 +1135,7 @@ func TestValidateRebasesIsolatesFailuresPerStack(t *testing.T) {
 			TrackBranch("b1", "main")
 
 		s.Checkout("main").CommitChange("shared.txt", "main conflicting version")
-		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
+		mainRev, err := s.Engine.GetRevision(t.Context(), s.Engine.Trunk())
 		require.NoError(t, err)
 
 		specs := []engine.RebaseSpec{
@@ -1143,7 +1143,7 @@ func TestValidateRebasesIsolatesFailuresPerStack(t *testing.T) {
 			{Branch: "b1", NewParent: mainRev, OldUpstream: oldBase},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(t.Context(), specs)
 		require.NoError(t, err)
 		require.False(t, result.Success)
 

@@ -118,7 +118,7 @@ func TestSyncAction(t *testing.T) {
 			Commit("P updated")
 
 		// Refresh engine
-		err := s.Engine.Rebuild("main")
+		err := s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		err = Action(s.Context, Options{
@@ -164,7 +164,7 @@ func TestSyncAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Refresh engine
-		err = s.Engine.Rebuild("main")
+		err = s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		s.Checkout("P")
@@ -203,7 +203,7 @@ func TestSyncAction(t *testing.T) {
 			conflictBranch: "branch1",
 		}
 
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot: s.Scene.Dir,
 			Trunk:    "main",
 			Git:      wrappedGit,
@@ -219,9 +219,9 @@ func TestSyncAction(t *testing.T) {
 		require.True(t, wrappedGit.abortCalled, "sync should abort an unexpected in-progress rebase")
 		require.False(t, wrappedGit.IsRebaseInProgress(s.Context), "sync should finish with no rebase in progress")
 
-		current := s.Engine.CurrentBranch()
+		current := s.Engine.CurrentBranch(t.Context())
 		require.NotNil(t, current, "sync should restore original branch checkout")
-		require.Equal(t, "branch1", current.GetName())
+		require.Equal(t, "branch1", current.Name())
 	})
 }
 

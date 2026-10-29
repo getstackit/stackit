@@ -2,7 +2,6 @@ package lock_test
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -38,9 +37,9 @@ func (h *testLockHandler) PromptUnlockDownstack(names []string) (bool, error) {
 	return h.unlockDownstack, nil
 }
 
-func (h *testLockHandler) GetSubmitHandler() submit.Handler { return nil }
-func (h *testLockHandler) Cleanup()                         {}
-func (h *testLockHandler) IsInteractive() bool              { return h.isInteractive }
+func (h *testLockHandler) SubmitHandler() submit.Handler { return nil }
+func (h *testLockHandler) Cleanup()                      {}
+func (h *testLockHandler) IsInteractive() bool           { return h.isInteractive }
 
 func TestLockUnlockAction(t *testing.T) {
 	t.Parallel()
@@ -60,7 +59,7 @@ func TestLockUnlockAction(t *testing.T) {
 
 		require.True(t, s.Engine.GetBranch("feature-b").IsLocked())
 		require.True(t, s.Engine.GetBranch("feature-a").IsLocked())
-		require.Equal(t, engine.LockReasonUser, s.Engine.GetBranch("feature-b").GetLockReason())
+		require.Equal(t, engine.LockReasonUser, s.Engine.GetBranch("feature-b").LockReason())
 		require.False(t, s.Engine.GetBranch("main").IsLocked())
 	})
 
@@ -73,7 +72,7 @@ func TestLockUnlockAction(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		// Pre-lock
-		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
+		_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		var buf bytes.Buffer
@@ -99,9 +98,9 @@ func TestLockUnlockAction(t *testing.T) {
 			TrackBranch("feature-b", "feature-a")
 
 		// Pre-lock
-		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
+		_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
 		require.NoError(t, err)
-		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-b")), engine.LockReasonUser)
+		_, err = s.Engine.SetLocked(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature-b")), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		err = lock.Unlock(s.Context, "feature-a", nil)
@@ -219,9 +218,9 @@ func TestLockUnlockAction(t *testing.T) {
 			TrackBranch("feature-b", "feature-a")
 
 		// Pre-lock both
-		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
+		_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
 		require.NoError(t, err)
-		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-b")), engine.LockReasonUser)
+		_, err = s.Engine.SetLocked(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature-b")), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		// Use test handler that confirms unlock
@@ -253,9 +252,9 @@ func TestLockUnlockAction(t *testing.T) {
 			TrackBranch("feature-b", "feature-a")
 
 		// Pre-lock both
-		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
+		_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
 		require.NoError(t, err)
-		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-b")), engine.LockReasonUser)
+		_, err = s.Engine.SetLocked(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature-b")), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		// Use test handler that declines unlock

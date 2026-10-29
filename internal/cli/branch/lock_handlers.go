@@ -43,8 +43,8 @@ func (h *SimpleLockHandler) PromptUnlockDownstack(_ []string) (bool, error) {
 	return false, nil
 }
 
-// GetSubmitHandler returns nil for simple handler
-func (h *SimpleLockHandler) GetSubmitHandler() submit.Handler {
+// SubmitHandler returns nil for simple handler
+func (h *SimpleLockHandler) SubmitHandler() submit.Handler {
 	return nil
 }
 
@@ -81,8 +81,8 @@ func (h *InteractiveLockHandler) PromptUnlockDownstack(lockedBranchNames []strin
 	return tui.PromptConfirm(prompt, true)
 }
 
-// GetSubmitHandler returns a handler for the nested submit operation
-func (h *InteractiveLockHandler) GetSubmitHandler() submit.Handler {
+// SubmitHandler returns a handler for the nested submit operation
+func (h *InteractiveLockHandler) SubmitHandler() submit.Handler {
 	return &lockSubmitHandler{splog: h.Output}
 }
 

@@ -5,10 +5,11 @@ import (
 	"context"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // TreeStyle defines the output style for the tree command
@@ -108,14 +109,14 @@ type TreeJSONRequest struct {
 // gh may be nil when GitHub is unavailable. Short views never use it, so
 // callers should not construct a client for them.
 func BuildTreeJSON(ctx context.Context, eng engine.Engine, gh github.Client, req TreeJSONRequest) TreeJSONResult {
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx)
 	currentBranchName := ""
 	if currentBranch != nil {
-		currentBranchName = currentBranch.GetName()
+		currentBranchName = currentBranch.Name()
 	}
 
 	// Build stack graph
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	// Scoped views (--stack, --steps) arrive with the branch set already
 	// resolved by the adapter; everything else reports every tracked branch.
@@ -125,7 +126,7 @@ func BuildTreeJSON(ctx context.Context, eng engine.Engine, gh github.Client, req
 	}
 	included := make(map[string]bool, len(branchesToInclude))
 	for _, b := range branchesToInclude {
-		included[b.GetName()] = true
+		included[b.Name()] = true
 	}
 
 	// Short views are local and structural: never initialize the GitHub client.
@@ -174,13 +175,13 @@ func BuildTreeJSON(ctx context.Context, eng engine.Engine, gh github.Client, req
 	// would shell a separate `git rev-parse` for the parent).
 	var stats map[string]engine.BranchStat
 	if req.Style != TreeStyleShort {
-		stats = eng.BatchBranchStats(processableBranches)
+		stats = eng.BatchBranchStats(ctx, processableBranches)
 	}
-	statuses := eng.ReadBranchStatuses(processableBranches)
+	statuses := eng.ReadBranchStatuses(ctx, processableBranches)
 
 	if len(processableBranches) > 0 {
-		utils.Run(processableBranches.All(), func(branch engine.Branch) {
-			branchName := branch.GetName()
+		workpool.Run(processableBranches.All(), func(branch engine.Branch) {
+			branchName := branch.Name()
 
 			info := TreeBranchInfo{
 				Name:         branchName,
@@ -195,19 +196,19 @@ func BuildTreeJSON(ctx context.Context, eng engine.Engine, gh github.Client, req
 			// receive visible branches, so walk past anchors to avoid emitting a
 			// parent that does not exist in the result.
 			if parent := visibleTreeParent(branch); parent != nil {
-				info.Parent = parent.GetName()
+				info.Parent = parent.Name()
 			}
 
 			// Scope
-			if scope := branch.GetScope(); !scope.IsNone() {
+			if scope := branch.Scope(); !scope.IsNone() {
 				info.Scope = scope.String()
 			}
 
 			// Children, limited to the result so a bounded view never names a
 			// branch the consumer cannot look up.
 			for _, child := range visibleTreeChildren(graph, branch) {
-				if included[child.GetName()] {
-					info.Children = append(info.Children, child.GetName())
+				if included[child.Name()] {
+					info.Children = append(info.Children, child.Name())
 				}
 			}
 
@@ -225,7 +226,7 @@ func BuildTreeJSON(ctx context.Context, eng engine.Engine, gh github.Client, req
 
 			// PR info
 			if req.Style != TreeStyleShort && !branch.IsTrunk() {
-				prInfo, _ := branch.GetPrInfo()
+				prInfo, _ := branch.PrInfo()
 				if prInfo != nil && prInfo.Number() != nil {
 					info.PR = &TreePRInfo{
 						Number:  *prInfo.Number(),
@@ -288,9 +289,9 @@ func BuildTreeJSON(ctx context.Context, eng engine.Engine, gh github.Client, req
 }
 
 func visibleTreeParent(branch engine.Branch) *engine.Branch {
-	parent := branch.GetParent()
+	parent := branch.Parent()
 	for parent != nil && parent.IsWorktreeAnchor() {
-		parent = parent.GetParent()
+		parent = parent.Parent()
 	}
 	return parent
 }

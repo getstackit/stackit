@@ -86,7 +86,7 @@ func (r *runner) PushBranches(ctx context.Context, remote string, specs []PushSp
 		args = append(args, s.BranchName)
 	}
 
-	out, err := r.RunGitCommandWithContext(ctx, args...)
+	out, err := r.Run(ctx, args...)
 	if err != nil {
 		// `--porcelain` writes its per-ref status to stdout even when the push
 		// exits non-zero (some refs rejected); recover it from the error.

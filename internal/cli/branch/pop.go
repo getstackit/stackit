@@ -2,12 +2,11 @@
 package branch
 
 import (
+	"github.com/getstackit/stackit/internal/actions/pop"
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
-	_ "github.com/getstackit/stackit/internal/demo" // Register demo engine factory
 )
 
 // NewPopCmd creates the pop command
@@ -24,7 +23,7 @@ the branch is deleted.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
 				// Run pop action
-				return actions.PopAction(ctx, actions.PopOptions{})
+				return pop.Action(ctx.Context, pop.Deps{Engine: ctx.Engine, Out: ctx.Output})
 			})
 		},
 	}

@@ -338,7 +338,7 @@ func (m *shippableModel) updateFocusedStack() {
 func (m *shippableModel) refresh() tea.Cmd {
 	return func() tea.Msg {
 		// Rebuild engine cache to pick up external changes (e.g., move operations in another terminal)
-		if err := m.engine.Rebuild(m.engine.Trunk().GetName()); err != nil {
+		if err := m.engine.Rebuild(m.ctx.Context, m.engine.Trunk().Name()); err != nil {
 			return refreshCompleteMsg{err: err}
 		}
 		result, err := m.analyzer.AnalyzeAll(m.ctx.Context)

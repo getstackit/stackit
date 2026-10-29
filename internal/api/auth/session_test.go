@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
@@ -103,7 +102,7 @@ func TestMemoryStore_ConcurrentAccess(t *testing.T) {
 func TestSessionFromContext(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	require.Nil(t, SessionFromContext(ctx))
 
 	sess := &Session{ID: "x", GitHubLogin: "y"}

@@ -40,9 +40,9 @@ func (h *ReposListHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			DisplayName: entry.DisplayName,
 		}
 		if entry.Engine != nil {
-			summary.Trunk = entry.Engine.Trunk().GetName()
-			if current := entry.Engine.CurrentBranch(); current != nil {
-				summary.CurrentBranch = current.GetName()
+			summary.Trunk = entry.Engine.Trunk().Name()
+			if current := entry.Engine.CurrentBranch(r.Context()); current != nil {
+				summary.CurrentBranch = current.Name()
 			}
 		}
 		summaries = append(summaries, summary)

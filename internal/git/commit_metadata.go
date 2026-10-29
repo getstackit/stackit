@@ -56,7 +56,7 @@ func readCommitRange[T commitRecord](r *runner, ctx context.Context, codec commi
 	if rr.Base != "" {
 		rangeArg = rr.String()
 	}
-	out, err := r.RunGitCommandRawWithContext(ctx, "log", "-z",
+	out, err := r.RunRaw(ctx, "log", "-z",
 		"--format="+codec.format, "--end-of-options", rangeArg, "--")
 	if err != nil {
 		return nil, err

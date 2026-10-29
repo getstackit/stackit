@@ -491,8 +491,8 @@ func (r *GitRepo) GetBranchSHA(branch string) (string, error) {
 	return r.GetRevision(branch)
 }
 
-// GetCurrentSHA returns the SHA of HEAD.
-func (r *GitRepo) GetCurrentSHA() (string, error) {
+// CurrentSHA returns the SHA of HEAD.
+func (r *GitRepo) CurrentSHA() (string, error) {
 	return r.GetRevision("HEAD")
 }
 
@@ -519,8 +519,8 @@ func (r *GitRepo) HasUntrackedFiles() (bool, error) {
 	return strings.TrimSpace(output) != "", nil
 }
 
-// GetLocalBranches returns a list of all local branches.
-func (r *GitRepo) GetLocalBranches() ([]string, error) {
+// LocalBranches returns a list of all local branches.
+func (r *GitRepo) LocalBranches() ([]string, error) {
 	output, err := r.runGitCommandAndGetOutput("branch", "--format=%(refname:short)")
 	if err != nil {
 		return nil, err

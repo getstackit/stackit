@@ -218,7 +218,7 @@ func unlockDrainBranches(ctx *app.Context, branches []BranchMergeInfo) {
 	var toUnlock []engine.Branch
 	for _, b := range branches {
 		branch := ctx.Engine.GetBranch(b.BranchName)
-		if branch.IsTracked() && branch.GetLockReason() == engine.LockReasonDraining {
+		if branch.IsTracked() && branch.LockReason() == engine.LockReasonDraining {
 			toUnlock = append(toUnlock, branch)
 		}
 	}

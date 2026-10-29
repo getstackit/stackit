@@ -51,7 +51,7 @@ func (e *engineImpl) GetUntrackedFileHunks(ctx context.Context) ([]git.Hunk, err
 
 	hunks := make([]git.Hunk, 0, len(files))
 	for _, file := range files {
-		content, err := os.ReadFile(filepath.Join(e.git.GetRepoRoot(), file))
+		content, err := os.ReadFile(filepath.Join(e.git.RepoRoot(), file))
 		if err != nil {
 			return nil, fmt.Errorf("failed to read untracked file %s: %w", file, err)
 		}
@@ -83,8 +83,8 @@ func (e *engineImpl) ListWorktrees(ctx context.Context) (git.WorktreeList, error
 }
 
 // GetRemoteURL returns the remote URL
-func (e *engineImpl) GetRemoteURL(_ context.Context) (string, error) {
-	return e.git.GetConfig("remote.origin.url")
+func (e *engineImpl) GetRemoteURL(ctx context.Context) (string, error) {
+	return e.git.GetConfig(ctx, "remote.origin.url")
 }
 
 // GetCurrentRevision returns the current revision (HEAD)
@@ -139,8 +139,8 @@ func (e *engineImpl) GetUnmergedFiles(ctx context.Context) ([]string, error) {
 }
 
 // GetCommitSHA returns the SHA at a relative position (0 = HEAD, 1 = HEAD~1)
-func (e *engineImpl) GetCommitSHA(branchName string, offset int) (string, error) {
-	return e.git.ReadRevisions(context.Background(), fmt.Sprintf("%s~%d", branchName, offset)).One()
+func (e *engineImpl) GetCommitSHA(ctx context.Context, branchName string, offset int) (string, error) {
+	return e.git.ReadRevisions(ctx, fmt.Sprintf("%s~%d", branchName, offset)).One()
 }
 
 // IsAncestor checks if one commit is an ancestor of another
@@ -159,8 +159,8 @@ func (e *engineImpl) IsMergeInProgress(ctx context.Context) bool {
 }
 
 // GetRebaseHead returns the current rebase head
-func (e *engineImpl) GetRebaseHead() (string, error) {
-	return e.git.GetRebaseHead()
+func (e *engineImpl) GetRebaseHead(ctx context.Context) (string, error) {
+	return e.git.GetRebaseHead(ctx)
 }
 
 // HasUncommittedChanges checks if there are uncommitted changes
@@ -173,9 +173,9 @@ func (e *engineImpl) GetRepoInfo(ctx context.Context) (git.RemoteRepository, err
 	return e.git.GetRepoInfo(ctx)
 }
 
-// GetRepoRoot returns the absolute path to the repository root.
-func (e *engineImpl) GetRepoRoot() string {
-	return e.git.GetRepoRoot()
+// RepoRoot returns the absolute path to the repository root.
+func (e *engineImpl) RepoRoot() string {
+	return e.git.RepoRoot()
 }
 
 // GetUserName returns the configured git user.name.
@@ -189,8 +189,8 @@ func (e *engineImpl) GitVersion(ctx context.Context) (git.Version, error) {
 }
 
 // GetConfig reads a git configuration value.
-func (e *engineImpl) GetConfig(key string) (string, error) {
-	return e.git.GetConfig(key)
+func (e *engineImpl) GetConfig(ctx context.Context, key string) (string, error) {
+	return e.git.GetConfig(ctx, key)
 }
 
 // SetConfig writes a git configuration value.
@@ -206,20 +206,20 @@ func (e *engineImpl) GetAllBranchNames(ctx context.Context) ([]string, error) {
 
 // ListMetadataRefs returns a map of branch name to metadata-ref SHA for every
 // stackit metadata ref, including refs whose branches no longer exist.
-func (e *engineImpl) ListMetadataRefs() (map[string]string, error) {
-	return e.metadata.ListMetadata()
+func (e *engineImpl) ListMetadataRefs(ctx context.Context) (map[string]string, error) {
+	return e.metadata.ListMetadata(ctx)
 }
 
 // ReadMetadataRaw reads a single branch's metadata directly from its ref,
 // bypassing the engine's tracked-branch cache.
-func (e *engineImpl) ReadMetadataRaw(branchName string) (*git.Meta, error) {
-	return e.metadata.ReadMetadata(context.Background(), branchName).One()
+func (e *engineImpl) ReadMetadataRaw(ctx context.Context, branchName string) (*git.Meta, error) {
+	return e.metadata.ReadMetadata(ctx, branchName).One()
 }
 
 // BatchReadMetadataRaw reads raw metadata for many branches in one pass,
 // returning per-branch errors so callers can detect corrupted refs.
-func (e *engineImpl) BatchReadMetadataRaw(branchNames []string) (MetaMap, map[string]error) {
-	return e.metadata.ReadMetadata(context.Background(), branchNames...).Split()
+func (e *engineImpl) BatchReadMetadataRaw(ctx context.Context, branchNames []string) (MetaMap, map[string]error) {
+	return e.metadata.ReadMetadata(ctx, branchNames...).Split()
 }
 
 // DeleteMetadataRefsBatch deletes many branches' metadata refs in a single

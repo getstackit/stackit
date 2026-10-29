@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+
 	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/tui/components/tree"
@@ -8,28 +10,28 @@ import (
 
 // NewStackTreeRenderer creates a tree renderer configured for the current engine state
 // using the SMART sorting strategy (active path hoisting + newest first).
-func NewStackTreeRenderer(eng engine.StackView) *tree.StackTreeRenderer {
-	return NewStackTreeRendererWithStrategy(eng, engine.SortStrategySmart, nil)
+func NewStackTreeRenderer(ctx context.Context, eng engine.StackView) *tree.StackTreeRenderer {
+	return NewStackTreeRendererWithStrategy(ctx, eng, engine.SortStrategySmart, nil)
 }
 
 // NewStackTreeRendererWithFilter creates a tree renderer with a filter function
-func NewStackTreeRendererWithFilter(eng engine.StackView, filter func(string) bool) *tree.StackTreeRenderer {
-	return NewStackTreeRendererWithStrategy(eng, engine.SortStrategySmart, filter)
+func NewStackTreeRendererWithFilter(ctx context.Context, eng engine.StackView, filter func(string) bool) *tree.StackTreeRenderer {
+	return NewStackTreeRendererWithStrategy(ctx, eng, engine.SortStrategySmart, filter)
 }
 
 // NewStackTreeRendererWithStrategy creates a tree renderer with a specific sorting strategy and optional filter
-func NewStackTreeRendererWithStrategy(eng engine.StackView, strategy engine.SortStrategy, filter func(string) bool) *tree.StackTreeRenderer {
-	return newStackTreeRendererInternal(eng, strategy, filter, nil)
+func NewStackTreeRendererWithStrategy(ctx context.Context, eng engine.StackView, strategy engine.SortStrategy, filter func(string) bool) *tree.StackTreeRenderer {
+	return newStackTreeRendererInternal(ctx, eng, strategy, filter, nil)
 }
 
 // NewStackTreeRendererWithEmptyWorktrees creates a tree renderer that shows empty worktree anchors
-func NewStackTreeRendererWithEmptyWorktrees(eng engine.StackView, emptyWorktrees map[string]bool) *tree.StackTreeRenderer {
-	return newStackTreeRendererInternal(eng, engine.SortStrategySmart, nil, emptyWorktrees)
+func NewStackTreeRendererWithEmptyWorktrees(ctx context.Context, eng engine.StackView, emptyWorktrees map[string]bool) *tree.StackTreeRenderer {
+	return newStackTreeRendererInternal(ctx, eng, engine.SortStrategySmart, nil, emptyWorktrees)
 }
 
 // NewStackTreeRendererWithOptions creates a tree renderer with all options
-func NewStackTreeRendererWithOptions(eng engine.StackView, strategy engine.SortStrategy, filter func(string) bool, emptyWorktrees map[string]bool) *tree.StackTreeRenderer {
-	return newStackTreeRendererInternal(eng, strategy, filter, emptyWorktrees)
+func NewStackTreeRendererWithOptions(ctx context.Context, eng engine.StackView, strategy engine.SortStrategy, filter func(string) bool, emptyWorktrees map[string]bool) *tree.StackTreeRenderer {
+	return newStackTreeRendererInternal(ctx, eng, strategy, filter, emptyWorktrees)
 }
 
 // graphData implements tree.Data using an engine.StackGraph.
@@ -150,7 +152,7 @@ func (d *graphData) flattenHiddenAnchors(branchName string) []string {
 }
 
 // newStackTreeRendererInternal is the internal implementation that handles all renderer options
-func newStackTreeRendererInternal(eng engine.StackView, strategy engine.SortStrategy, filter func(string) bool, emptyWorktrees map[string]bool) *tree.StackTreeRenderer {
+func newStackTreeRendererInternal(ctx context.Context, eng engine.StackView, strategy engine.SortStrategy, filter func(string) bool, emptyWorktrees map[string]bool) *tree.StackTreeRenderer {
 	branchFilter := func(b engine.Branch) bool {
 		if b.IsWorktreeAnchor() {
 			// Keep anchors in the graph so children remain connected even when
@@ -159,17 +161,17 @@ func newStackTreeRendererInternal(eng engine.StackView, strategy engine.SortStra
 		}
 		// Apply user-provided filter if any
 		if filter != nil {
-			return filter(b.GetName())
+			return filter(b.Name())
 		}
 		return true
 	}
 
-	graph := engine.BuildStackGraph(eng, strategy, branchFilter)
+	graph := engine.BuildStackGraph(ctx, eng, strategy, branchFilter)
 
 	// Resolve restack status for every branch in one batched parent-revision
 	// read instead of a per-branch IsUpToDate() call during tree traversal
 	// (each of which would shell a separate `git rev-parse` for the parent).
-	statuses := eng.ReadBranchStatuses(eng.AllBranches())
+	statuses := eng.ReadBranchStatuses(ctx, eng.AllBranches())
 
 	// Use the Data interface instead of callback functions
 	data := &graphData{

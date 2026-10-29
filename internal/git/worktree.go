@@ -246,7 +246,7 @@ func (r *runner) AddWorktreeWithOptions(ctx context.Context, path WorktreePath, 
 		args = append(args, branch)
 	}
 
-	_, err := r.RunGitCommandWithContext(ctx, args...)
+	_, err := r.Run(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("failed to add worktree at %s: %w", path, err)
 	}
@@ -254,7 +254,7 @@ func (r *runner) AddWorktreeWithOptions(ctx context.Context, path WorktreePath, 
 }
 
 func (r *runner) RemoveWorktree(ctx context.Context, path WorktreePath) error {
-	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", path.String())
+	_, err := r.Run(ctx, "worktree", "remove", path.String())
 	if err != nil {
 		return fmt.Errorf("failed to remove worktree at %s: %w", path, err)
 	}
@@ -264,7 +264,7 @@ func (r *runner) RemoveWorktree(ctx context.Context, path WorktreePath) error {
 func (r *runner) ForceRemoveWorktree(ctx context.Context, path WorktreePath) error {
 	// Git requires --force twice when the worktree is locked, in addition to
 	// using it to discard local changes.
-	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", "--force", "--force", path.String())
+	_, err := r.Run(ctx, "worktree", "remove", "--force", "--force", path.String())
 	if err != nil {
 		return fmt.Errorf("failed to remove worktree at %s: %w", path, err)
 	}
@@ -283,7 +283,7 @@ func (r *runner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 	if err := r.requireGitVersion(ctx, MinimumGitVersion, "git worktree list -z"); err != nil {
 		return nil, err
 	}
-	output, err := r.RunGitCommandWithContext(ctx, "worktree", "list", "--porcelain", "-z")
+	output, err := r.Run(ctx, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
 	}
@@ -333,7 +333,7 @@ func (r *runner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 // creating new worktrees to prevent "failed to read commondir" errors caused
 // by incomplete cleanup from previous operations.
 func (r *runner) PruneWorktrees(ctx context.Context) error {
-	_, err := r.RunGitCommandWithContext(ctx, "worktree", "prune")
+	_, err := r.Run(ctx, "worktree", "prune")
 	if err != nil {
 		return fmt.Errorf("failed to prune worktrees: %w", err)
 	}
@@ -341,16 +341,16 @@ func (r *runner) PruneWorktrees(ctx context.Context) error {
 }
 
 // ReadWorktreeMeta reads worktree metadata for a stack root from local git refs
-func (r *runner) ReadWorktreeMeta(stackRoot string) (*WorktreeMeta, error) {
+func (r *runner) ReadWorktreeMeta(ctx context.Context, stackRoot string) (*WorktreeMeta, error) {
 	refName := fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot)
 
-	sha, err := r.ReadRevisions(context.Background(), refName).One()
+	sha, err := r.ReadRevisions(ctx, refName).One()
 	if err != nil {
 		// If ref doesn't exist, it's not an error, just means no worktree registered
 		return nil, nil //nolint:nilerr
 	}
 
-	content, err := ObjectContent(r.ReadObjects(context.Background(), sha))
+	content, err := ObjectContent(r.ReadObjects(ctx, sha))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read worktree metadata blob %s: %w", sha, err)
 	}
@@ -411,7 +411,7 @@ func (r *runner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error
 	// cleanup with no way to retire it short of a manual `git update-ref -d`.
 	// Drop the forward ref regardless; PruneOrphanedWorktreePathRefs sweeps the
 	// reverse claim once this ref is gone.
-	meta, err := r.ReadWorktreeMeta(stackRoot)
+	meta, err := r.ReadWorktreeMeta(ctx, stackRoot)
 	if err != nil {
 		meta = nil
 	}
@@ -443,7 +443,7 @@ func (r *runner) GetWorktreePathForBranch(ctx context.Context, branchName string
 // ResetWorktreeWorkingDir resets a worktree's working directory to match HEAD.
 // This is used after updating a branch ref to sync the worktree's working directory.
 func (r *runner) ResetWorktreeWorkingDir(ctx context.Context, worktreePath WorktreePath) error {
-	_, err := r.RunGitCommandWithContext(ctx, "-C", worktreePath.String(), "reset", "--hard", "HEAD")
+	_, err := r.Run(ctx, "-C", worktreePath.String(), "reset", "--hard", "HEAD")
 	if err != nil {
 		return fmt.Errorf("failed to reset worktree at %s: %w", worktreePath, err)
 	}
@@ -454,7 +454,7 @@ func (r *runner) ResetWorktreeWorkingDir(ctx context.Context, worktreePath Workt
 // "Clean" means: no staged, unstaged, or untracked entries — equivalent to
 // `git status --porcelain --untracked-files=normal` returning empty output.
 func (r *runner) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath WorktreePath) (bool, error) {
-	out, err := r.RunGitCommandRawWithContext(ctx,
+	out, err := r.RunRaw(ctx,
 		"-C", worktreePath.String(),
 		"status", "--porcelain", "--untracked-files=normal",
 	)
@@ -473,7 +473,7 @@ func (r *runner) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath
 // against the target tree with WorktreeResetBlocker. Use
 // WorktreeHasUncommittedChanges when any untracked file should count as dirty.
 func (r *runner) WorktreeHasTrackedChanges(ctx context.Context, worktreePath WorktreePath) (bool, error) {
-	out, err := r.RunGitCommandRawWithContext(ctx,
+	out, err := r.RunRaw(ctx,
 		"-C", worktreePath.String(),
 		"status", "--porcelain", "--untracked-files=no",
 	)
@@ -544,7 +544,7 @@ func (r *runner) WorktreeResetBlocker(ctx context.Context, worktreePath Worktree
 // ignore semantics, rather than treating a warm-start include file as another
 // source of ignored paths.
 func (r *runner) ListIgnoredFiles(ctx context.Context, worktreePath WorktreePath) ([]string, error) {
-	out, err := r.RunGitCommandRawWithContext(ctx,
+	out, err := r.RunRaw(ctx,
 		"-C", worktreePath.String(),
 		"ls-files", "--others", "--ignored", "--exclude-standard", "-z",
 	)
@@ -552,8 +552,7 @@ func (r *runner) ListIgnoredFiles(ctx context.Context, worktreePath WorktreePath
 		return nil, fmt.Errorf("list ignored files in worktree %s: %w", worktreePath, err)
 	}
 
-	paths := strings.Split(out, "\x00")
-	paths = slices.DeleteFunc(paths, func(path string) bool { return path == "" })
+	paths := splitNulTerminated(out)
 	slices.Sort(paths)
 	return paths, nil
 }
@@ -564,7 +563,7 @@ func (r *runner) ListIgnoredFiles(ctx context.Context, worktreePath WorktreePath
 // uses exit code 1 specifically for "not a symbolic ref" when `-q` is passed,
 // reserving 128 (and others) for genuine errors.
 func (r *runner) GetWorktreeCurrentBranch(ctx context.Context, worktreePath WorktreePath) (string, error) {
-	out, err := r.RunGitCommandWithContext(ctx, "-C", worktreePath.String(), "symbolic-ref", "-q", "--short", "HEAD")
+	out, err := r.Run(ctx, "-C", worktreePath.String(), "symbolic-ref", "-q", "--short", "HEAD")
 	if err != nil {
 		if isExitCode(err, 1) {
 			return "", nil
@@ -584,8 +583,8 @@ type WorktreeRegistration struct {
 // ListWorktreeRegistrations lists every worktree registration keyed by stack
 // root, reporting unreadable entries instead of skipping them, so ownership
 // checks can refuse rather than treat a damaged registration as absent.
-func (r *runner) ListWorktreeRegistrations() (map[string]WorktreeRegistration, error) {
-	refs, err := r.ListRefs(WorktreeRefPrefix)
+func (r *runner) ListWorktreeRegistrations(ctx context.Context) (map[string]WorktreeRegistration, error) {
+	refs, err := r.ListRefs(ctx, WorktreeRefPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -594,7 +593,7 @@ func (r *runner) ListWorktreeRegistrations() (map[string]WorktreeRegistration, e
 	for refName, sha := range refs {
 		stackRoot := strings.TrimPrefix(refName, WorktreeRefPrefix)
 
-		content, err := ObjectContent(r.ReadObjects(context.Background(), sha))
+		content, err := ObjectContent(r.ReadObjects(ctx, sha))
 		if err != nil {
 			result[stackRoot] = WorktreeRegistration{Err: fmt.Errorf("failed to read worktree metadata blob %s: %w", sha, err)}
 			continue
@@ -617,8 +616,8 @@ func (r *runner) ListWorktreeRegistrations() (map[string]WorktreeRegistration, e
 // ListWorktreeMetas lists all readable worktree metadata, skipping entries
 // that cannot be read. Use ListWorktreeRegistrations where a damaged entry
 // must not read as "no worktree".
-func (r *runner) ListWorktreeMetas() (map[string]*WorktreeMeta, error) {
-	registrations, err := r.ListWorktreeRegistrations()
+func (r *runner) ListWorktreeMetas(ctx context.Context) (map[string]*WorktreeMeta, error) {
+	registrations, err := r.ListWorktreeRegistrations(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -662,7 +661,7 @@ func (r *runner) TreeContainsAnyPath(ctx context.Context, rev string, paths []st
 		}
 	}
 
-	out, err := r.RunGitCommandRawWithContext(ctx, "ls-tree", "-r", "-z", "--name-only", rev)
+	out, err := r.RunRaw(ctx, "ls-tree", "-r", "-z", "--name-only", rev)
 	if err != nil {
 		return false, false
 	}

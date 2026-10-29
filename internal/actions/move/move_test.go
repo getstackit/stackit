@@ -1,7 +1,6 @@
 package move
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,13 +57,13 @@ func TestMoveAction(t *testing.T) {
 
 		// Verify initial state
 		branchparent2Initial := s.Engine.GetBranch("branch2")
-		parent2Initial := branchparent2Initial.GetParent()
+		parent2Initial := branchparent2Initial.Parent()
 		require.NotNil(t, parent2Initial)
-		require.Equal(t, "branch1", parent2Initial.GetName())
+		require.Equal(t, "branch1", parent2Initial.Name())
 		branchparent3Initial := s.Engine.GetBranch("branch3")
-		parent3Initial := branchparent3Initial.GetParent()
+		parent3Initial := branchparent3Initial.Parent()
 		require.NotNil(t, parent3Initial)
-		require.Equal(t, "branch2", parent3Initial.GetName())
+		require.Equal(t, "branch2", parent3Initial.Name())
 
 		// Move branch2 from branch1 to main (downstack)
 		err := Action(s.Context, Options{
@@ -75,10 +74,10 @@ func TestMoveAction(t *testing.T) {
 
 		// Verify new parent relationship
 		branchparent2After := s.Engine.GetBranch("branch2")
-		parent2After := branchparent2After.GetParent()
+		parent2After := branchparent2After.Parent()
 		require.NotNil(t, parent2After)
-		require.Equal(t, "main", parent2After.GetName())
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+		require.Equal(t, "main", parent2After.Name())
+		graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 		mainChildren := graph.Children(s.Engine.Trunk())
 		require.Contains(t, mainChildren, "branch2")
 		branch1Children := graph.Children(s.Engine.GetBranch("branch1"))
@@ -86,9 +85,9 @@ func TestMoveAction(t *testing.T) {
 
 		// Verify branch3 still has branch2 as parent (descendant relationship preserved)
 		branchparent3After := s.Engine.GetBranch("branch3")
-		parent3After := branchparent3After.GetParent()
+		parent3After := branchparent3After.Parent()
 		require.NotNil(t, parent3After)
-		require.Equal(t, "branch2", parent3After.GetName())
+		require.Equal(t, "branch2", parent3After.Name())
 	})
 
 	t.Run("moves branch upstack and restacks descendants", func(t *testing.T) {
@@ -109,10 +108,10 @@ func TestMoveAction(t *testing.T) {
 
 		// Verify new parent relationship
 		branchparentA := s.Engine.GetBranch("branchA")
-		parentA := branchparentA.GetParent()
+		parentA := branchparentA.Parent()
 		require.NotNil(t, parentA)
-		require.Equal(t, "branchB", parentA.GetName())
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+		require.Equal(t, "branchB", parentA.Name())
+		graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 		branchBChildren := graph.Children(s.Engine.GetBranch("branchB"))
 		require.Contains(t, branchBChildren, "branchA")
 		mainChildren := graph.Children(s.Engine.Trunk())
@@ -120,9 +119,9 @@ func TestMoveAction(t *testing.T) {
 
 		// Verify branchA2 still has branchA as parent (descendant relationship preserved)
 		branchparentA2 := s.Engine.GetBranch("branchA2")
-		parentA2 := branchparentA2.GetParent()
+		parentA2 := branchparentA2.Parent()
 		require.NotNil(t, parentA2)
-		require.Equal(t, "branchA", parentA2.GetName())
+		require.Equal(t, "branchA", parentA2.Name())
 	})
 
 	t.Run("moves branch across different stack trees", func(t *testing.T) {
@@ -144,10 +143,10 @@ func TestMoveAction(t *testing.T) {
 
 		// Verify new parent relationship
 		branchparentA2 := s.Engine.GetBranch("branchA2")
-		parentA2 := branchparentA2.GetParent()
+		parentA2 := branchparentA2.Parent()
 		require.NotNil(t, parentA2)
-		require.Equal(t, "branchB1", parentA2.GetName())
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+		require.Equal(t, "branchB1", parentA2.Name())
+		graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 		branchB1Children := graph.Children(s.Engine.GetBranch("branchB1"))
 		require.Contains(t, branchB1Children, "branchA2")
 		branchA1Children := graph.Children(s.Engine.GetBranch("branchA1"))
@@ -174,9 +173,9 @@ func TestMoveAction(t *testing.T) {
 
 		// Verify branch2 was moved
 		branchparent2 := s.Engine.GetBranch("branch2")
-		parent2 := branchparent2.GetParent()
+		parent2 := branchparent2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName())
+		require.Equal(t, "main", parent2.Name())
 	})
 
 	t.Run("prevents moving trunk branch", func(t *testing.T) {
@@ -292,9 +291,9 @@ func TestMoveAction(t *testing.T) {
 
 		// Verify new parent relationship
 		branchparent1 := s.Engine.GetBranch("branch1")
-		parent1 := branchparent1.GetParent()
+		parent1 := branchparent1.Parent()
 		require.NotNil(t, parent1)
-		require.Equal(t, "untracked", parent1.GetName())
+		require.Equal(t, "untracked", parent1.Name())
 	})
 
 	t.Run("restacks all descendants after move", func(t *testing.T) {
@@ -374,7 +373,7 @@ func TestMoveAction(t *testing.T) {
 
 		// Verify branch2 only has its own commit relative to main
 		// branch1's commit should NOT be in branch2's history anymore
-		branch2Commits, err := s.Engine.GetCommitIDs(s.Engine.GetBranch("branch2"))
+		branch2Commits, err := s.Engine.GetCommitIDs(t.Context(), s.Engine.GetBranch("branch2"))
 		require.NoError(t, err)
 
 		// branch2 should only have 1 commit (the one we added to it)
@@ -382,7 +381,7 @@ func TestMoveAction(t *testing.T) {
 		require.NotEqual(t, branch1Commit, branch2Commits[0], "branch1's commit should not be in branch2")
 
 		// Verify the commit message matches
-		branch2MessagesData, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branch2"))
+		branch2MessagesData, err := s.Engine.GetAllCommits(t.Context(), s.Engine.GetBranch("branch2"))
 		branch2Messages := branch2MessagesData.Subjects()
 		require.NoError(t, err)
 		require.Equal(t, "commit in branch2", branch2Messages[0])
@@ -400,7 +399,7 @@ func TestMoveAction(t *testing.T) {
 		branch2 := s.Engine.GetBranch("branch2")
 		prNumber := git.PRNumber(123)
 		prInfo := engine.NewPrInfo(engine.PrInfoFields{Number: &prNumber, Title: "Test PR", Body: "Test Body", State: "OPEN", Base: "branch1", URL: "https://github.com/owner/repo/pull/123"})
-		err := s.Engine.UpsertPrInfo(context.Background(), branch2, prInfo)
+		err := s.Engine.UpsertPrInfo(t.Context(), branch2, prInfo)
 		require.NoError(t, err)
 
 		// Move branch2 to main
@@ -412,7 +411,7 @@ func TestMoveAction(t *testing.T) {
 
 		// Verify PR info is preserved
 		movedBranch2 := s.Engine.GetBranch("branch2")
-		newPrInfo, err := movedBranch2.GetPrInfo()
+		newPrInfo, err := movedBranch2.PrInfo()
 		require.NoError(t, err)
 		require.NotNil(t, newPrInfo)
 		require.Equal(t, git.PRNumber(123), *newPrInfo.Number())
@@ -438,7 +437,7 @@ func TestMoveAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch2 still has 1 commit relative to main (the amended one)
-		branch2CommitsData, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branch2"))
+		branch2CommitsData, err := s.Engine.GetAllCommits(t.Context(), s.Engine.GetBranch("branch2"))
 		branch2Commits := branch2CommitsData.Subjects()
 		require.NoError(t, err)
 		require.Len(t, branch2Commits, 1)
@@ -470,14 +469,14 @@ func TestMoveAction(t *testing.T) {
 
 		// Verify branchA2 only has its own commit relative to branchB1
 		// branchA1's commit should NOT be in branchA2's history relative to branchB1
-		branchA2Commits, err := s.Engine.GetCommitIDs(s.Engine.GetBranch("branchA2"))
+		branchA2Commits, err := s.Engine.GetCommitIDs(t.Context(), s.Engine.GetBranch("branchA2"))
 		require.NoError(t, err)
 
 		require.Len(t, branchA2Commits, 1, "branchA2 should only have 1 commit after move")
 		require.NotEqual(t, branchA1Commit, branchA2Commits[0], "branchA1's commit should not be in branchA2")
 
 		// Verify the commit message matches
-		branchA2MessagesData, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branchA2"))
+		branchA2MessagesData, err := s.Engine.GetAllCommits(t.Context(), s.Engine.GetBranch("branchA2"))
 		branchA2Messages := branchA2MessagesData.Subjects()
 		require.NoError(t, err)
 		require.Equal(t, "commit A2", branchA2Messages[0])
@@ -505,7 +504,7 @@ func TestMoveAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branchB only has its own commit (not A's commit)
-		branchBCommitsData, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branchB"))
+		branchBCommitsData, err := s.Engine.GetAllCommits(t.Context(), s.Engine.GetBranch("branchB"))
 		branchBCommits := branchBCommitsData.Subjects()
 		require.NoError(t, err)
 		require.Len(t, branchBCommits, 1, "branchB should only have 1 commit after move")
@@ -518,18 +517,18 @@ func TestMoveAction(t *testing.T) {
 		require.False(t, mergedIntoMain, "branchA should NOT be merged into main after moving branchB")
 
 		// Verify branchA still has its own commit
-		branchACommitsData, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branchA"))
+		branchACommitsData, err := s.Engine.GetAllCommits(t.Context(), s.Engine.GetBranch("branchA"))
 		branchACommits := branchACommitsData.Subjects()
 		require.NoError(t, err)
 		require.Len(t, branchACommits, 1, "branchA should still have 1 commit")
 		require.Equal(t, "commit A", branchACommits[0])
 
 		// Verify branchC still has branchB as parent and its own commit
-		branchCParent := s.Engine.GetBranch("branchC").GetParent()
+		branchCParent := s.Engine.GetBranch("branchC").Parent()
 		require.NotNil(t, branchCParent)
-		require.Equal(t, "branchB", branchCParent.GetName())
+		require.Equal(t, "branchB", branchCParent.Name())
 
-		branchCCommitsData, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branchC"))
+		branchCCommitsData, err := s.Engine.GetAllCommits(t.Context(), s.Engine.GetBranch("branchC"))
 		branchCCommits := branchCCommitsData.Subjects()
 		require.NoError(t, err)
 		require.Len(t, branchCCommits, 1, "branchC should have 1 commit")
@@ -553,9 +552,9 @@ func TestMoveAction(t *testing.T) {
 		require.Equal(t, 1, h.prompts, "user should have been prompted")
 
 		// Branch should still be parented to branch1 — the move was canceled.
-		parent := s.Engine.GetBranch("branch2").GetParent()
+		parent := s.Engine.GetBranch("branch2").Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "branch1", parent.GetName())
+		require.Equal(t, "branch1", parent.Name())
 	})
 
 	t.Run("interactive proceed on conflict enters conflict workflow", func(t *testing.T) {
@@ -609,9 +608,9 @@ func TestMoveAction(t *testing.T) {
 		require.Equal(t, "branch2", cont.CurrentBranchOverride)
 
 		// Parent metadata is updated even though the rebase is incomplete.
-		parent := s.Engine.GetBranch("branch2").GetParent()
+		parent := s.Engine.GetBranch("branch2").Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "branch1", parent.GetName())
+		require.Equal(t, "branch1", parent.Name())
 
 		// Resolve the conflict (take incoming) and continue.
 		require.NoError(t, s.Scene.Repo.ResolveMergeConflicts())
@@ -628,7 +627,7 @@ func TestMoveMarksBranchesForPRBodyUpdate(t *testing.T) {
 
 	needsPRUpdate := func(t *testing.T, s *scenario.Scenario, branch string) bool {
 		t.Helper()
-		meta, err := s.Metadata.ReadLocalMetadata(context.Background(), branch).One()
+		meta, err := s.Metadata.ReadLocalMetadata(t.Context(), branch).One()
 		require.NoError(t, err)
 		return meta != nil && meta.NeedsPRBodyUpdate
 	}

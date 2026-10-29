@@ -108,7 +108,7 @@ func FindLargestWorkingSet(
 
 	for _, stack := range stacks {
 		// Reset to trunk
-		if err := worktreeEng.ResetHard(ctx, trunk.GetName()); err != nil {
+		if err := worktreeEng.ResetHard(ctx, trunk.Name()); err != nil {
 			return nil, fmt.Errorf("failed to reset worktree: %w", err)
 		}
 
@@ -152,7 +152,7 @@ func FindLargestWorkingSet(
 
 	// Final state: reset and merge only working stacks
 	if len(working) > 0 {
-		if err := worktreeEng.ResetHard(ctx, trunk.GetName()); err != nil {
+		if err := worktreeEng.ResetHard(ctx, trunk.Name()); err != nil {
 			return nil, fmt.Errorf("failed to reset worktree: %w", err)
 		}
 		for _, s := range working {

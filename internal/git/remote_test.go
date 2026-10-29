@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,7 +34,7 @@ func TestFetchRemoteShas(t *testing.T) {
 		// Fetch remote SHAs (FetchRemoteShas runs git command in current dir which is scene.Dir)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
-		remoteShas, err := runner.FetchRemoteShas(context.Background(), "origin")
+		remoteShas, err := runner.FetchRemoteShas(t.Context(), "origin")
 		require.NoError(t, err)
 
 		// Should have both branches
@@ -61,7 +60,7 @@ func TestFetchRemoteShas(t *testing.T) {
 		// Fetch remote SHAs - should be empty since nothing was pushed
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
-		remoteShas, err := runner.FetchRemoteShas(context.Background(), "origin")
+		remoteShas, err := runner.FetchRemoteShas(t.Context(), "origin")
 		require.NoError(t, err)
 		require.Empty(t, remoteShas, "remote should have no branches")
 	})
@@ -89,7 +88,7 @@ func TestFetchRemoteShas(t *testing.T) {
 		// Fetch remote SHAs
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
-		remoteShas, err := runner.FetchRemoteShas(context.Background(), "origin")
+		remoteShas, err := runner.FetchRemoteShas(t.Context(), "origin")
 		require.NoError(t, err)
 
 		// Should have the branch with slash

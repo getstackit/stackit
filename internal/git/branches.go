@@ -10,11 +10,11 @@ import (
 	"strings"
 )
 
-func (r *runner) GetCurrentBranch() (string, error) {
-	if name, ok := r.readHeadBranch(); ok {
+func (r *runner) GetCurrentBranch(ctx context.Context) (string, error) {
+	if name, ok := r.readHeadBranch(ctx); ok {
 		return name, nil
 	}
-	out, err := r.RunGitCommandWithContext(context.Background(), "symbolic-ref", "--short", "HEAD")
+	out, err := r.Run(ctx, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("HEAD is not on a branch: %w", err)
 	}
@@ -31,11 +31,11 @@ func (r *runner) GetCurrentBranch() (string, error) {
 // then runs the real command, so git stays the authority on every case except
 // the overwhelmingly common one. Note this reads the worktree's own git dir,
 // not the common dir: each worktree has its own HEAD.
-func (r *runner) readHeadBranch() (string, bool) {
+func (r *runner) readHeadBranch(ctx context.Context) (string, bool) {
 	if err := r.ensureRepo(); err != nil {
 		return "", false
 	}
-	gitDir := r.getGitDir(context.Background())
+	gitDir := r.getGitDir(ctx)
 	if gitDir == "" {
 		return "", false
 	}
@@ -61,11 +61,11 @@ func (r *runner) readHeadBranch() (string, bool) {
 // Reports ok=false for anything other than a raw SHA (HEAD on a branch, an
 // unreadable file, malformed content). The caller then runs the real
 // command, so git stays the authority on every case except detached HEAD.
-func (r *runner) readHeadRevision() (string, bool) {
+func (r *runner) readHeadRevision(ctx context.Context) (string, bool) {
 	if err := r.ensureRepo(); err != nil {
 		return "", false
 	}
-	gitDir := r.getGitDir(context.Background())
+	gitDir := r.getGitDir(ctx)
 	if gitDir == "" {
 		return "", false
 	}
@@ -163,21 +163,21 @@ func (r *runner) GetAllBranchNames(ctx context.Context) ([]string, error) {
 }
 
 func (r *runner) CheckoutBranch(ctx context.Context, branchName string) error {
-	if _, err := r.RunGitCommandWithContext(ctx, "checkout", branchName); err != nil {
+	if _, err := r.Run(ctx, "checkout", branchName); err != nil {
 		return fmt.Errorf("failed to checkout branch %s: %w", branchName, err)
 	}
 	return nil
 }
 
 func (r *runner) CheckoutBranchForce(ctx context.Context, branchName string) error {
-	if _, err := r.RunGitCommandWithContext(ctx, "checkout", "--force", branchName); err != nil {
+	if _, err := r.Run(ctx, "checkout", "--force", branchName); err != nil {
 		return fmt.Errorf("failed to force-checkout branch %s: %w", branchName, err)
 	}
 	return nil
 }
 
 func (r *runner) CreateAndCheckoutBranch(ctx context.Context, branchName string) error {
-	if _, err := r.RunGitCommandWithContext(ctx, "checkout", "-b", branchName); err != nil {
+	if _, err := r.Run(ctx, "checkout", "-b", branchName); err != nil {
 		return fmt.Errorf("failed to create and checkout branch %s: %w", branchName, err)
 	}
 	return nil
@@ -192,7 +192,7 @@ func (r *runner) DeleteBranch(ctx context.Context, branchName string) error {
 
 	// `git update-ref -d` rewrites packed-refs correctly and is lenient when
 	// the ref doesn't exist.
-	if _, err := r.RunGitCommandWithContext(ctx, "update-ref", "-d", refName); err != nil {
+	if _, err := r.Run(ctx, "update-ref", "-d", refName); err != nil {
 		return fmt.Errorf("failed to delete branch %s: %w", branchName, err)
 	}
 
@@ -207,7 +207,7 @@ func (r *runner) DeleteBranch(ctx context.Context, branchName string) error {
 // Defense against silent failures in the underlying storage layer (e.g. when a
 // ref deletion appears to succeed but a packed entry survives).
 func (r *runner) verifyRefDeleted(ctx context.Context, refName string) error {
-	_, err := r.RunGitCommandRawWithContext(ctx, "show-ref", "--verify", "--quiet", refName)
+	_, err := r.RunRaw(ctx, "show-ref", "--verify", "--quiet", refName)
 	if err == nil {
 		return fmt.Errorf("ref %s still resolves after delete", refName)
 	}
@@ -215,7 +215,7 @@ func (r *runner) verifyRefDeleted(ctx context.Context, refName string) error {
 }
 
 func (r *runner) RenameBranch(ctx context.Context, oldName, newName string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "branch", "-m", oldName, newName)
+	_, err := r.Run(ctx, "branch", "-m", oldName, newName)
 	if err != nil {
 		return fmt.Errorf("failed to rename branch %s to %s: %w", oldName, newName, err)
 	}
@@ -228,11 +228,11 @@ func (r *runner) CreateBranch(ctx context.Context, branchName, startPoint string
 	// Existence check via show-ref — exit 0 means the ref exists; exit 1 means
 	// it doesn't (or anything else, which we map to "doesn't exist" for the
 	// purpose of the precondition).
-	if _, err := r.RunGitCommandRawWithContext(ctx, "show-ref", "--verify", "--quiet", refName); err == nil {
+	if _, err := r.RunRaw(ctx, "show-ref", "--verify", "--quiet", refName); err == nil {
 		return fmt.Errorf("failed to create branch %s from %s: branch already exists", branchName, startPoint)
 	}
 
-	sha, err := r.resolveRefSHA(startPoint)
+	sha, err := r.resolveRefSHA(ctx, startPoint)
 	if err != nil {
 		return fmt.Errorf("failed to create branch %s from %s: %w", branchName, startPoint, err)
 	}
@@ -240,38 +240,38 @@ func (r *runner) CreateBranch(ctx context.Context, branchName, startPoint string
 	// update-ref with no old-value asserts "ref must not exist"; combined with
 	// the show-ref pre-check above this is race-resistant enough for stackit's
 	// usage (single-process at a time on a given repo).
-	if _, err := r.RunGitCommandWithContext(ctx, "update-ref", refName, sha); err != nil {
+	if _, err := r.Run(ctx, "update-ref", refName, sha); err != nil {
 		return fmt.Errorf("failed to create branch %s from %s: %w", branchName, startPoint, err)
 	}
 	return nil
 }
 
 func (r *runner) CreateBranchForce(ctx context.Context, branchName, revision string) error {
-	sha, err := r.resolveRefSHA(revision)
+	sha, err := r.resolveRefSHA(ctx, revision)
 	if err != nil {
 		return err
 	}
 	refName := fmt.Sprintf("refs/heads/%s", branchName)
-	if _, err := r.RunGitCommandWithContext(ctx, "update-ref", refName, sha); err != nil {
+	if _, err := r.Run(ctx, "update-ref", refName, sha); err != nil {
 		return fmt.Errorf("failed to force-create branch %s at %s: %w", branchName, revision, err)
 	}
 	return nil
 }
 
 func (r *runner) CheckoutDetached(ctx context.Context, revision string) error {
-	if _, err := r.RunGitCommandWithContext(ctx, "checkout", "--detach", revision); err != nil {
+	if _, err := r.Run(ctx, "checkout", "--detach", revision); err != nil {
 		return fmt.Errorf("failed to checkout %s in detached state: %w", revision, err)
 	}
 	return nil
 }
 
 func (r *runner) UpdateBranchRef(ctx context.Context, branchName, revision string) error {
-	sha, err := r.resolveRefSHA(revision)
+	sha, err := r.resolveRefSHA(ctx, revision)
 	if err != nil {
 		return fmt.Errorf("failed to resolve revision %s: %w", revision, err)
 	}
 	refName := fmt.Sprintf("refs/heads/%s", branchName)
-	if _, err := r.RunGitCommandWithContext(ctx, "update-ref", "-m", "stackit: update branch ref", refName, sha); err != nil {
+	if _, err := r.Run(ctx, "update-ref", "-m", "stackit: update branch ref", refName, sha); err != nil {
 		return fmt.Errorf("failed to update branch ref: %w", err)
 	}
 	return nil
@@ -291,7 +291,7 @@ type BranchRefUpdate struct {
 
 func (r *runner) UpdateBranchRefCAS(ctx context.Context, update BranchRefUpdate) error {
 	branchName, revision, expectedOld := update.Branch, update.NewRevision, update.ExpectedOld
-	sha, err := r.resolveRefSHA(revision)
+	sha, err := r.resolveRefSHA(ctx, revision)
 	if err != nil {
 		return fmt.Errorf("failed to resolve revision %s: %w", revision, err)
 	}
@@ -309,7 +309,7 @@ func (r *runner) UpdateBranchRefCAS(ctx context.Context, update BranchRefUpdate)
 }
 
 func (r *runner) GetCurrentBranchOrSHA(ctx context.Context) (string, error) {
-	branch, err := r.GetCurrentBranch()
+	branch, err := r.GetCurrentBranch(ctx)
 	if err == nil {
 		return branch, nil
 	}
@@ -327,7 +327,7 @@ func (r *runner) GetCurrentBranchOrSHA(ctx context.Context) (string, error) {
 // either. Callers that care about squash merges (engine_branch_status.go's
 // deletion policy) consult PR metadata first and only fall back to this map.
 func (r *runner) GetMergedBranches(ctx context.Context, target string) (map[string]bool, error) {
-	out, err := r.RunGitCommandWithContext(ctx,
+	out, err := r.Run(ctx,
 		"for-each-ref",
 		"--format=%(refname:short)",
 		"--merged", target,
@@ -350,25 +350,15 @@ func (r *runner) GetMergedBranches(ctx context.Context, target string) (map[stri
 // allBranchHashes returns a map of local branch name → SHA via a single
 // `git for-each-ref` invocation.
 func (r *runner) allBranchHashes(ctx context.Context) (map[string]string, error) {
-	out, err := r.RunGitCommandWithContext(ctx,
-		"for-each-ref",
-		"--format=%(refname:short)%00%(objectname)",
-		"refs/heads/",
-	)
+	refs, err := r.forEachRef(ctx, []string{atomRefName + ":short", atomObjectName}, "refs/heads/")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list branches: %w", err)
 	}
-
-	branches := make(map[string]string)
-	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
-		if line == "" {
-			continue
+	branches := make(map[string]string, len(refs))
+	for _, ref := range refs {
+		if ref[1] != "" {
+			branches[ref[0]] = ref[1]
 		}
-		name, sha, ok := strings.Cut(line, "\x00")
-		if !ok || sha == "" {
-			continue
-		}
-		branches[name] = sha
 	}
 	return branches, nil
 }

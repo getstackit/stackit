@@ -6,13 +6,14 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // IsTrunk checks if a branch is the trunk
 func (e *engineImpl) IsTrunk(branch Branch) bool {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return branchName == e.trunk
@@ -20,16 +21,16 @@ func (e *engineImpl) IsTrunk(branch Branch) bool {
 
 // IsTracked checks if a branch is tracked (has a parent in metadata)
 func (e *engineImpl) IsTracked(branch Branch) bool {
-	e.ensureBranchSharedLoaded(branch.GetName())
+	e.ensureBranchSharedLoaded(branch.Name())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	state := e.readState(branch.GetName())
+	state := e.readState(branch.Name())
 	return state != nil && state.Parent != ""
 }
 
 // GetScope returns the scope for a branch, inheriting from parent if not set
 func (e *engineImpl) GetScope(branch Branch) Scope {
-	current := branch.GetName()
+	current := branch.Name()
 	visited := make(map[string]bool)
 	for !visited[current] {
 		visited[current] = true
@@ -64,10 +65,10 @@ func (e *engineImpl) GetScope(branch Branch) Scope {
 
 // IsLocked checks if a branch is locked
 func (e *engineImpl) IsLocked(branch Branch) bool {
-	e.ensureBranchSharedLoaded(branch.GetName())
+	e.ensureBranchSharedLoaded(branch.Name())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if state := e.readState(branch.GetName()); state != nil {
+	if state := e.readState(branch.Name()); state != nil {
 		return state.IsLocked()
 	}
 	return false
@@ -75,10 +76,10 @@ func (e *engineImpl) IsLocked(branch Branch) bool {
 
 // GetLockReason returns the reason why a branch is locked
 func (e *engineImpl) GetLockReason(branch Branch) LockReason {
-	e.ensureBranchSharedLoaded(branch.GetName())
+	e.ensureBranchSharedLoaded(branch.Name())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if state := e.readState(branch.GetName()); state != nil {
+	if state := e.readState(branch.Name()); state != nil {
 		return state.LockReason
 	}
 	return LockReasonNone
@@ -91,7 +92,7 @@ func (e *engineImpl) IsFrozen(branch Branch) bool {
 	e.ensureLocalLoaded()
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if state := e.readState(branch.GetName()); state != nil {
+	if state := e.readState(branch.Name()); state != nil {
 		return state.Frozen
 	}
 	return false
@@ -99,10 +100,10 @@ func (e *engineImpl) IsFrozen(branch Branch) bool {
 
 // GetBranchType returns the branch type for a branch
 func (e *engineImpl) GetBranchType(branch Branch) git.BranchType {
-	e.ensureBranchSharedLoaded(branch.GetName())
+	e.ensureBranchSharedLoaded(branch.Name())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if state := e.readState(branch.GetName()); state != nil {
+	if state := e.readState(branch.Name()); state != nil {
 		return state.BranchType
 	}
 	return ""
@@ -114,11 +115,11 @@ func (e *engineImpl) IsWorktreeAnchor(branch Branch) bool {
 }
 
 // SetBranchType sets the branch type for a branch
-func (e *engineImpl) SetBranchType(branch Branch, branchType git.BranchType) error {
+func (e *engineImpl) SetBranchType(ctx context.Context, branch Branch, branchType git.BranchType) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	// Read existing metadata
 	meta, err := e.readMetadata(branchName)
@@ -130,7 +131,7 @@ func (e *engineImpl) SetBranchType(branch Branch, branchType git.BranchType) err
 	meta = meta.WithBranchType(branchType)
 
 	// Write metadata
-	if err := e.writeMetadata(branchName, meta); err != nil {
+	if err := e.writeMetadata(ctx, branchName, meta); err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
 
@@ -144,11 +145,11 @@ func (e *engineImpl) SetBranchType(branch Branch, branchType git.BranchType) err
 
 // GetExplicitScope returns the explicit scope set for a branch (no inheritance)
 func (e *engineImpl) GetExplicitScope(branch Branch) Scope {
-	e.ensureBranchSharedLoaded(branch.GetName())
+	e.ensureBranchSharedLoaded(branch.Name())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	if state := e.readState(branch.GetName()); state != nil && state.HasScope() {
+	if state := e.readState(branch.Name()); state != nil && state.HasScope() {
 		return state.GetScope()
 	}
 	return Empty()
@@ -156,13 +157,13 @@ func (e *engineImpl) GetExplicitScope(branch Branch) Scope {
 
 // IsUpToDate checks if a branch is up to date with its parent
 // A branch is up to date if its parent revision matches the stored parent revision
-func (e *engineImpl) IsUpToDate(branch Branch) bool {
+func (e *engineImpl) IsUpToDate(ctx context.Context, branch Branch) bool {
 	if e.IsTrunk(branch) {
 		return true
 	}
 
 	e.mu.RLock()
-	state := e.readState(branch.GetName())
+	state := e.readState(branch.Name())
 	e.mu.RUnlock()
 
 	if state == nil {
@@ -174,7 +175,7 @@ func (e *engineImpl) IsUpToDate(branch Branch) bool {
 	}
 
 	// Get current parent revision.
-	parentRev, err := e.git.ReadRevisions(context.Background(), state.Parent).One()
+	parentRev, err := e.git.ReadRevisions(ctx, state.Parent).One()
 	if err != nil {
 		return false // Can't determine, assume needs restack
 	}
@@ -186,7 +187,7 @@ func (e *engineImpl) IsUpToDate(branch Branch) bool {
 // ReadBranchStatuses reads status facts for a group of branches.
 // Parent revisions are fetched in one batch. Missing metadata follows
 // IsUpToDate semantics.
-func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
+func (e *engineImpl) ReadBranchStatuses(ctx context.Context, branches Branches) BranchStatuses {
 	results := make(map[string]bool, branches.Len())
 	type pendingCheck struct {
 		parent      string
@@ -198,7 +199,7 @@ func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
 	e.mu.RLock()
 	trunk := e.trunk
 	for _, branch := range branches {
-		name := branch.GetName()
+		name := branch.Name()
 		if name == trunk {
 			results[name] = true
 			continue
@@ -229,7 +230,7 @@ func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
 
 	parents := slices.Sorted(maps.Keys(parentSet))
 
-	parentRevs, _ := e.git.ReadRevisions(context.Background(), parents...).ValuesAndErrors()
+	parentRevs, _ := e.git.ReadRevisions(ctx, parents...).ValuesAndErrors()
 	for name, check := range pending {
 		parentRev, ok := parentRevs[check.parent]
 		results[name] = ok && check.expectedRev == parentRev
@@ -242,10 +243,6 @@ func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
 // requested branches. It lists remote branch SHAs once and does not mutate
 // engine state.
 func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
 	results := make(map[string]BranchRemoteStatus, len(branches))
 	if len(branches) == 0 {
 		return results
@@ -254,7 +251,7 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 	branchNames := branches.Names()
 	localShas, _ := e.git.ReadRevisions(ctx, branchNames...).ValuesAndErrors()
 
-	remote := e.git.GetRemote()
+	remote := e.git.GetRemote(ctx)
 	remoteShas, err := e.git.FetchRemoteShas(ctx, remote)
 	if err != nil {
 		remoteShas = map[string]string{}
@@ -266,7 +263,7 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 	// set, so it must not be re-entered per worker.
 	var missingRefs []string
 	for _, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 		if remoteShas[branchName] == "" {
 			missingRefs = append(missingRefs, remote+"/"+branchName)
 		}
@@ -286,8 +283,8 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 		indexed[i] = indexedBranch{index: i, branch: b}
 	}
 
-	utils.Run(indexed, func(item indexedBranch) {
-		branchName := item.branch.GetName()
+	workpool.Run(indexed, func(item indexedBranch) {
+		branchName := item.branch.Name()
 		localSha := localShas[branchName]
 		remoteSha := remoteShas[branchName]
 		if remoteSha == "" {
@@ -313,7 +310,7 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 	})
 
 	for i, b := range branches {
-		results[b.GetName()] = statuses[i]
+		results[b.Name()] = statuses[i]
 	}
 
 	return results
@@ -328,14 +325,11 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 // fetched, fresh clone) it returns HasRemoteRef=false and AheadOrDiverged=false
 // so callers leave such repos unguarded.
 func (e *engineImpl) TrunkRemoteState(ctx context.Context) TrunkRemoteState {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	e.mu.RLock()
 	trunk := e.trunk
 	e.mu.RUnlock()
 
-	remote := e.git.GetRemote()
+	remote := e.git.GetRemote(ctx)
 	state := TrunkRemoteState{RemoteRef: remote + "/" + trunk}
 
 	remoteSha, err := e.git.ReadRevisions(ctx, "refs/remotes/"+remote+"/"+trunk).One()
@@ -400,7 +394,7 @@ func (e *engineImpl) IsBranchEmpty(ctx context.Context, branchName string) (bool
 // are content-addressed, so equal SHA ⇔ no diff). All branch and parent tree
 // SHAs are resolved in a single batched rev-parse rather than a `git diff` per
 // branch. Branches whose trees cannot be resolved are omitted from the result.
-func (e *engineImpl) BatchIsBranchEmpty(branchNames []string) BranchNameSet {
+func (e *engineImpl) BatchIsBranchEmpty(ctx context.Context, branchNames []string) BranchNameSet {
 	result := make(BranchNameSet, len(branchNames))
 	if len(branchNames) == 0 {
 		return result
@@ -434,7 +428,7 @@ func (e *engineImpl) BatchIsBranchEmpty(branchNames []string) BranchNameSet {
 		addRef(parents.Parent(name))
 	}
 
-	trees, _ := e.git.ReadRevisions(context.Background(), treeRefs...).ValuesAndErrors()
+	trees, _ := e.git.ReadRevisions(ctx, treeRefs...).ValuesAndErrors()
 
 	for _, name := range branchNames {
 		branchTree, ok1 := trees[name+"^{tree}"]
@@ -474,7 +468,7 @@ type deletionStatusInputs struct {
 }
 
 func (e *engineImpl) loadDeletionStatusInputs(ctx context.Context, branchNames []string) (*deletionStatusInputs, error) {
-	trunkName := e.Trunk().GetName()
+	trunkName := e.Trunk().Name()
 
 	// Collect all refs we need revisions for (branches + their parents)
 	refsToFetch := make([]string, 0, len(branchNames)*2+1)
@@ -482,9 +476,9 @@ func (e *engineImpl) loadDeletionStatusInputs(ctx context.Context, branchNames [
 	for _, name := range branchNames {
 		refsToFetch = append(refsToFetch, name)
 		branch := e.GetBranch(name)
-		parent := branch.GetParent()
+		parent := branch.Parent()
 		if parent != nil {
-			refsToFetch = append(refsToFetch, parent.GetName())
+			refsToFetch = append(refsToFetch, parent.Name())
 		}
 	}
 
@@ -601,13 +595,13 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 		return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}
 	}
 
-	parent := branch.GetParent()
+	parent := branch.Parent()
 	parentName := trunkName
 	if parent != nil {
-		parentName = parent.GetName()
+		parentName = parent.Name()
 	}
 
-	if parentRev, ok := e.planRev(revisions, parentName); ok && parentRev != "" {
+	if parentRev, ok := e.planRev(ctx, revisions, parentName); ok && parentRev != "" {
 		if empty, err := e.isDiffEmpty(ctx, parentRev, branchName); err == nil && empty {
 			return DeletionStatus{SafeToDelete: true, Reason: "empty", Kind: DeletionReasonEmptyWithPR}
 		}
@@ -617,8 +611,8 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 }
 
 // GetRemote returns the default remote name
-func (e *engineImpl) GetRemote() string {
-	return e.git.GetRemote()
+func (e *engineImpl) GetRemote(ctx context.Context) string {
+	return e.git.GetRemote(ctx)
 }
 
 // MissingRemoteBranches returns the subset of branchNames that no longer have a
@@ -634,7 +628,7 @@ func (e *engineImpl) MissingRemoteBranches(ctx context.Context, branchNames []st
 	if len(branchNames) == 0 {
 		return nil, nil
 	}
-	remote := e.GetRemote()
+	remote := e.GetRemote(ctx)
 
 	remoteShas, err := e.git.FetchRemoteShas(ctx, remote)
 	if err != nil {

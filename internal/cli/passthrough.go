@@ -10,6 +10,9 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+	sterrors "github.com/getstackit/stackit/internal/errors"
+
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/git"
@@ -76,8 +79,8 @@ var modifyingGitCommands = []string{
 
 // HandlePassthrough checks if the command should be passed through to git
 // and executes it if so. Returns true if the command was handled (and the program should exit).
-func HandlePassthrough(args []string) bool {
-	handled, _ := HandlePassthroughWithResult(args, PassthroughExitProcess, os.Stdout, os.Stderr)
+func HandlePassthrough(ctx context.Context, args []string) bool {
+	handled, _ := HandlePassthroughWithResult(ctx, args, PassthroughExitProcess, os.Stdout, os.Stderr)
 	return handled
 }
 
@@ -94,7 +97,7 @@ const (
 
 // HandlePassthroughWithResult is like HandlePassthrough but, with
 // PassthroughReturnError, returns an error instead of exiting.
-func HandlePassthroughWithResult(args []string, exitMode PassthroughExitMode, out, errWriter io.Writer) (bool, error) {
+func HandlePassthroughWithResult(ctx context.Context, args []string, exitMode PassthroughExitMode, out, errWriter io.Writer) (bool, error) {
 	exit := exitMode == PassthroughExitProcess
 	if len(args) < 2 {
 		return false, nil
@@ -132,20 +135,8 @@ func HandlePassthroughWithResult(args []string, exitMode PassthroughExitMode, ou
 				if cwd != "" {
 					runner = git.NewRunnerWithPath(cwd, nil)
 				}
-				if locked, frozen, branch := isCurrentBranchLockedOrFrozen(runner); locked || frozen {
-					var state, cmd string
-					switch {
-					case locked && frozen:
-						state = "locked and frozen"
-						cmd = "st unlock' and 'st unfreeze"
-					case locked:
-						state = "locked"
-						cmd = "st unlock"
-					case frozen:
-						state = "frozen"
-						cmd = "st unfreeze"
-					}
-					err := fmt.Errorf("branch %s is %s. Use '%s' to enable modifications", branch, state, cmd)
+				if modErr := currentBranchModificationError(ctx, runner); modErr != nil {
+					err := common.HandleCommandError(modErr)
 					if exit {
 						_, _ = fmt.Fprintf(errWriter, "Error: %v\n", err)
 						os.Exit(1)
@@ -192,23 +183,28 @@ func HandlePassthroughWithResult(args []string, exitMode PassthroughExitMode, ou
 	return false, nil
 }
 
-func isCurrentBranchLockedOrFrozen(runner git.Runner) (bool, bool, string) {
-	branch, err := runner.GetCurrentBranch()
+// currentBranchModificationError reports why the checked-out branch must not
+// be committed to (locked, frozen, or both), or nil when it may be.
+func currentBranchModificationError(ctx context.Context, runner git.Runner) *sterrors.BranchModificationError {
+	branch, err := runner.GetCurrentBranch(ctx)
 	if err != nil {
-		return false, false, ""
+		return nil //nolint:nilerr // no current branch (detached HEAD) means nothing to guard
 	}
 	branch = strings.TrimSpace(branch)
 
-	ctx := context.Background()
 	store := git.NewMetadataStore(runner)
 
-	meta, err := store.ReadMetadata(ctx, branch).Get(branch)
-	locked := err == nil && meta != nil && meta.GetLockReason().IsLocked()
-
+	lockReason := git.LockReasonNone
+	if meta, err := store.ReadMetadata(ctx, branch).Get(branch); err == nil && meta != nil {
+		lockReason = meta.GetLockReason()
+	}
 	localMeta, err := store.ReadLocalMetadata(ctx, branch).Get(branch)
 	frozen := err == nil && localMeta != nil && localMeta.Frozen
 
-	return locked, frozen, branch
+	if !lockReason.IsLocked() && !frozen {
+		return nil
+	}
+	return sterrors.NewBranchModificationError(branch, lockReason, frozen)
 }
 
 func newAddCmd() *cobra.Command {

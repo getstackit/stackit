@@ -2,6 +2,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -205,13 +206,13 @@ func (e *engineImpl) TakeSnapshot(ctx context.Context, opts SnapshotOptions) err
 	currentBranch := e.currentBranch
 
 	// Get all branch SHAs in one git rev-parse call; misses (deleted branches) are omitted.
-	branchSHAs, _ := e.git.ReadRevisions(context.Background(), e.state.branches...).ValuesAndErrors()
+	branchSHAs, _ := e.git.ReadRevisions(ctx, e.state.branches...).ValuesAndErrors()
 	if branchSHAs == nil {
 		branchSHAs = make(map[string]string)
 	}
 
 	// Get all metadata ref SHAs
-	metadataRefs, err := e.metadata.ListMetadata()
+	metadataRefs, err := e.metadata.ListMetadata(ctx)
 	if err != nil {
 		// If we can't get metadata refs, continue with empty map
 		metadataRefs = make(map[string]string)
@@ -407,13 +408,7 @@ func (e *engineImpl) enforceMaxStackDepth(ctx context.Context) error {
 
 	// Sort by filename (which includes timestamp, so chronological)
 	slices.SortFunc(snapshots, func(a, b os.DirEntry) int {
-		if a.Name() < b.Name() {
-			return -1
-		}
-		if a.Name() > b.Name() {
-			return 1
-		}
-		return 0
+		return strings.Compare(a.Name(), b.Name())
 	})
 
 	// Delete oldest snapshots
@@ -454,8 +449,8 @@ func (e *engineImpl) enforceMaxStackDepth(ctx context.Context) error {
 	return nil
 }
 
-// GetSnapshots returns a list of all available snapshots, sorted by time (newest first)
-func (e *engineImpl) GetSnapshots() ([]SnapshotInfo, error) {
+// Snapshots returns a list of all available snapshots, sorted by time (newest first)
+func (e *engineImpl) Snapshots() ([]SnapshotInfo, error) {
 	dir := getUndoDir(e.repoRoot)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -508,20 +503,8 @@ func (e *engineImpl) GetSnapshots() ([]SnapshotInfo, error) {
 
 	// Sort by timestamp (newest first)
 	slices.SortFunc(snapshots, func(a, b SnapshotInfo) int {
-		if !a.Timestamp.Equal(b.Timestamp) {
-			if a.Timestamp.After(b.Timestamp) {
-				return -1 // a is newer, should come first
-			}
-			return 1 // b is newer
-		}
-		// Tie-breaker: use ID (filename) descending
-		if a.ID > b.ID {
-			return -1
-		}
-		if a.ID < b.ID {
-			return 1
-		}
-		return 0
+		// Newest first; ties break on ID (filename), also descending.
+		return cmp.Or(b.Timestamp.Compare(a.Timestamp), strings.Compare(b.ID, a.ID))
 	})
 
 	return snapshots, nil
@@ -624,14 +607,14 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 		if branchName == e.currentBranch {
 			// Access trunk directly while holding the lock (avoid deadlock from e.Trunk() trying to acquire RLock)
 			trunkBranch := NewBranch(trunkName, e)
-			if err := e.git.CheckoutBranch(ctx, trunkBranch.GetName()); err != nil {
+			if err := e.git.CheckoutBranch(ctx, trunkBranch.Name()); err != nil {
 				return fmt.Errorf("failed to switch to trunk before deleting branch: %w", err)
 			}
 			e.currentBranch = trunkName
 		}
 		// Delete the branch
 		branch := e.GetBranch(branchName)
-		if err := e.git.DeleteBranch(ctx, branch.GetName()); err != nil {
+		if err := e.git.DeleteBranch(ctx, branch.Name()); err != nil {
 			// Log but continue - branch might not exist or might be protected
 			continue
 		}
@@ -661,7 +644,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 	}
 
 	// Delete metadata refs that were created after the snapshot (separate operation)
-	currentMetadataRefs, err := e.metadata.ListMetadata()
+	currentMetadataRefs, err := e.metadata.ListMetadata(ctx)
 	if err == nil {
 		var toDelete []string
 		for branchName := range currentMetadataRefs {
@@ -675,7 +658,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 	}
 
 	// Rebuild engine state
-	if err := e.rebuildInternal(refreshCurrentBranchFromGit); err != nil {
+	if err := e.rebuildInternal(ctx, refreshCurrentBranchFromGit); err != nil {
 		return fmt.Errorf("failed to rebuild engine after restore: %w", err)
 	}
 
@@ -688,12 +671,12 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 			branch := e.GetBranch(snapshot.CurrentBranch)
 			// If we are already on this branch, checkout might not update the working directory
 			// after we've updated the ref. Use reset --hard to be sure.
-			current, _ := e.git.GetCurrentBranch()
-			if current == branch.GetName() {
+			current, _ := e.git.GetCurrentBranch(ctx)
+			if current == branch.Name() {
 				if err := e.git.HardReset(ctx, "HEAD"); err != nil {
 					return fmt.Errorf("failed to reset working directory: %w", err)
 				}
-			} else if err := e.git.CheckoutBranch(ctx, branch.GetName()); err == nil {
+			} else if err := e.git.CheckoutBranch(ctx, branch.Name()); err == nil {
 				e.currentBranch = snapshot.CurrentBranch
 			}
 			// If checkout fails, continue anyway - the restore already applied the refs,
@@ -702,7 +685,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 			// Branch was deleted, switch to trunk
 			// Access trunk directly while holding the lock (avoid deadlock from e.Trunk() trying to acquire RLock)
 			trunkBranch := NewBranch(e.trunk, e)
-			if err := e.git.CheckoutBranch(ctx, trunkBranch.GetName()); err != nil {
+			if err := e.git.CheckoutBranch(ctx, trunkBranch.Name()); err != nil {
 				return fmt.Errorf("failed to checkout trunk after restore: %w", err)
 			}
 			e.currentBranch = e.trunk

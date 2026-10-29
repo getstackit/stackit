@@ -2,6 +2,7 @@
 package submit
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -15,8 +16,8 @@ import (
 )
 
 // GetPRTitle gets the PR title, prompting if needed
-func GetPRTitle(prompter handler.TextInputPrompter, branch engine.Branch, editInline bool, existingTitle string, scope engine.Scope) (string, error) {
-	title := pr.GenerateTitle(branch, existingTitle, scope)
+func GetPRTitle(ctx context.Context, prompter handler.TextInputPrompter, branch engine.Branch, editInline bool, existingTitle string, scope engine.Scope) (string, error) {
+	title := pr.GenerateTitle(ctx, branch, existingTitle, scope)
 
 	if !editInline {
 		return title, nil
@@ -31,8 +32,8 @@ func GetPRTitle(prompter handler.TextInputPrompter, branch engine.Branch, editIn
 }
 
 // GetPRBody gets the PR body, prompting if needed
-func GetPRBody(branch engine.Branch, editInline bool, existingBody string) (string, error) {
-	body := pr.GenerateBody(branch, existingBody)
+func GetPRBody(ctx context.Context, branch engine.Branch, editInline bool, existingBody string) (string, error) {
+	body := pr.GenerateBody(ctx, branch, existingBody)
 
 	if !editInline {
 		return body, nil
@@ -69,7 +70,7 @@ func GetReviewersWithPrompt(prompter handler.TextInputPrompter, reviewersFlag st
 // PreparePRMetadata prepares PR metadata for a branch. current holds PR content
 // prefetched in bulk; a PR missing from it (or a nil map) is fetched directly.
 func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Context, current map[git.PRNumber]github.PRContent) (*PRMetadata, error) {
-	prInfo, _ := branch.GetPrInfo()
+	prInfo, _ := branch.PrInfo()
 	nav := ctx.Navigator()
 
 	metadata := &PRMetadata{
@@ -112,13 +113,13 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 	case metadata.Title == "" && metadata.Body == "" && !shouldEditTitle && !shouldEditBody:
 		// Neither field has a value yet and neither needs interactive editing,
 		// so derive both from a single commit read instead of one read per field.
-		title, body := branch.DefaultPRTitleAndBody()
+		title, body := branch.DefaultPRTitleAndBody(ctx.Context)
 		metadata.Title = scope.ApplyToTitle(title)
 		metadata.Body = body
 	default:
 		// Handle Title
 		if shouldEditTitle || metadata.Title == "" {
-			title, err := GetPRTitle(ctx.Prompts(), branch, shouldEditTitle, metadata.Title, scope)
+			title, err := GetPRTitle(ctx.Context, ctx.Prompts(), branch, shouldEditTitle, metadata.Title, scope)
 			if err != nil {
 				return nil, err
 			}
@@ -127,7 +128,7 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 
 		// Handle Body
 		if shouldEditBody || metadata.Body == "" {
-			body, err := GetPRBody(branch, shouldEditBody, metadata.Body)
+			body, err := GetPRBody(ctx.Context, branch, shouldEditBody, metadata.Body)
 			if err != nil {
 				return nil, err
 			}
@@ -189,7 +190,7 @@ func pendingPrInfo(branch engine.Branch, metadata *PRMetadata) *engine.PrInfo {
 		Title:   metadata.Title,
 		Body:    metadata.Body,
 		IsDraft: metadata.IsDraft,
-	}).WithLockReason(branch.GetLockReason())
+	}).WithLockReason(branch.LockReason())
 }
 
 // MetadataOptions contains options for PR metadata collection
@@ -223,11 +224,11 @@ type PRMetadata struct {
 // isParentPRDraft returns true if the branch's parent has a draft PR.
 // Returns false for trunk-parented branches, branches with no parent PR, or on errors.
 func isParentPRDraft(branch engine.Branch) bool {
-	parent := branch.GetParent()
+	parent := branch.Parent()
 	if parent == nil {
 		return false
 	}
-	prInfo, err := parent.GetPrInfo()
+	prInfo, err := parent.PrInfo()
 	if err != nil || prInfo == nil {
 		return false
 	}

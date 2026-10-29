@@ -7,13 +7,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Strategy defines how PRs in the stack should be merged
@@ -179,13 +180,13 @@ type CollectedBranches struct {
 // mergePlanEngine lists exactly the engine methods merge planning calls.
 type mergePlanEngine interface {
 	Trunk() engine.Branch
-	CurrentBranch() *engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
 	GetBranch(branchName string) engine.Branch
 	AllBranches() engine.Branches
 	GetScope(branch engine.Branch) engine.Scope
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
-	SortBranchesTopologically(branches engine.Branches) engine.Branches
-	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+	SortBranchesTopologically(ctx context.Context, branches engine.Branches) engine.Branches
+	BatchReadMetadataRaw(ctx context.Context, branchNames []string) (engine.MetaMap, map[string]error)
 	ReadBranchRemoteStatuses(ctx context.Context, branches engine.Branches) engine.BranchRemoteStatuses
 }
 
@@ -213,7 +214,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 			return nil, fmt.Errorf("branch %s is not tracked by stackit", opts.TargetBranch)
 		}
 	} else {
-		cb := eng.CurrentBranch()
+		cb := eng.CurrentBranch(ctx)
 		if cb == nil {
 			return nil, errors.ErrNotOnBranch
 		}
@@ -224,7 +225,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	var planCurrentBranch string
 
 	// Build a StackGraph for efficient traversals
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	if opts.Scope != "" {
 		// Collect all branches with the specified scope
@@ -239,7 +240,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 		}
 
 		// Sort branches topologically so we merge in correct order (bottom to top)
-		scopeBranches = eng.SortBranchesTopologically(scopeBranches)
+		scopeBranches = eng.SortBranchesTopologically(ctx, scopeBranches)
 		allBranches = scopeBranches.Names()
 		// In scope mode, the "current branch" for the plan is the top-most branch in the scope
 		planCurrentBranch = allBranches[len(allBranches)-1]
@@ -250,7 +251,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 
 		// Check if target branch is tracked
 		if !targetBranch.IsTracked() {
-			return nil, fmt.Errorf("branch %s is not tracked by stackit", targetBranch.GetName())
+			return nil, fmt.Errorf("branch %s is not tracked by stackit", targetBranch.Name())
 		}
 
 		// 2. Collect branches from trunk to target
@@ -262,11 +263,11 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 		allBranches = make([]string, 0, len(parentBranches)+1)
 		for _, branch := range parentBranches {
 			if !branch.IsTrunk() {
-				allBranches = append(allBranches, branch.GetName())
+				allBranches = append(allBranches, branch.Name())
 			}
 		}
-		allBranches = append(allBranches, targetBranch.GetName())
-		planCurrentBranch = targetBranch.GetName()
+		allBranches = append(allBranches, targetBranch.Name())
+		planCurrentBranch = targetBranch.Name()
 	}
 
 	// 3. Identify upstack branches that need restacking (moved up for batch loading)
@@ -278,8 +279,8 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	if opts.Scope != "" {
 		// In scope mode, find all tracked branches with the scope that are not being merged
 		for _, branch := range eng.AllBranches() {
-			if branch.IsTracked() && eng.GetScope(branch).String() == opts.Scope && !mergedMap[branch.GetName()] {
-				upstackBranches = append(upstackBranches, branch.GetName())
+			if branch.IsTracked() && eng.GetScope(branch).String() == opts.Scope && !mergedMap[branch.Name()] {
+				upstackBranches = append(upstackBranches, branch.Name())
 			}
 		}
 	} else {
@@ -289,15 +290,15 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 		// Only get upstack of the current branch (the top of the stack being merged)
 		upstack := graph.Range(eng.GetBranch(planCurrentBranch), engine.StackRange{RecursiveChildren: true})
 		for _, ub := range upstack {
-			if ub.IsTracked() && !mergedMap[ub.GetName()] {
-				upstackBranches = append(upstackBranches, ub.GetName())
+			if ub.IsTracked() && !mergedMap[ub.Name()] {
+				upstackBranches = append(upstackBranches, ub.Name())
 			}
 		}
 	}
 
 	// 4. Batch fetch metadata for all involved branches
 	involvedBranches := slices.Concat(allBranches, upstackBranches)
-	allMeta, _ := eng.BatchReadMetadataRaw(involvedBranches)
+	allMeta, _ := eng.BatchReadMetadataRaw(ctx, involvedBranches)
 
 	remoteCtx, cancelRemote := app.WithRemoteOperationTimeout(ctx)
 	defer cancelRemote()
@@ -330,7 +331,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 		indices[i] = i
 	}
 
-	utils.RunWithWorkers(indices, github.MaxGitHubConcurrency, func(idx int) {
+	workpool.RunN(indices, github.MaxGitHubConcurrency, func(idx int) {
 		name := allBranches[idx]
 
 		// Get PR info from batch-loaded metadata
@@ -424,7 +425,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	// Pre-flight check: Check if trunk is in sync with remote
 	trunk := eng.Trunk()
 	if remoteStatuses.ForBranch(trunk).Diverged() {
-		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Trunk branch %s has diverged from remote. You may need to sync it manually or use --force during merge.", trunk.GetName()))
+		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Trunk branch %s has diverged from remote. You may need to sync it manually or use --force during merge.", trunk.Name()))
 	}
 
 	for i := range allBranches {
@@ -452,13 +453,13 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	}
 
 	for _, ancestor := range allBranches {
-		if ancestor == eng.Trunk().GetName() {
+		if ancestor == eng.Trunk().Name() {
 			continue
 		}
 		children := graph.ChildBranches(eng.GetBranch(ancestor))
 		for _, child := range children {
-			if !mergedSet[child.GetName()] {
-				validation.Infos = append(validation.Infos, fmt.Sprintf("Branch %s is not part of this merge and will be moved to %s", child.GetName(), eng.Trunk().GetName()))
+			if !mergedSet[child.Name()] {
+				validation.Infos = append(validation.Infos, fmt.Sprintf("Branch %s is not part of this merge and will be moved to %s", child.Name(), eng.Trunk().Name()))
 			}
 		}
 	}
@@ -476,7 +477,7 @@ func formatBranchRemoteDifference(status engine.BranchRemoteStatus) string {
 		return "(branch not found locally)"
 	}
 
-	localShort := utils.ShortRevision(status.LocalSha, 0)
+	localShort := git.ShortRevision(status.LocalSha, 0)
 	if status.RemoteSha == "" {
 		return fmt.Sprintf("local: %s (branch not found on remote)", localShort)
 	}
@@ -484,7 +485,7 @@ func formatBranchRemoteDifference(status engine.BranchRemoteStatus) string {
 		return ""
 	}
 
-	remoteShort := utils.ShortRevision(status.RemoteSha, 0)
+	remoteShort := git.ShortRevision(status.RemoteSha, 0)
 	switch {
 	case status.Behind():
 		return fmt.Sprintf("local is behind remote (local: %s, remote: %s)", localShort, remoteShort)

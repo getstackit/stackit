@@ -7,7 +7,6 @@ import (
 	"github.com/getstackit/stackit/internal/actions/fold"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
-	_ "github.com/getstackit/stackit/internal/demo" // Register demo engine factory
 )
 
 // NewFoldCmd creates the fold command

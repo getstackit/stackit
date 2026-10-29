@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -19,7 +18,7 @@ func TestReadCommitInfo(t *testing.T) {
 	require.NoError(t, scene.Repo.RunGitCommand("tag", "branch1", "main"))
 	logger := &traceCaptureLogger{}
 	runner := git.NewRunnerWithPath(scene.Dir, logger)
-	_, err := runner.RunGitCommandWithEnv(t.Context(), []string{
+	_, err := runner.RunWithEnv(t.Context(), []string{
 		"GIT_AUTHOR_NAME=Renée Example", "GIT_AUTHOR_EMAIL=author@example.com",
 		"GIT_AUTHOR_DATE=2026-06-02T09:30:00+05:30",
 	}, "commit", "--amend", "--no-edit", "--reset-author")
@@ -31,9 +30,9 @@ func TestReadCommitInfo(t *testing.T) {
 	require.Len(t, got.Values(), 4)
 	require.ErrorContains(t, got.Failures()["missing"], "commit not found")
 	for ref, info := range got.Values() {
-		wantDate, err := runner.RunGitCommandWithContext(t.Context(), "log", "-1", "--format=%aI", ref)
+		wantDate, err := runner.Run(t.Context(), "log", "-1", "--format=%aI", ref)
 		require.NoError(t, err)
-		wantAuthor, err := runner.RunGitCommandWithContext(t.Context(), "log", "-1", "--format=%an", ref)
+		wantAuthor, err := runner.Run(t.Context(), "log", "-1", "--format=%an", ref)
 		require.NoError(t, err)
 		require.Equal(t, wantDate, info.Date.Format(time.RFC3339))
 		require.Equal(t, wantAuthor, info.Author)
@@ -41,7 +40,7 @@ func TestReadCommitInfo(t *testing.T) {
 	require.Equal(t, got.Values()["HEAD"], got.Values()["refs/heads/branch1"])
 	require.Equal(t, got.Values()["main"], got.Values()["refs/tags/branch1"])
 	require.Empty(t, runner.ReadCommitInfo(t.Context()).Values())
-	blob, err := git.One(runner.CreateBlobs(context.Background(), "not a commit"))
+	blob, err := git.One(runner.CreateBlobs(t.Context(), "not a commit"))
 	require.NoError(t, err)
 	mixed := runner.ReadCommitInfo(t.Context(), blob, "HEAD")
 	require.Contains(t, mixed.Values(), "HEAD")
@@ -60,7 +59,7 @@ func TestGetRemoteRevision_UsesConfiguredRemote(t *testing.T) {
 	require.NoError(t, scene.Repo.RunGitCommand("branch", "upstream/main", mainSHA))
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	got, err := runner.ReadRevisions(context.Background(), runner.GetRemote()+"/"+"main").One()
+	got, err := runner.ReadRevisions(t.Context(), runner.GetRemote(t.Context())+"/"+"main").One()
 	require.NoError(t, err)
 	require.Equal(t, mainSHA, got)
 }

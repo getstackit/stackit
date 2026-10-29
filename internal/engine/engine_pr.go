@@ -11,7 +11,7 @@ import (
 
 // GetPrInfo returns PR information for a branch
 func (e *engineImpl) GetPrInfo(branch Branch) (*PrInfo, error) {
-	meta, err := e.readMetadata(branch.GetName())
+	meta, err := e.readMetadata(branch.Name())
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func NewPrInfoFromMeta(meta *git.Meta) *PrInfo {
 
 // GetMergedDownstack returns the merged downstack history for a branch
 func (e *engineImpl) GetMergedDownstack(branch Branch) []git.MergedParent {
-	meta, err := e.readMetadata(branch.GetName())
+	meta, err := e.readMetadata(branch.Name())
 	if err != nil {
 		return nil
 	}
@@ -59,7 +59,7 @@ func (e *engineImpl) GetMergedDownstack(branch Branch) []git.MergedParent {
 // UpsertPrInfo updates or creates PR information for a branch with retry logic
 // for concurrent modification resilience.
 func (e *engineImpl) UpsertPrInfo(ctx context.Context, branch Branch, prInfo *PrInfo) error {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	return e.WithRetry(ctx, func() error {
 		tx := e.BeginTx(fmt.Sprintf("upsert PR info: %s", branchName))
@@ -170,7 +170,7 @@ func (e *engineImpl) BatchGetPRSubmissionStatus(ctx context.Context, branches Br
 	if remoteStatuses == nil {
 		remoteStatuses = BranchRemoteStatuses{}
 		for _, branch := range branches {
-			prInfo := NewPrInfoFromMeta(metas[branch.GetName()])
+			prInfo := NewPrInfoFromMeta(metas[branch.Name()])
 			if prInfo != nil && prInfo.Number() != nil {
 				remoteStatuses = e.ReadBranchRemoteStatuses(ctx, branches)
 				break
@@ -185,7 +185,7 @@ func (e *engineImpl) BatchGetPRSubmissionStatus(ctx context.Context, branches Br
 
 	results := make(map[string]PRSubmissionStatus, len(branches))
 	for _, branch := range branches {
-		name := branch.GetName()
+		name := branch.Name()
 		results[name] = e.prSubmissionStatus(branch, metas[name], localMetas.Get(name), remoteStatuses.ForBranch(branch))
 	}
 	return results, nil
@@ -198,7 +198,7 @@ func (e *engineImpl) BatchGetPRSubmissionStatus(ctx context.Context, branches Br
 func (e *engineImpl) batchReadPrMetas(branches Branches) (MetaMap, error) {
 	branchNames := make([]string, len(branches))
 	for i, b := range branches {
-		branchNames[i] = b.GetName()
+		branchNames[i] = b.Name()
 	}
 	metas, errs := e.batchReadMetadata(branchNames)
 	for _, name := range branchNames {
@@ -220,7 +220,7 @@ func (e *engineImpl) prSubmissionStatus(branch Branch, meta *git.Meta, localMeta
 	if parentBranch == nil {
 		parentBranchName = e.trunk
 	} else {
-		parentBranchName = parentBranch.GetName()
+		parentBranchName = parentBranch.Name()
 	}
 
 	if prInfo == nil || prInfo.Number() == nil {
@@ -277,7 +277,7 @@ func (e *engineImpl) prTitleNeedsUpdate(branch Branch, prInfo *PrInfo) bool {
 // GetNavigationCommentID returns the cached navigation comment ID for a branch.
 // Returns 0 if no comment ID is cached.
 func (e *engineImpl) GetNavigationCommentID(branch Branch) (int64, error) {
-	localMeta, err := e.readLocalMetadata(branch.GetName())
+	localMeta, err := e.readLocalMetadata(branch.Name())
 	if err != nil {
 		return 0, err
 	}
@@ -288,25 +288,25 @@ func (e *engineImpl) GetNavigationCommentID(branch Branch) (int64, error) {
 }
 
 // SetNavigationCommentID caches a navigation comment ID for a branch.
-func (e *engineImpl) SetNavigationCommentID(branch Branch, commentID int64) error {
+func (e *engineImpl) SetNavigationCommentID(ctx context.Context, branch Branch, commentID int64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	localMeta, err := e.readLocalMetadata(branch.GetName())
+	localMeta, err := e.readLocalMetadata(branch.Name())
 	if err != nil {
 		localMeta = &git.LocalMeta{}
 	}
 
 	localMeta.NavigationCommentID = &commentID
-	return e.writeLocalMetadata(branch.GetName(), localMeta)
+	return e.writeLocalMetadata(ctx, branch.Name(), localMeta)
 }
 
 // ClearNavigationCommentID removes the cached navigation comment ID for a branch.
-func (e *engineImpl) ClearNavigationCommentID(branch Branch) error {
+func (e *engineImpl) ClearNavigationCommentID(ctx context.Context, branch Branch) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	localMeta, err := e.readLocalMetadata(branch.GetName())
+	localMeta, err := e.readLocalMetadata(branch.Name())
 	if err != nil {
 		return nil // Nothing to clear if we can't read
 	}
@@ -316,5 +316,5 @@ func (e *engineImpl) ClearNavigationCommentID(branch Branch) error {
 	}
 
 	localMeta.NavigationCommentID = nil
-	return e.writeLocalMetadata(branch.GetName(), localMeta)
+	return e.writeLocalMetadata(ctx, branch.Name(), localMeta)
 }

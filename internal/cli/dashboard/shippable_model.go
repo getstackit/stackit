@@ -373,6 +373,7 @@ func (m *shippableModel) updateSelectionCache() {
 // rebuildCache rebuilds all cached render data.
 // Call this after stacks are updated (on refresh).
 func (m *shippableModel) rebuildCache() {
+	ctx := m.ctx.Context
 	// Initialize maps
 	m.cache.stackTitles = make(map[string]string)
 	m.cache.stackDescriptions = make(map[string]*git.StackDescription)
@@ -383,8 +384,8 @@ func (m *shippableModel) rebuildCache() {
 	// Determine which stack contains the currently checked-out branch
 	m.cache.currentBranch = ""
 	m.cache.currentStackRoot = ""
-	if current := m.engine.CurrentBranch(); current != nil {
-		m.cache.currentBranch = current.GetName()
+	if current := m.engine.CurrentBranch(m.ctx.Context); current != nil {
+		m.cache.currentBranch = current.Name()
 		for _, stack := range m.stacks {
 			if slices.Contains(stack.Stack.AllBranches, m.cache.currentBranch) {
 				m.cache.currentStackRoot = stack.RootBranch()
@@ -406,13 +407,13 @@ func (m *shippableModel) rebuildCache() {
 	allBranches := engine.Branches{}
 	for _, stack := range m.stacks {
 		for _, branchName := range stack.Stack.AllBranches {
-			if branch := m.engine.GetBranch(branchName); branch.GetName() != "" {
+			if branch := m.engine.GetBranch(branchName); branch.Name() != "" {
 				allBranches = allBranches.Append(branch)
 			}
 		}
 	}
-	stats := m.engine.BatchBranchStats(allBranches)
-	commits := m.engine.BatchCommits(allBranches)
+	stats := m.engine.BatchBranchStats(ctx, allBranches)
+	commits := m.engine.BatchCommits(ctx, allBranches)
 
 	for _, stack := range m.stacks {
 		rootBranch := stack.RootBranch()
@@ -423,12 +424,12 @@ func (m *shippableModel) rebuildCache() {
 		m.cache.stackTitles[rootBranch] = stack.DisplayTitle()
 
 		// Get stack description from metadata
-		if branch := m.engine.GetBranch(rootBranch); branch.GetName() != "" {
-			if desc := m.engine.GetStackDescription(branch); desc != nil && !desc.IsEmpty() {
+		if branch := m.engine.GetBranch(rootBranch); branch.Name() != "" {
+			if desc := m.engine.GetStackDescription(m.ctx.Context, branch); desc != nil && !desc.IsEmpty() {
 				m.cache.stackDescriptions[rootBranch] = desc
 			} else if stack.BranchCount() == 1 {
 				// For single-branch stacks without a description, use commit body
-				if body := branch.DefaultPRBody(); body != "" {
+				if body := branch.DefaultPRBody(ctx); body != "" {
 					m.cache.commitBodies[rootBranch] = strings.TrimSpace(body)
 				}
 			}
@@ -436,11 +437,11 @@ func (m *shippableModel) rebuildCache() {
 
 		for _, branchName := range stack.Stack.AllBranches {
 			branch := m.engine.GetBranch(branchName)
-			if branch.GetName() == "" {
+			if branch.Name() == "" {
 				continue
 			}
-			name := branch.GetName()
-			ann := tui.TreeAnnotation(stackview.BaseAnnotation(m.engine, branch, stats[name], stackview.AnnotationOptions{SkipCommitMessages: true}))
+			name := branch.Name()
+			ann := tui.TreeAnnotation(stackview.BaseAnnotation(ctx, m.engine, branch, stats[name], stackview.AnnotationOptions{SkipCommitMessages: true}))
 			if msgs := commits[name].Onelines(); msgs != nil {
 				ann.CommitMessages = msgs
 				ann.CommitCount = len(msgs)
@@ -456,7 +457,7 @@ func (m *shippableModel) rebuildCache() {
 
 	// Build a single tree renderer that can be reused
 	// This avoids rebuilding the stack graph on every render
-	m.cache.treeRenderer = tui.NewStackTreeRenderer(m.engine)
+	m.cache.treeRenderer = tui.NewStackTreeRenderer(m.ctx.Context, m.engine)
 
 	// Update selection cache
 	m.updateSelectionCache()

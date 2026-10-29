@@ -12,7 +12,7 @@ func TestShippableStoriesRegistered(t *testing.T) {
 	shippableCount := 0
 	mergeFlowCount := 0
 
-	for _, s := range Stories {
+	for _, s := range AllStories() {
 		switch s.Category {
 		case "Shippable":
 			shippableCount++

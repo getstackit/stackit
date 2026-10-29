@@ -13,14 +13,14 @@ import (
 )
 
 // TestHardReset_HonorsCanceledContext locks in the cancellation behavior: the
-// reset path is wired to RunGitCommandWithContext so callers passing a canceled
+// reset path is wired to Run so callers passing a canceled
 // or deadline-exceeded ctx can interrupt a long-running reset.
 func TestHardReset_HonorsCanceledContext(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	err := runner.HardReset(ctx, "HEAD")
@@ -39,7 +39,7 @@ func TestHardReset_DiscardsUncommittedChanges(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(tracked, []byte("dirty"), 0o600))
 
-	require.NoError(t, runner.HardReset(context.Background(), "HEAD"))
+	require.NoError(t, runner.HardReset(t.Context(), "HEAD"))
 
 	after, err := os.ReadFile(tracked)
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestSoftReset_PreservesWorkingTree(t *testing.T) {
 	before, err := os.ReadFile(tracked)
 	require.NoError(t, err)
 
-	require.NoError(t, runner.SoftReset(context.Background(), "HEAD~1"))
+	require.NoError(t, runner.SoftReset(t.Context(), "HEAD~1"))
 
 	after, err := os.ReadFile(tracked)
 	require.NoError(t, err)

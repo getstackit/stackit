@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -201,7 +203,7 @@ var ErrReorderCanceled = errors.New("reorder canceled")
 // RunReorderTUI runs the reorder TUI and returns the new order
 // trunk is displayed at the bottom but is not selectable or reorderable
 func RunReorderTUI(branches []string, trunk string) ([]string, error) {
-	if !IsTTY() {
+	if !term.IsInteractive() {
 		return nil, errors.New("RunReorderTUI called in non-interactive mode")
 	}
 	m := newReorderModel(branches, trunk)

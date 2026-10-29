@@ -1,7 +1,6 @@
 package fold
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -31,7 +30,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch2 is deleted
-		branches, err := s.Git.GetAllBranchNames(context.Background())
+		branches, err := s.Git.GetAllBranchNames(t.Context())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch2")
 
@@ -55,7 +54,7 @@ func TestFoldAction(t *testing.T) {
 				"branch2": "branch1",
 			})
 		s.Checkout("branch2")
-		branch2Before, err := s.Engine.GetBranch("branch2").GetRevision()
+		branch2Before, err := s.Engine.GetBranch("branch2").Revision(t.Context())
 		require.NoError(t, err)
 
 		worktreePath := filepath.Join(t.TempDir(), "parent")
@@ -66,7 +65,7 @@ func TestFoldAction(t *testing.T) {
 		require.Error(t, err)
 		require.ErrorContains(t, err, "failed to checkout parent branch")
 
-		branch2After, err := s.Engine.GetBranch("branch2").GetRevision()
+		branch2After, err := s.Engine.GetBranch("branch2").Revision(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, branch2Before, branch2After, "fold must not delete or rewrite its branch")
 		current, err := s.Scene.Repo.CurrentBranchName()
@@ -92,12 +91,12 @@ func TestFoldAction(t *testing.T) {
 
 		// Verify branch3's parent is now branch1
 		branchparent := s.Engine.GetBranch("branch3")
-		parent := branchparent.GetParent()
+		parent := branchparent.Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "branch1", parent.GetName())
+		require.Equal(t, "branch1", parent.Name())
 
 		// Verify branch2 is deleted
-		branches, err := s.Git.GetAllBranchNames(context.Background())
+		branches, err := s.Git.GetAllBranchNames(t.Context())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch2")
 	})
@@ -118,7 +117,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch1 is deleted
-		branches, err := s.Git.GetAllBranchNames(context.Background())
+		branches, err := s.Git.GetAllBranchNames(t.Context())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch1")
 
@@ -129,9 +128,9 @@ func TestFoldAction(t *testing.T) {
 
 		// Verify branch2's parent is now main
 		branchparent := s.Engine.GetBranch("branch2")
-		parent := branchparent.GetParent()
+		parent := branchparent.Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "main", parent.GetName())
+		require.Equal(t, "main", parent.Name())
 
 		// Verify branch2 contains both commits by checking log
 		logOutput, err := s.Scene.Repo.RunGitCommandAndGetOutput("log", "--oneline", "main..branch2")
@@ -157,21 +156,21 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch1 is deleted
-		branches, err := s.Git.GetAllBranchNames(context.Background())
+		branches, err := s.Git.GetAllBranchNames(t.Context())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch1")
 
 		// Verify branch3's parent is now branch2
 		branchparent := s.Engine.GetBranch("branch3")
-		parent := branchparent.GetParent()
+		parent := branchparent.Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "branch2", parent.GetName())
+		require.Equal(t, "branch2", parent.Name())
 
 		// Verify branch2's parent is now main
 		branchparent2 := s.Engine.GetBranch("branch2")
-		parent2 := branchparent2.GetParent()
+		parent2 := branchparent2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName())
+		require.Equal(t, "main", parent2.Name())
 	})
 
 	t.Run("fails when trying to fold trunk", func(t *testing.T) {
@@ -276,9 +275,9 @@ func TestFoldAction(t *testing.T) {
 
 		// Verify branch3's parent is now branch1
 		branchparent3 := s.Engine.GetBranch("branch3")
-		parent3 := branchparent3.GetParent()
+		parent3 := branchparent3.Parent()
 		require.NotNil(t, parent3)
-		require.Equal(t, "branch1", parent3.GetName())
+		require.Equal(t, "branch1", parent3.Name())
 
 		// Verify branch3 contains all commits (c1, c2, c3)
 		logOutput, err := s.Scene.Repo.RunGitCommandAndGetOutput("log", "--oneline", "main..branch3")
@@ -315,10 +314,10 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// branch3 should be deleted and branch4 should now be a child of branch2.
-		branches, err := s.Git.GetAllBranchNames(context.Background())
+		branches, err := s.Git.GetAllBranchNames(t.Context())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch3")
-		require.Equal(t, "branch2", s.Engine.GetBranch("branch4").GetParent().GetName())
+		require.Equal(t, "branch2", s.Engine.GetBranch("branch4").Parent().Name())
 
 		// branch2 should contain both branch3 commits after fold.
 		logBranch2, err := s.Scene.Repo.RunGitCommandAndGetOutput("log", "--oneline", "main..branch2")
@@ -445,7 +444,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch2 is deleted and we're on branch1
-		branches, _ := s.Git.GetAllBranchNames(context.Background())
+		branches, _ := s.Git.GetAllBranchNames(t.Context())
 		require.NotContains(t, branches, "branch2")
 		current, _ := s.Scene.Repo.CurrentBranchName()
 		require.Equal(t, "branch1", current)
@@ -464,7 +463,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify snapshot exists
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		require.NotEmpty(t, snapshots)
 		require.Equal(t, "fold", snapshots[0].Command)
@@ -483,7 +482,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify snapshot exists with --keep arg
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		require.NotEmpty(t, snapshots)
 		require.Equal(t, "fold", snapshots[0].Command)
@@ -515,7 +514,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch1 is deleted
-		branches, _ := s.Git.GetAllBranchNames(context.Background())
+		branches, _ := s.Git.GetAllBranchNames(t.Context())
 		require.NotContains(t, branches, "branch1")
 
 		// Verify we're on main
@@ -538,9 +537,9 @@ func TestFoldAction(t *testing.T) {
 		// Set different scopes on the branches
 		branch1 := s.Engine.GetBranch("branch1")
 		branch2 := s.Engine.GetBranch("branch2")
-		err := s.Engine.SetScope(context.Background(), branch1, engine.NewScope("PROJ-123"))
+		err := s.Engine.SetScope(t.Context(), branch1, engine.NewScope("PROJ-123"))
 		require.NoError(t, err)
-		err = s.Engine.SetScope(context.Background(), branch2, engine.NewScope("PROJ-456"))
+		err = s.Engine.SetScope(t.Context(), branch2, engine.NewScope("PROJ-456"))
 		require.NoError(t, err)
 
 		// Switch to branch2 and try to fold
@@ -562,7 +561,7 @@ func TestFoldAction(t *testing.T) {
 
 		s.Checkout("branch2")
 		branch2 := s.Engine.GetBranch("branch2")
-		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch2), engine.LockReasonUser)
+		_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch2), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		err = Action(s.Context, Options{Keep: false}, nil)
@@ -580,7 +579,7 @@ func TestFoldAction(t *testing.T) {
 
 		s.Checkout("branch2")
 		branch1 := s.Engine.GetBranch("branch1")
-		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch1), engine.LockReasonUser)
+		_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch1), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		err = Action(s.Context, Options{Keep: false}, nil)
@@ -598,7 +597,7 @@ func TestFoldAction(t *testing.T) {
 
 		s.Checkout("branch2")
 		branch2 := s.Engine.GetBranch("branch2")
-		_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch2), engine.BranchFrozen)
+		_, err := s.Engine.SetFrozen(t.Context(), engine.BranchesOf(branch2), engine.BranchFrozen)
 		require.NoError(t, err)
 
 		err = Action(s.Context, Options{Keep: false}, nil)
@@ -621,7 +620,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch2 still exists
-		branches, err := s.Git.GetAllBranchNames(context.Background())
+		branches, err := s.Git.GetAllBranchNames(t.Context())
 		require.NoError(t, err)
 		require.Contains(t, branches, "branch2")
 
@@ -632,7 +631,7 @@ func TestFoldAction(t *testing.T) {
 
 		// Verify branch1 parent is still main
 		branch1 := s.Engine.GetBranch("branch1")
-		require.Equal(t, "main", branch1.GetParent().GetName())
+		require.Equal(t, "main", branch1.Parent().Name())
 	})
 
 	t.Run("dry-run fails if branch is locked", func(t *testing.T) {
@@ -645,7 +644,7 @@ func TestFoldAction(t *testing.T) {
 
 		s.Checkout("branch2")
 		branch2 := s.Engine.GetBranch("branch2")
-		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch2), engine.LockReasonUser)
+		_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch2), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		// Dry-run should fail because branch is locked

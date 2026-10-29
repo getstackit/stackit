@@ -6,13 +6,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // GitHubSyncResult holds the results from GitHub PR info sync (network operation)
@@ -57,11 +58,11 @@ func syncGitHubPRInfo(remoteCtx context.Context, ctx *app.Context) (*GitHubSyncR
 	// delete local work; this only supplies GitHub's PR state to normal cleanup.
 	knownPRNumbers := make(map[string]git.PRNumber)
 	for _, branch := range allBranches {
-		prInfo, err := branch.GetPrInfo()
+		prInfo, err := branch.PrInfo()
 		if err != nil || prInfo == nil || prInfo.Number() == nil || *prInfo.Number() <= 0 {
 			continue
 		}
-		knownPRNumbers[branch.GetName()] = *prInfo.Number()
+		knownPRNumbers[branch.Name()] = *prInfo.Number()
 	}
 
 	// Sync PR info from GitHub (this is already parallelized internally)
@@ -94,7 +95,7 @@ func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAn
 		branch := nav.GetBranch(name)
 
 		lockReason := engine.LockReasonNone
-		if existing, err := branch.GetPrInfo(); err == nil && existing != nil {
+		if existing, err := branch.PrInfo(); err == nil && existing != nil {
 			lockReason = existing.LockReason()
 		}
 
@@ -131,7 +132,7 @@ func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAn
 
 	// Update PR body footers only for branches flagged as needing updates
 	if ctx.GitHub() != nil && result.RepoOwner != "" && result.RepoName != "" {
-		flaggedBranches := ctx.Engine.GetBranchesNeedingPRBodyUpdate()
+		flaggedBranches := ctx.Engine.BranchesNeedingPRBodyUpdate()
 		if len(flaggedBranches) > 0 {
 			updateMetaStart := time.Now()
 			// Emit progress events for each branch being updated
@@ -194,12 +195,12 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 		}
 
 		// Skip branches in dirty stacks
-		if dirtyAnchors.includes(ctx, branch.GetName()) {
+		if dirtyAnchors.includes(ctx, branch.Name()) {
 			continue
 		}
 
 		// Get the PR info we just fetched from GitHub
-		prInfo, ok := result.PRInfos[branch.GetName()]
+		prInfo, ok := result.PRInfos[branch.Name()]
 		if !ok || prInfo == nil || prInfo.Number == 0 {
 			// No PR for this branch
 			continue
@@ -213,7 +214,7 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 		}
 
 		pending = append(pending, baseUpdate{
-			branchName:      branch.GetName(),
+			branchName:      branch.Name(),
 			prNumber:        prInfo.Number,
 			oldBase:         prInfo.Base,
 			localParentName: localParentName,
@@ -224,7 +225,7 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 		mu      sync.Mutex
 		updated []string
 	)
-	utils.Run(pending, func(u baseUpdate) {
+	workpool.Run(pending, func(u baseUpdate) {
 		out.Debug("PR for %s has base %s, but local parent is %s. Updating GitHub PR base...",
 			u.branchName, u.oldBase, u.localParentName)
 
@@ -255,10 +256,10 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 // githubParentName skips hidden worktree anchors: they are local bookkeeping
 // branches and can never be valid GitHub PR bases.
 func githubParentName(nav engine.StackNavigator, branch engine.Branch) string {
-	parent := branch.GetParent()
+	parent := branch.Parent()
 	visited := make(map[string]bool)
 	for parent != nil {
-		name := parent.GetName()
+		name := parent.Name()
 		if visited[name] {
 			break
 		}
@@ -266,7 +267,7 @@ func githubParentName(nav engine.StackNavigator, branch engine.Branch) string {
 		if !parent.IsWorktreeAnchor() {
 			return name
 		}
-		parent = parent.GetParent()
+		parent = parent.Parent()
 	}
-	return nav.Trunk().GetName()
+	return nav.Trunk().Name()
 }

@@ -65,14 +65,14 @@ type branchInfoDebugLogger interface {
 
 // QueryBranchInfo gathers structured information for `stackit info`.
 func QueryBranchInfo(ctx context.Context, eng engine.Engine, opts BranchInfoQueryOptions, debug branchInfoDebugLogger) (BranchInfoResult, error) {
-	branchName, err := ResolveBranchName(eng, opts.BranchName)
+	branchName, err := ResolveBranchName(ctx, eng, opts.BranchName)
 	if err != nil {
 		return BranchInfoResult{}, err
 	}
 
 	branch := eng.GetBranch(branchName)
 	if !branch.IsTracked() && !branch.IsTrunk() {
-		if _, err := eng.GetRevision(branch); err != nil {
+		if _, err := eng.GetRevision(ctx, branch); err != nil {
 			return BranchInfoResult{}, fmt.Errorf("branch %s does not exist", branchName)
 		}
 		refreshRemoteMetadataForBranchInfo(ctx, eng, branchName, debug)
@@ -93,8 +93,8 @@ func refreshRemoteMetadataForBranchInfo(ctx context.Context, eng engine.Engine, 
 }
 
 func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName string, branch engine.Branch, opts BranchInfoQueryOptions) (BranchInfoResult, error) {
-	currentBranch := eng.CurrentBranch()
-	isCurrent := currentBranch != nil && branchName == currentBranch.GetName()
+	currentBranch := eng.CurrentBranch(ctx)
+	isCurrent := currentBranch != nil && branchName == currentBranch.Name()
 	isTrunk := branch.IsTrunk()
 
 	result := BranchInfoResult{
@@ -103,29 +103,29 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 		IsTrunk:        isTrunk,
 		IsLocked:       branch.IsLocked(),
 		IsFrozen:       branch.IsFrozen(),
-		NeedsRestack:   !isTrunk && !branch.IsBranchUpToDate(),
-		Scope:          branch.GetScope().String(),
-		Trunk:          eng.Trunk().GetName(),
+		NeedsRestack:   !isTrunk && !branch.IsBranchUpToDate(ctx),
+		Scope:          branch.Scope().String(),
+		Trunk:          eng.Trunk().Name(),
 		CommitMessages: []string{},
 		Children:       []string{},
 	}
 
-	commitDate, err := branch.GetCommitDate()
+	commitDate, err := branch.CommitDate(ctx)
 	if err == nil {
 		result.CommitDate = commitDate.Format(time.RFC3339)
 	}
 
-	if parent := branch.GetParent(); parent != nil {
-		result.Parent = parent.GetName()
+	if parent := branch.Parent(); parent != nil {
+		result.Parent = parent.Name()
 	}
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	for _, child := range graph.ChildBranches(branch) {
-		result.Children = append(result.Children, child.GetName())
+		result.Children = append(result.Children, child.Name())
 	}
 
 	if !isTrunk {
-		prInfo, _ := branch.GetPrInfo()
+		prInfo, _ := branch.PrInfo()
 		if prInfo != nil {
 			result.PR = &BranchInfoPR{
 				Number:  prInfo.Number(),
@@ -146,12 +146,12 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 
 	// Diff stats — resolved via the batched reader over a single-branch set,
 	// rather than a per-branch accessor.
-	diff := eng.BatchDiffStats(engine.BranchesOf(branch))[branchName]
+	diff := eng.BatchDiffStats(ctx, engine.BranchesOf(branch))[branchName]
 	result.DiffStats.Additions = diff.Added
 	result.DiffStats.Deletions = diff.Deleted
 	result.DiffStats.FilesChanged = diff.FilesChanged
 
-	stackDesc := eng.GetStackDescription(branch)
+	stackDesc := eng.GetStackDescription(ctx, branch)
 	if stackDesc != nil && !stackDesc.IsEmpty() {
 		result.StackTitle = stackDesc.Title
 		result.StackDescription = stackDesc.Description
@@ -174,7 +174,7 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 		var revisionErr error
 		if isTrunk {
 			baseRevision = branchName + "~"
-			branchRevision, revisionErr = branch.GetRevision()
+			branchRevision, revisionErr = branch.Revision(ctx)
 		}
 		if revisionErr == nil {
 			patchOutput, err := eng.ShowCommits(ctx, git.RevRange{Base: baseRevision, Head: branchRevision}, commitLogFormat)
@@ -186,9 +186,9 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 
 	if effectiveDiff {
 		if isTrunk {
-			headRevision, err := branch.GetRevision()
+			headRevision, err := branch.Revision(ctx)
 			if err == nil {
-				parentSHA, err := eng.GetCommitSHA(branchName, 1)
+				parentSHA, err := eng.GetCommitSHA(ctx, branchName, 1)
 				if err == nil {
 					diffOutput, err := eng.ShowDiff(ctx, git.RevRange{Base: parentSHA, Head: headRevision}, diffFormat)
 					if err == nil {

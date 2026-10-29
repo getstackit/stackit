@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -34,7 +33,7 @@ func TestGetRepoInfo(t *testing.T) {
 			scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 			require.NoError(t, scene.Repo.RunGitCommand("config", "remote.origin.url", tt.url))
 
-			got, err := git.NewRunnerWithPath(scene.Dir, nil).GetRepoInfo(context.Background())
+			got, err := git.NewRunnerWithPath(scene.Dir, nil).GetRepoInfo(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, tt.want, got)
 		})
@@ -43,7 +42,7 @@ func TestGetRepoInfo(t *testing.T) {
 	t.Run("returns zero value for missing remote", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
-		got, err := git.NewRunnerWithPath(scene.Dir, nil).GetRepoInfo(context.Background())
+		got, err := git.NewRunnerWithPath(scene.Dir, nil).GetRepoInfo(t.Context())
 		require.NoError(t, err)
 		require.False(t, got.IsHosted())
 	})

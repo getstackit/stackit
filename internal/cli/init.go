@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/spf13/cobra"
 
 	initaction "github.com/getstackit/stackit/internal/actions/init"
@@ -27,7 +29,7 @@ type cliInitHandler struct {
 }
 
 func (h *cliInitHandler) SelectTrunk(_ context.Context, branchNames []string, inferredTrunk string) (string, error) {
-	interactive := !h.noInteractive && tui.IsTTY()
+	interactive := !h.noInteractive && term.IsInteractive()
 	if !interactive {
 		if inferredTrunk != "" {
 			return inferredTrunk, nil
@@ -55,7 +57,7 @@ func (h *cliInitHandler) SelectTrunk(_ context.Context, branchNames []string, in
 	return selected, nil
 }
 
-func (h *cliInitHandler) OnSuccess(result initaction.Result) {
+func (h *cliInitHandler) OnSuccess(ctx context.Context, result initaction.Result) {
 	trunkName, wasInitialized, isReset := result.Trunk, result.WasInitialized, result.Reset
 	splog := output.NewConsoleOutput(h.writer, false)
 
@@ -83,14 +85,14 @@ func (h *cliInitHandler) OnSuccess(result initaction.Result) {
 	splog.Newline()
 	splog.Info("Run '%s' to change these settings.", style.ColorCyan("stackit config"))
 
-	if !h.noInteractive && tui.IsTTY() {
-		if _, err := rerere.EnsureEnabled(h.runner, true, nil); err != nil {
+	if !h.noInteractive && term.IsInteractive() {
+		if _, err := rerere.EnsureEnabled(ctx, h.runner, true, nil); err != nil {
 			splog.Warn("Failed to enable git rerere: %v", err)
 		}
 	}
 
 	// Offer interactive integration installation
-	if !h.noInteractive && tui.IsTTY() {
+	if !h.noInteractive && term.IsInteractive() {
 		h.offerIntegrations(splog)
 	} else {
 		// Non-interactive: just show hints

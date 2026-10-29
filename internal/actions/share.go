@@ -31,13 +31,13 @@ type ShareOptions struct {
 func ShareAction(ctx *app.Context, opts ShareOptions) error {
 	eng := ctx.Engine
 
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	branchName := opts.BranchName
 	if branchName == "" {
 		if currentBranch == nil {
 			return errors.ErrNotOnBranch
 		}
-		branchName = currentBranch.GetName()
+		branchName = currentBranch.Name()
 	}
 
 	branchObj := eng.GetBranch(branchName)
@@ -50,7 +50,7 @@ func ShareAction(ctx *app.Context, opts ShareOptions) error {
 
 	currentName := ""
 	if currentBranch != nil {
-		currentName = currentBranch.GetName()
+		currentName = currentBranch.Name()
 	}
 
 	marker := opts.Marker
@@ -58,7 +58,7 @@ func ShareAction(ctx *app.Context, opts ShareOptions) error {
 		marker = DefaultShareMarker
 	}
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	base := eng.GetBranch(shareStackBase(eng, branchName))
 
 	var sb strings.Builder
@@ -86,11 +86,11 @@ func ShareAction(ctx *app.Context, opts ShareOptions) error {
 // of the visible stack.
 func shareStackBase(eng engine.Engine, branchName string) string {
 	branch := eng.GetBranch(branchName)
-	parent := branch.GetParent()
+	parent := branch.Parent()
 	if parent == nil || parent.IsTrunk() {
 		return branchName
 	}
-	return shareStackBase(eng, parent.GetName())
+	return shareStackBase(eng, parent.Name())
 }
 
 // shareLeaf renders a single branch as a Slack mrkdwn bullet, indented by depth.
@@ -99,15 +99,15 @@ func shareLeaf(branch engine.Branch, depth int, currentName, marker string) stri
 		prNumber       *git.PRNumber
 		prTitle, prURL string
 	)
-	if prInfo, err := branch.GetPrInfo(); err == nil && prInfo != nil {
+	if prInfo, err := branch.PrInfo(); err == nil && prInfo != nil {
 		prNumber = prInfo.Number()
 		prTitle = prInfo.Title()
 		prURL = prInfo.URL()
 	}
 
 	indent := strings.Repeat("    ", depth)
-	line := indent + "• " + shareLabel(branch.GetName(), prNumber, prTitle, prURL)
-	if branch.GetName() == currentName {
+	line := indent + "• " + shareLabel(branch.Name(), prNumber, prTitle, prURL)
+	if branch.Name() == currentName {
 		line += " " + marker
 	}
 	return line

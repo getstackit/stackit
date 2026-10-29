@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -89,7 +88,7 @@ func BenchmarkGetRecentCommits(b *testing.B) {
 		b.Run(fmt.Sprintf("count=%d", count), func(b *testing.B) {
 			br := newBenchRepo(b, count+5, 0)
 			for b.Loop() {
-				if _, err := br.runner.GetRecentCommits(context.Background(), "main", count); err != nil {
+				if _, err := br.runner.GetRecentCommits(b.Context(), "main", count); err != nil {
 					b.Fatalf("GetRecentCommits: %v", err)
 				}
 			}
@@ -102,7 +101,7 @@ func BenchmarkGetRecentCommits(b *testing.B) {
 func BenchmarkGetRevision(b *testing.B) {
 	br := newBenchRepo(b, 5, 1)
 	for b.Loop() {
-		if _, err := br.runner.ReadRevisions(context.Background(), "branch-0").One(); err != nil {
+		if _, err := br.runner.ReadRevisions(b.Context(), "branch-0").One(); err != nil {
 			b.Fatalf("GetRevision: %v", err)
 		}
 	}
@@ -114,7 +113,7 @@ func BenchmarkCommitRangeMetadata(b *testing.B) {
 	for _, batch := range []bool{false, true} {
 		b.Run(fmt.Sprintf("batch=%t", batch), func(b *testing.B) {
 			br := newBenchRepo(b, 21, 0)
-			ctx := context.Background()
+			ctx := b.Context()
 			rr := git.RevRange{Base: "main~20", Head: "main"}
 			for b.Loop() {
 				if batch {
@@ -129,7 +128,7 @@ func BenchmarkCommitRangeMetadata(b *testing.B) {
 				}
 				for _, sha := range commits {
 					for _, format := range []string{"%P", "%an", "%ae", "%aI", "%B"} {
-						if _, err := br.runner.RunGitCommandWithContext(ctx, "log", "-1", "--format="+format, sha.SHA); err != nil {
+						if _, err := br.runner.Run(ctx, "log", "-1", "--format="+format, sha.SHA); err != nil {
 							b.Fatal(err)
 						}
 					}
@@ -150,7 +149,7 @@ func BenchmarkReadRevisions(b *testing.B) {
 		names[i] = fmt.Sprintf("branch-%d", i)
 	}
 	for b.Loop() {
-		if _, errs := br.runner.ReadRevisions(context.Background(), names...).ValuesAndErrors(); len(errs) > 0 {
+		if _, errs := br.runner.ReadRevisions(b.Context(), names...).ValuesAndErrors(); len(errs) > 0 {
 			b.Fatalf("ReadRevisions: %v", errs[0])
 		}
 	}
@@ -169,17 +168,17 @@ func BenchmarkReadRevisionsMissing(b *testing.B) {
 			}
 			for b.Loop() {
 				if batch {
-					got, errs := br.runner.ReadRevisions(context.Background(), names...).ValuesAndErrors()
+					got, errs := br.runner.ReadRevisions(b.Context(), names...).ValuesAndErrors()
 					if len(got) != 1 || len(errs) != 30 {
 						b.Fatalf("unexpected results: %v, %v", got, errs)
 					}
 					continue
 				}
-				if _, err := br.runner.RunGitCommandWithContext(context.Background(), append([]string{"rev-parse"}, names...)...); err == nil {
+				if _, err := br.runner.Run(b.Context(), append([]string{"rev-parse"}, names...)...); err == nil {
 					b.Fatal("expected missing refs")
 				}
 				for i, name := range names {
-					_, err := br.runner.ReadRevisions(context.Background(), name).One()
+					_, err := br.runner.ReadRevisions(b.Context(), name).One()
 					if (err != nil) != (i > 0) {
 						b.Fatalf("unexpected error for %s: %v", name, err)
 					}
@@ -194,7 +193,7 @@ func BenchmarkReadRevisionsMissing(b *testing.B) {
 func BenchmarkGetMergeBase(b *testing.B) {
 	br := newBenchRepo(b, 30, 2)
 	for b.Loop() {
-		if _, err := br.runner.GetMergeBase(context.Background(), "branch-0", "branch-1"); err != nil {
+		if _, err := br.runner.GetMergeBase(b.Context(), "branch-0", "branch-1"); err != nil {
 			b.Fatalf("GetMergeBase: %v", err)
 		}
 	}
@@ -204,16 +203,16 @@ func BenchmarkGetMergeBase(b *testing.B) {
 // commit.IsAncestor with `git merge-base --is-ancestor` (cheap plumbing).
 func BenchmarkIsAncestor(b *testing.B) {
 	br := newBenchRepo(b, 30, 1)
-	ancestorSHA, err := br.runner.RunGitCommandWithContext(context.Background(), "rev-parse", "main~5")
+	ancestorSHA, err := br.runner.Run(b.Context(), "rev-parse", "main~5")
 	if err != nil {
 		b.Fatalf("resolve ancestor sha: %v", err)
 	}
-	descendantSHA, err := br.runner.RunGitCommandWithContext(context.Background(), "rev-parse", "main")
+	descendantSHA, err := br.runner.Run(b.Context(), "rev-parse", "main")
 	if err != nil {
 		b.Fatalf("resolve descendant sha: %v", err)
 	}
 	for b.Loop() {
-		if _, err := br.runner.IsAncestor(context.Background(), ancestorSHA, descendantSHA); err != nil {
+		if _, err := br.runner.IsAncestor(b.Context(), ancestorSHA, descendantSHA); err != nil {
 			b.Fatalf("IsAncestor: %v", err)
 		}
 	}
@@ -224,7 +223,7 @@ func BenchmarkIsAncestor(b *testing.B) {
 func BenchmarkHasStagedChanges(b *testing.B) {
 	br := newBenchRepo(b, 5, 0)
 	for b.Loop() {
-		if _, err := br.runner.HasStagedChanges(context.Background()); err != nil {
+		if _, err := br.runner.HasStagedChanges(b.Context()); err != nil {
 			b.Fatalf("HasStagedChanges: %v", err)
 		}
 	}
@@ -242,7 +241,7 @@ func BenchmarkHasStagedChanges_LargeTree(b *testing.B) {
 		}
 	}
 	for b.Loop() {
-		if _, err := br.runner.HasStagedChanges(context.Background()); err != nil {
+		if _, err := br.runner.HasStagedChanges(b.Context()); err != nil {
 			b.Fatalf("HasStagedChanges: %v", err)
 		}
 	}
@@ -261,7 +260,7 @@ func BenchmarkStageAll(b *testing.B) {
 		iter++
 		b.StartTimer()
 
-		if err := br.runner.StageAll(context.Background()); err != nil {
+		if err := br.runner.StageAll(b.Context()); err != nil {
 			b.Fatalf("StageAll: %v", err)
 		}
 	}
@@ -272,7 +271,7 @@ func BenchmarkGetConfig(b *testing.B) {
 	br := newBenchRepo(b, 1, 0)
 	br.runGit(b, "config", "stackit.bench.key", "bench-value")
 	for b.Loop() {
-		if _, err := br.runner.GetConfig("stackit.bench.key"); err != nil {
+		if _, err := br.runner.GetConfig(b.Context(), "stackit.bench.key"); err != nil {
 			b.Fatalf("GetConfig: %v", err)
 		}
 	}
@@ -305,7 +304,7 @@ func BenchmarkCreateBlob(b *testing.B) {
 			}
 			s := string(content)
 			for b.Loop() {
-				if _, err := git.One(br.runner.CreateBlobs(context.Background(), s)); err != nil {
+				if _, err := git.One(br.runner.CreateBlobs(b.Context(), s)); err != nil {
 					b.Fatalf("CreateBlob: %v", err)
 				}
 			}
@@ -324,7 +323,7 @@ func BenchmarkCreateBlobs_Sequential(b *testing.B) {
 			for b.Loop() {
 				for j := range n {
 					content := fmt.Sprintf("blob-iter-%d-idx-%d", iter, j)
-					if _, err := git.One(br.runner.CreateBlobs(context.Background(), content)); err != nil {
+					if _, err := git.One(br.runner.CreateBlobs(b.Context(), content)); err != nil {
 						b.Fatalf("CreateBlob: %v", err)
 					}
 				}
@@ -347,7 +346,7 @@ func BenchmarkCreateBlobs(b *testing.B) {
 				for j := range n {
 					contents[j] = fmt.Sprintf("blob-iter-%d-idx-%d", iter, j)
 				}
-				if _, err := br.runner.CreateBlobs(context.Background(), contents...); err != nil {
+				if _, err := br.runner.CreateBlobs(b.Context(), contents...); err != nil {
 					b.Fatalf("CreateBlobs: %v", err)
 				}
 				iter++
@@ -359,12 +358,12 @@ func BenchmarkCreateBlobs(b *testing.B) {
 // BenchmarkReadObjects measures blob reads. Phase 6 swaps in `git cat-file blob`.
 func BenchmarkReadObjects(b *testing.B) {
 	br := newBenchRepo(b, 1, 0)
-	sha, err := git.One(br.runner.CreateBlobs(context.Background(), "read-bench-content"))
+	sha, err := git.One(br.runner.CreateBlobs(b.Context(), "read-bench-content"))
 	if err != nil {
 		b.Fatalf("CreateBlob: %v", err)
 	}
 	for b.Loop() {
-		if _, err := git.ObjectContent(br.runner.ReadObjects(context.Background(), sha)); err != nil {
+		if _, err := git.ObjectContent(br.runner.ReadObjects(b.Context(), sha)); err != nil {
 			b.Fatalf("ReadObjects: %v", err)
 		}
 	}
@@ -387,7 +386,7 @@ func BenchmarkParallelGetRevision(b *testing.B) {
 		for pb.Next() {
 			name := names[i%branches]
 			i++
-			if _, err := br.runner.ReadRevisions(context.Background(), name).One(); err != nil {
+			if _, err := br.runner.ReadRevisions(b.Context(), name).One(); err != nil {
 				b.Fatalf("GetRevision: %v", err)
 			}
 		}
@@ -411,7 +410,7 @@ func BenchmarkParallelGetMergeBase(b *testing.B) {
 		for pb.Next() {
 			p := pairs[i%len(pairs)]
 			i++
-			if _, err := br.runner.GetMergeBase(context.Background(), p[0], p[1]); err != nil {
+			if _, err := br.runner.GetMergeBase(b.Context(), p[0], p[1]); err != nil {
 				b.Fatalf("GetMergeBase: %v", err)
 			}
 		}

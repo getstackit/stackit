@@ -8,6 +8,6 @@ import "context"
 // runner; the GitHub package depends only on these two methods rather than the
 // whole git surface.
 type GitCommandRunner interface {
-	GetConfig(key string) (string, error)
-	RunGHCommandWithContext(ctx context.Context, args ...string) (string, error)
+	GetConfig(ctx context.Context, key string) (string, error)
+	RunGH(ctx context.Context, args ...string) (string, error)
 }

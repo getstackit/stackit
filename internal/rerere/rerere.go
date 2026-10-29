@@ -1,6 +1,7 @@
 package rerere
 
 import (
+	"context"
 	"strings"
 
 	"github.com/getstackit/stackit/internal/tui"
@@ -12,7 +13,7 @@ const declinedKey = "stackit.rerere.declined"
 // engine.Engine satisfy it, so callers can pass the engine rather than reaching
 // for the raw git runner.
 type GitConfigurer interface {
-	GetConfig(key string) (string, error)
+	GetConfig(ctx context.Context, key string) (string, error)
 	SetConfig(key, value string) error
 }
 
@@ -37,13 +38,13 @@ type Pauser interface {
 //
 // If pauser is non-nil, it is paused around the confirmation prompt so a
 // surrounding TUI does not contend for stdin/stdout.
-func EnsureEnabled(cfg GitConfigurer, interactive bool, pauser Pauser) (bool, error) {
-	return ensureEnabled(cfg, interactive, pauser, tui.PromptConfirm)
+func EnsureEnabled(ctx context.Context, cfg GitConfigurer, interactive bool, pauser Pauser) (bool, error) {
+	return ensureEnabled(ctx, cfg, interactive, pauser, tui.PromptConfirm)
 }
 
-func ensureEnabled(cfg GitConfigurer, interactive bool, pauser Pauser, confirm ConfirmFunc) (bool, error) {
-	if configBool(cfg, "rerere.enabled") {
-		if !configBool(cfg, "rerere.autoupdate") {
+func ensureEnabled(ctx context.Context, cfg GitConfigurer, interactive bool, pauser Pauser, confirm ConfirmFunc) (bool, error) {
+	if configBool(ctx, cfg, "rerere.enabled") {
+		if !configBool(ctx, cfg, "rerere.autoupdate") {
 			if err := cfg.SetConfig("rerere.autoupdate", "true"); err != nil {
 				return false, err
 			}
@@ -51,7 +52,7 @@ func ensureEnabled(cfg GitConfigurer, interactive bool, pauser Pauser, confirm C
 		return false, nil
 	}
 
-	if configBool(cfg, declinedKey) || !interactive {
+	if configBool(ctx, cfg, declinedKey) || !interactive {
 		return false, nil
 	}
 
@@ -81,8 +82,8 @@ func promptWithPause(pauser Pauser, confirm ConfirmFunc, prompt string, defaultV
 	return confirm(prompt, defaultValue)
 }
 
-func configBool(cfg GitConfigurer, key string) bool {
-	value, err := cfg.GetConfig(key)
+func configBool(ctx context.Context, cfg GitConfigurer, key string) bool {
+	value, err := cfg.GetConfig(ctx, key)
 	if err != nil {
 		return false
 	}

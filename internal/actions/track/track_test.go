@@ -84,7 +84,7 @@ func TestTrackAction(t *testing.T) {
 		}, nil)
 		require.NoError(t, err)
 		require.True(t, s.Engine.GetBranch("feature").IsTracked())
-		require.Equal(t, "main", s.Engine.GetBranch("feature").GetParent().GetName())
+		require.Equal(t, "main", s.Engine.GetBranch("feature").Parent().Name())
 	})
 
 	t.Run("non-interactive mode requires --parent or --force", func(t *testing.T) {
@@ -157,7 +157,7 @@ func TestTrackAction(t *testing.T) {
 		// Should NOT have called PromptSelectParent because auto-detection worked
 		require.False(t, handler.promptSelectCalled)
 		require.True(t, s.Engine.GetBranch("feature").IsTracked())
-		require.Equal(t, "base", s.Engine.GetBranch("feature").GetParent().GetName())
+		require.Equal(t, "base", s.Engine.GetBranch("feature").Parent().Name())
 	})
 
 	t.Run("PromptTrackChild is called for untracked children", func(t *testing.T) {

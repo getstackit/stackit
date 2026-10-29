@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/config"
@@ -92,7 +94,7 @@ Examples:
 			}
 
 			// If --list flag is set, or terminal is not interactive, show list
-			if listFlag || !tui.IsTTY() {
+			if listFlag || !term.IsInteractive() {
 				return printConfigList(repoRoot, cmd.OutOrStdout())
 			}
 
@@ -710,7 +712,7 @@ Use with caution - this will clear all personal configuration including:
 			}
 
 			// Confirm with user if interactive
-			if tui.IsTTY() {
+			if term.IsInteractive() {
 				confirmed, err := tui.PromptConfirm("This will remove all personal configuration overrides. Continue?", false)
 				if err != nil {
 					return err

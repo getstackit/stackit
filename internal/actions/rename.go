@@ -4,10 +4,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/branchname"
+
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // RenameOptions contains options for the rename command
@@ -32,10 +33,10 @@ func RenameAction(ctx *app.Context, opts RenameOptions, handler RenameHandler) e
 	out := ctx.Output
 
 	// Validate preconditions
-	if err := validation.ModifyBranchChain(eng, "rename").Validate(); err != nil {
+	if err := validation.ModifyBranchChain(ctx.Context, eng, "rename").Validate(); err != nil {
 		return err
 	}
-	currentBranch := eng.CurrentBranch().GetName()
+	currentBranch := eng.CurrentBranch(ctx.Context).Name()
 
 	newName := opts.NewName
 	if newName == "" {
@@ -46,7 +47,7 @@ func RenameAction(ctx *app.Context, opts RenameOptions, handler RenameHandler) e
 		}
 	}
 
-	newName = utils.SanitizeBranchName(newName)
+	newName = branchname.Sanitize(newName)
 	if newName == "" {
 		return errors.New("invalid branch name")
 	}
@@ -58,13 +59,13 @@ func RenameAction(ctx *app.Context, opts RenameOptions, handler RenameHandler) e
 
 	allBranches := eng.AllBranches()
 	for _, b := range allBranches {
-		if b.GetName() == newName {
+		if b.Name() == newName {
 			return fmt.Errorf("branch %s already exists", newName)
 		}
 	}
 
 	branch := eng.GetBranch(currentBranch)
-	prInfo, _ := branch.GetPrInfo()
+	prInfo, _ := branch.PrInfo()
 
 	if prInfo != nil && prInfo.Number() != nil {
 		if !opts.Force {

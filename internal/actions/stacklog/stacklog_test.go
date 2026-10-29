@@ -23,7 +23,7 @@ func TestGather_AncestorPathTopDown(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithLinearStack3()
 	s.Checkout("c")
 
-	res, err := stacklog.Gather(s.Engine)
+	res, err := stacklog.Gather(t.Context(), s.Engine)
 	require.NoError(t, err)
 
 	require.NotEmpty(t, res.Branches)
@@ -49,7 +49,7 @@ func TestGather_FromMiddleOfStackExcludesChildren(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithLinearStack3()
 	s.Checkout("b")
 
-	res, err := stacklog.Gather(s.Engine)
+	res, err := stacklog.Gather(t.Context(), s.Engine)
 	require.NoError(t, err)
 
 	// Standing on b: only b and its ancestor a; child c is out of scope.
@@ -62,7 +62,7 @@ func TestGather_OnTrunkHasNoStackBand(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithLinearStack3()
 	s.Checkout("main")
 
-	res, err := stacklog.Gather(s.Engine)
+	res, err := stacklog.Gather(t.Context(), s.Engine)
 	require.NoError(t, err)
 
 	require.Empty(t, res.Branches)
@@ -75,7 +75,7 @@ func TestGather_DecorationsIncludeBranchesAndTags(t *testing.T) {
 	s.Checkout("c")
 	require.NoError(t, s.Scene.Repo.RunGitCommand("tag", "-a", "v1.0.0", "-m", "release"))
 
-	res, err := stacklog.Gather(s.Engine)
+	res, err := stacklog.Gather(t.Context(), s.Engine)
 	require.NoError(t, err)
 
 	// The tag on c's tip resolves to c's tip commit, alongside the branch head.

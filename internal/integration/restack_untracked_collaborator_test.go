@@ -104,7 +104,7 @@ func TestUntrackedCoworkerMultiCommitSquash(t *testing.T) {
 
 	restackMineOntoTrunk(t, sh)
 
-	require.Equal(t, "main", sh.Engine.GetBranch("mine").GetParent().GetName(),
+	require.Equal(t, "main", sh.Engine.GetBranch("mine").Parent().Name(),
 		"mine should reparent to main past the squash-merged teammate branch")
 	require.Equal(t, 1, mineCommitsAboveTrunk(t, sh),
 		"mine must contain only my own commit, not the teammate's pre-squash commits")
@@ -135,7 +135,7 @@ func TestUntrackedCoworkerSingleCommitSquash(t *testing.T) {
 
 	restackMineOntoTrunk(t, sh)
 
-	require.Equal(t, "main", sh.Engine.GetBranch("mine").GetParent().GetName(),
+	require.Equal(t, "main", sh.Engine.GetBranch("mine").Parent().Name(),
 		"mine should reparent to main past the single-commit squash")
 	require.Equal(t, 1, mineCommitsAboveTrunk(t, sh),
 		"mine must contain only my own commit")
@@ -166,7 +166,7 @@ func TestUntrackedCoworkerMultiCommitRebaseMerge(t *testing.T) {
 
 	restackMineOntoTrunk(t, sh)
 
-	require.Equal(t, "main", sh.Engine.GetBranch("mine").GetParent().GetName(),
+	require.Equal(t, "main", sh.Engine.GetBranch("mine").Parent().Name(),
 		"mine should reparent to main past the rebase-merged teammate branch")
 	require.Equal(t, 1, mineCommitsAboveTrunk(t, sh),
 		"mine must contain only my own commit after a rebase merge")
@@ -192,7 +192,7 @@ func TestUntrackedCoworkerSingleCommitRebaseMerge(t *testing.T) {
 
 	restackMineOntoTrunk(t, sh)
 
-	require.Equal(t, "main", sh.Engine.GetBranch("mine").GetParent().GetName(),
+	require.Equal(t, "main", sh.Engine.GetBranch("mine").Parent().Name(),
 		"mine should reparent to main past the single-commit rebase merge")
 	require.Equal(t, 1, mineCommitsAboveTrunk(t, sh),
 		"mine must contain only my own commit")

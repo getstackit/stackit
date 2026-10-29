@@ -34,14 +34,14 @@ type contentPlanRunner struct {
 	queries  []string
 }
 
-func (*contentPlanRunner) RunGHCommandWithContext(context.Context, ...string) (string, error) {
+func (*contentPlanRunner) RunGH(context.Context, ...string) (string, error) {
 	return "test-token", nil
 }
-func (r *contentPlanRunner) GetConfig(key string) (string, error) {
+func (r *contentPlanRunner) GetConfig(ctx context.Context, key string) (string, error) {
 	if key == "remote.origin.url" {
 		return "https://github.com/test/repo.git", nil
 	}
-	return r.GitCommandRunner.GetConfig(key)
+	return r.GitCommandRunner.GetConfig(ctx, key)
 }
 func (r *contentPlanRunner) RoundTrip(req *http.Request) (*http.Response, error) {
 	body, err := io.ReadAll(req.Body)
@@ -124,7 +124,7 @@ func TestPlanningBatchesMissingPRContent(t *testing.T) {
 				number := git.PRNumber(i + 1)
 				info := engine.NewPrInfo(engine.PrInfoFields{Number: &number, Title: "local title", State: git.PRStateOpen, Base: "main"})
 				require.NoError(t, s.Engine.UpsertPrInfo(s.Context, b, info))
-				statuses[b.GetName()] = engine.PRSubmissionStatus{
+				statuses[b.Name()] = engine.PRSubmissionStatus{
 					Action: engine.SubmitActionUpdate, PRNumber: &number, PRInfo: info,
 					NeedsUpdate: !tt.allSkipped && i < 2, Reason: "unchanged",
 				}

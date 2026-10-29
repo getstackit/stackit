@@ -44,7 +44,7 @@ func (p *MultiStackPRCreator) CreateAndPushBranch(ctx context.Context, branchNam
 	}
 	// Utility metadata tells sync that this generated delivery branch can be
 	// safely cleaned up once the consolidation has landed.
-	if err := p.worktreeEng.SetBranchType(p.worktreeEng.GetBranch(branchName), git.BranchTypeUtility); err != nil {
+	if err := p.worktreeEng.SetBranchType(ctx, p.worktreeEng.GetBranch(branchName), git.BranchTypeUtility); err != nil {
 		return fmt.Errorf("mark multi-stack branch %s as utility: %w", branchName, err)
 	}
 
@@ -55,8 +55,8 @@ func (p *MultiStackPRCreator) CreateAndPushBranch(ctx context.Context, branchNam
 	}
 
 	// Push to remote
-	remote := p.worktreeEng.GetRemote()
-	if err := p.worktreeEng.PushBranches(ctx, remote, []git.PushSpec{{BranchName: branch.GetName(), LeaseMode: git.PushLeaseNone}}, git.PushOptions{
+	remote := p.worktreeEng.GetRemote(ctx)
+	if err := p.worktreeEng.PushBranches(ctx, remote, []git.PushSpec{{BranchName: branch.Name(), LeaseMode: git.PushLeaseNone}}, git.PushOptions{
 		Force:    false,
 		NoVerify: true,
 	}).One(); err != nil {
@@ -78,7 +78,7 @@ func (p *MultiStackPRCreator) CreatePR(ctx context.Context, branchName string, i
 		Title: content.Title,
 		Body:  content.Body,
 		Head:  branchName,
-		Base:  p.worktreeEng.Trunk().GetName(),
+		Base:  p.worktreeEng.Trunk().Name(),
 		Draft: false,
 	}
 

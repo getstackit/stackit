@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/actions/restack"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
@@ -40,7 +42,7 @@ func FormatRestackRow(event actions.RestackBranchEvent) (string, RestackRowStatu
 		}
 		row += " → " + style.ColorDim(event.NewRevision)
 		if event.RerereResolvedCount > 0 {
-			row += " " + actions.FormatRerereResolved(event.RerereResolvedCount)
+			row += " " + restack.FormatRerereResolved(event.RerereResolvedCount)
 		}
 		return row, RestackRowDone
 	case actions.RestackConflict:

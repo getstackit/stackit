@@ -72,11 +72,11 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 				// Determine target branch
 				targetBranch := branch
 				if targetBranch == "" && !multiStack {
-					currentBranch := ctx.Engine.CurrentBranch()
+					currentBranch := ctx.Engine.CurrentBranch(ctx.Context)
 					if currentBranch == nil {
 						return errors.New("not on a branch and --branch not specified")
 					}
-					targetBranch = currentBranch.GetName()
+					targetBranch = currentBranch.Name()
 				}
 
 				// Determine scope based on flags

@@ -83,7 +83,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		}
 		events := &recordingProgress{}
 
-		outcome, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
+		outcome, err := orchestrateMerge(t.Context(), events, nil, api, baseOpts, prNodeID)
 
 		require.NoError(t, err)
 		require.Equal(t, MergePRMerged, outcome)
@@ -98,7 +98,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		}
 		events := &recordingProgress{}
 
-		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
+		_, err := orchestrateMerge(t.Context(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "CLOSED")
@@ -116,7 +116,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		}
 		events := &recordingProgress{}
 
-		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
+		_, err := orchestrateMerge(t.Context(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "still being calculated")
@@ -133,7 +133,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		}
 		events := &recordingProgress{}
 
-		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
+		_, err := orchestrateMerge(t.Context(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not mergeable")
@@ -151,7 +151,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		}
 		events := &recordingProgress{}
 
-		outcome, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
+		outcome, err := orchestrateMerge(t.Context(), events, nil, api, baseOpts, prNodeID)
 
 		require.NoError(t, err)
 		require.Equal(t, MergePRMerged, outcome)
@@ -171,7 +171,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		}
 		events := &recordingProgress{}
 
-		outcome, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
+		outcome, err := orchestrateMerge(t.Context(), events, nil, api, baseOpts, prNodeID)
 
 		require.NoError(t, err)
 		require.Equal(t, MergePRMerged, outcome)
@@ -191,7 +191,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		opts := baseOpts
 		opts.Wait = true
 
-		outcome, err := orchestrateMerge(context.Background(), events, nil, api, opts, prNodeID)
+		outcome, err := orchestrateMerge(t.Context(), events, nil, api, opts, prNodeID)
 
 		require.NoError(t, err)
 		require.Equal(t, MergePRMerged, outcome)
@@ -211,7 +211,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		}
 		events := &recordingProgress{}
 
-		outcome, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
+		outcome, err := orchestrateMerge(t.Context(), events, nil, api, baseOpts, prNodeID)
 
 		require.NoError(t, err)
 		require.Equal(t, MergePRAutomergeEnabled, outcome)
@@ -231,7 +231,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		}
 		events := &recordingProgress{}
 
-		outcome, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
+		outcome, err := orchestrateMerge(t.Context(), events, nil, api, baseOpts, prNodeID)
 
 		require.NoError(t, err)
 		require.Equal(t, MergePRMerged, outcome)
@@ -258,7 +258,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		opts := baseOpts
 		opts.Wait = true
 
-		outcome, err := orchestrateMerge(context.Background(), events, nil, api, opts, prNodeID)
+		outcome, err := orchestrateMerge(t.Context(), events, nil, api, opts, prNodeID)
 
 		require.NoError(t, err)
 		require.Equal(t, MergePRMerged, outcome)
@@ -279,7 +279,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		}
 		events := &recordingProgress{}
 
-		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
+		_, err := orchestrateMerge(t.Context(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "auto-merge is not enabled")
@@ -302,7 +302,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		opts := baseOpts
 		opts.Wait = true
 
-		outcome, err := orchestrateMerge(context.Background(), events, nil, api, opts, prNodeID)
+		outcome, err := orchestrateMerge(t.Context(), events, nil, api, opts, prNodeID)
 
 		require.NoError(t, err)
 		require.Equal(t, MergePRMerged, outcome)
@@ -322,7 +322,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		}
 		events := &recordingProgress{}
 
-		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
+		_, err := orchestrateMerge(t.Context(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to enable automerge")
@@ -341,7 +341,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		}
 		events := &recordingProgress{}
 
-		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
+		_, err := orchestrateMerge(t.Context(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to merge PR #42")
@@ -355,7 +355,7 @@ func TestOrchestrateMerge(t *testing.T) {
 		}
 		events := &recordingProgress{}
 
-		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
+		_, err := orchestrateMerge(t.Context(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to check PR mergeable state")

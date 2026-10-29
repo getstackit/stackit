@@ -5,15 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/config"
-	_ "github.com/getstackit/stackit/internal/demo" // Register demo engine factory
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 type submitFlags struct {
@@ -112,7 +112,7 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 			StackRange:           stackRange,
 			Force:                f.force,
 			DryRun:               f.dryRun,
-			Confirm:              f.confirm || regenerateNeedsConfirm(f, utils.IsInteractive()),
+			Confirm:              f.confirm || regenerateNeedsConfirm(f, term.IsInteractive()),
 			UpdateOnly:           f.updateOnly,
 			Always:               f.always,
 			Text:                 prTextSource(f.regenerate),

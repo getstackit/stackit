@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -30,7 +29,7 @@ func TestDeleteBranch_RemovesPackedRef(t *testing.T) {
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	require.NoError(t, scene.Repo.CreateBranch("packed-feature"))
 	packAllRefs(t, scene.Dir)
@@ -52,7 +51,7 @@ func TestDeleteBranch_NoErrorWhenBranchMissing(t *testing.T) {
 	// `git update-ref -d` is lenient for missing refs; deleting a never-existed
 	// branch should succeed so callers can treat "already gone" as a no-op
 	// without branching on error types.
-	require.NoError(t, runner.DeleteBranch(context.Background(), "nope"))
+	require.NoError(t, runner.DeleteBranch(t.Context(), "nope"))
 }
 
 func TestDeleteBranch_RefusesCheckedOutWorktreeBranch(t *testing.T) {
@@ -60,11 +59,11 @@ func TestDeleteBranch_RefusesCheckedOutWorktreeBranch(t *testing.T) {
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	require.NoError(t, scene.Repo.CreateBranch("feature"))
 	worktreePath := filepath.Join(t.TempDir(), "feature-worktree")
-	_, err := runner.RunGitCommandWithContext(ctx, "worktree", "add", worktreePath, "feature")
+	_, err := runner.Run(ctx, "worktree", "add", worktreePath, "feature")
 	require.NoError(t, err)
 
 	err = runner.DeleteBranch(ctx, "feature")
@@ -78,11 +77,11 @@ func TestDeleteRefs_RefusesCheckedOutWorktreeBranch(t *testing.T) {
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	require.NoError(t, scene.Repo.CreateBranch("feature"))
 	worktreePath := filepath.Join(t.TempDir(), "feature-worktree")
-	_, err := runner.RunGitCommandWithContext(ctx, "worktree", "add", worktreePath, "feature")
+	_, err := runner.Run(ctx, "worktree", "add", worktreePath, "feature")
 	require.NoError(t, err)
 
 	err = runner.DeleteRefs(ctx, []string{"refs/heads/feature"}...)
@@ -96,15 +95,15 @@ func TestDeleteRef_RemovesPackedRef(t *testing.T) {
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 
-	sha, err := git.One(runner.CreateBlobs(context.Background(), "payload"))
+	sha, err := git.One(runner.CreateBlobs(t.Context(), "payload"))
 	require.NoError(t, err)
-	require.NoError(t, runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/stackit/metadata/packed-feature", NewSHA: sha}}, ""))
+	require.NoError(t, runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: "refs/stackit/metadata/packed-feature", NewSHA: sha}}, ""))
 	packAllRefs(t, scene.Dir)
 
 	requireLooseRefAbsent(t, scene.Dir, "refs/stackit/metadata/packed-feature")
 	requirePackedRefPresent(t, scene.Dir, "refs/stackit/metadata/packed-feature")
 
-	require.NoError(t, runner.DeleteRefs(context.Background(), "refs/stackit/metadata/packed-feature"))
+	require.NoError(t, runner.DeleteRefs(t.Context(), "refs/stackit/metadata/packed-feature"))
 
 	requireRefAbsent(t, runner, "refs/stackit/metadata/packed-feature")
 	requirePackedRefAbsent(t, scene.Dir, "refs/stackit/metadata/packed-feature")
@@ -119,12 +118,12 @@ func TestDeleteMetadata_RemovesPackedRef(t *testing.T) {
 	// Covers the merge-ship symptom directly: cleanup deletes branch metadata
 	// via this entry point, which previously left packed metadata refs behind
 	// to be resurrected by the next sync as a phantom conflict.
-	sha, err := git.One(runner.CreateBlobs(context.Background(), `{"parentBranchName":"main"}`))
+	sha, err := git.One(runner.CreateBlobs(t.Context(), `{"parentBranchName":"main"}`))
 	require.NoError(t, err)
-	require.NoError(t, runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/stackit/metadata/packed-feature", NewSHA: sha}}, ""))
+	require.NoError(t, runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: "refs/stackit/metadata/packed-feature", NewSHA: sha}}, ""))
 	packAllRefs(t, scene.Dir)
 
-	require.NoError(t, runnerMetadata.DeleteMetadata(context.Background(), "packed-feature"))
+	require.NoError(t, runnerMetadata.DeleteMetadata(t.Context(), "packed-feature"))
 
 	requireRefAbsent(t, runner, "refs/stackit/metadata/packed-feature")
 	requirePackedRefAbsent(t, scene.Dir, "refs/stackit/metadata/packed-feature")
@@ -135,24 +134,20 @@ func packAllRefs(t *testing.T, repoDir string) {
 	// `--all` packs all refs under refs/, including non-branch refs like
 	// refs/stackit/metadata/*. `--prune` removes the loose files after packing
 	// so the test reflects the same state seen in user repos that ran git gc.
-	out, err := scriptGit(repoDir, "pack-refs", "--all", "--prune")
-	require.NoError(t, err, "pack-refs failed: %s", out)
-}
-
-func scriptGit(repoDir string, args ...string) (string, error) {
 	r := git.NewRunnerWithPath(repoDir, nil)
-	return r.RunGitCommandWithContext(context.Background(), args...)
+	out, err := r.Run(t.Context(), "pack-refs", "--all", "--prune")
+	require.NoError(t, err, "pack-refs failed: %s", out)
 }
 
 func requireRefAbsent(t *testing.T, runner git.Runner, refName string) {
 	t.Helper()
-	_, err := runner.ReadRevisions(context.Background(), refName).One()
+	_, err := runner.ReadRevisions(t.Context(), refName).One()
 	require.Error(t, err, "ref %s should not resolve", refName)
 }
 
 func requireRefPresent(t *testing.T, runner git.Runner, refName string) {
 	t.Helper()
-	_, err := runner.ReadRevisions(context.Background(), refName).One()
+	_, err := runner.ReadRevisions(t.Context(), refName).One()
 	require.NoError(t, err, "ref %s should still resolve", refName)
 }
 

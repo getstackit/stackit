@@ -5,7 +5,6 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/tui"
@@ -27,7 +26,7 @@ func TestDetailMark_Glyph(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			// glyph() wraps the rune in color codes; assert the rune is present.
-			assert.Contains(t, tt.mark.glyph(), tt.want)
+			require.Contains(t, tt.mark.glyph(), tt.want)
 		})
 	}
 }
@@ -41,10 +40,10 @@ func TestNewModel(t *testing.T) {
 	t.Parallel()
 	model := NewModel(10)
 
-	assert.Equal(t, 10, model.TotalOps)
-	assert.Equal(t, 0, model.CompletedOps)
-	assert.False(t, model.Done)
-	assert.Equal(t, Phase(""), model.CurrentPhase)
+	require.Equal(t, 10, model.TotalOps)
+	require.Equal(t, 0, model.CompletedOps)
+	require.False(t, model.Done)
+	require.Equal(t, Phase(""), model.CurrentPhase)
 }
 
 func TestModel_Init(t *testing.T) {
@@ -79,10 +78,10 @@ func TestModel_Update_PhaseStartMsg(t *testing.T) {
 	newModel, cmd := model.Update(PhaseStartMsg{Phase: PhaseTrunk, Message: "📥 Pulling from remote..."})
 	m := newModel.(*Model)
 
-	assert.Equal(t, PhaseTrunk, m.CurrentPhase)
-	assert.Empty(t, m.CurrentDetail) // Detail cleared on phase start
-	assert.Nil(t, cmd, "phase start should defer its header until the first detail")
-	assert.False(t, m.headers.Committed(PhaseTrunk), "header should not be committed before any detail")
+	require.Equal(t, PhaseTrunk, m.CurrentPhase)
+	require.Empty(t, m.CurrentDetail) // Detail cleared on phase start
+	require.Nil(t, cmd, "phase start should defer its header until the first detail")
+	require.False(t, m.headers.Committed(PhaseTrunk), "header should not be committed before any detail")
 }
 
 func TestModel_Update_EmptyPhaseSuppressed(t *testing.T) {
@@ -96,9 +95,9 @@ func TestModel_Update_EmptyPhaseSuppressed(t *testing.T) {
 	newModel, _ = m.Update(PhaseStartMsg{Phase: PhaseClean, Message: "🧹 Cleaning branches..."})
 	m = newModel.(*Model)
 
-	assert.False(t, m.headers.Committed(PhaseBranches), "empty branches phase should not commit a header")
-	assert.False(t, m.headers.Committed(PhaseClean), "empty clean phase should not commit a header")
-	assert.False(t, m.headers.Any(), "no headers should have been committed")
+	require.False(t, m.headers.Committed(PhaseBranches), "empty branches phase should not commit a header")
+	require.False(t, m.headers.Committed(PhaseClean), "empty clean phase should not commit a header")
+	require.False(t, m.headers.Any(), "no headers should have been committed")
 }
 
 func TestModel_Update_PhaseTransition(t *testing.T) {
@@ -114,7 +113,7 @@ func TestModel_Update_PhaseTransition(t *testing.T) {
 	newModel, _ = m.Update(PhaseStartMsg{Phase: PhaseGitHub, Message: "🔄 Fetching..."})
 	m = newModel.(*Model)
 
-	assert.Equal(t, PhaseGitHub, m.CurrentPhase)
+	require.Equal(t, PhaseGitHub, m.CurrentPhase)
 }
 
 func TestModel_Update_PhaseDetailMsg(t *testing.T) {
@@ -133,9 +132,9 @@ func TestModel_Update_PhaseDetailMsg(t *testing.T) {
 	})
 	m = newModel.(*Model)
 
-	assert.Equal(t, "main fast-forwarded to abc1234", m.CurrentDetail)
-	assert.NotNil(t, cmd, "should return print command")
-	assert.True(t, m.headers.Committed(PhaseTrunk), "first detail should commit the phase header")
+	require.Equal(t, "main fast-forwarded to abc1234", m.CurrentDetail)
+	require.NotNil(t, cmd, "should return print command")
+	require.True(t, m.headers.Committed(PhaseTrunk), "first detail should commit the phase header")
 }
 
 func TestModel_Update_PhaseDetailMsg_WithWarn(t *testing.T) {
@@ -151,8 +150,8 @@ func TestModel_Update_PhaseDetailMsg_WithWarn(t *testing.T) {
 	})
 	m := newModel.(*Model)
 
-	assert.Equal(t, "branch diverged", m.CurrentDetail)
-	assert.NotNil(t, cmd, "should return print command")
+	require.Equal(t, "branch diverged", m.CurrentDetail)
+	require.NotNil(t, cmd, "should return print command")
 }
 
 func TestModel_Update_ProgressTickMsg(t *testing.T) {
@@ -167,9 +166,9 @@ func TestModel_Update_ProgressTickMsg(t *testing.T) {
 	})
 	m := newModel.(*Model)
 
-	assert.Equal(t, 5, m.CompletedOps)
-	assert.Equal(t, 10, m.TotalOps)
-	assert.NotNil(t, cmd, "should return progress update command")
+	require.Equal(t, 5, m.CompletedOps)
+	require.Equal(t, 10, m.TotalOps)
+	require.NotNil(t, cmd, "should return progress update command")
 }
 
 func TestModel_Update_CompleteMsg(t *testing.T) {
@@ -183,8 +182,8 @@ func TestModel_Update_CompleteMsg(t *testing.T) {
 	})
 	m := newModel.(*Model)
 
-	assert.True(t, m.Done)
-	assert.Equal(t, "All done!", m.Summary)
+	require.True(t, m.Done)
+	require.Equal(t, "All done!", m.Summary)
 
 	// Should return a sequence command (print + quit)
 	require.NotNil(t, cmd)
@@ -208,7 +207,7 @@ func TestModel_Update_KeyMsg_Quit(t *testing.T) {
 
 			_, cmd := model.Update(tt.msg)
 
-			assert.NotNil(t, cmd, "should return quit command")
+			require.NotNil(t, cmd, "should return quit command")
 		})
 	}
 }
@@ -221,10 +220,10 @@ func TestModel_Update_WindowSizeMsg(t *testing.T) {
 	newModel, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
 	m := newModel.(*Model)
 
-	assert.Equal(t, 100, m.Width)
-	assert.Equal(t, 50, m.Height)
+	require.Equal(t, 100, m.Width)
+	require.Equal(t, 50, m.Height)
 	// Progress width should be capped at 60
-	assert.Equal(t, 60, m.Progress.Width())
+	require.Equal(t, 60, m.Progress.Width())
 }
 
 func TestModel_Update_WindowSizeMsg_NarrowTerminal(t *testing.T) {
@@ -235,10 +234,10 @@ func TestModel_Update_WindowSizeMsg_NarrowTerminal(t *testing.T) {
 	newModel, _ := model.Update(tea.WindowSizeMsg{Width: 50, Height: 30})
 	m := newModel.(*Model)
 
-	assert.Equal(t, 50, m.Width)
-	assert.Equal(t, 30, m.Height)
+	require.Equal(t, 50, m.Width)
+	require.Equal(t, 30, m.Height)
 	// Progress width should be 40 (50 - 10)
-	assert.Equal(t, 40, m.Progress.Width())
+	require.Equal(t, 40, m.Progress.Width())
 }
 
 func TestModel_View_InProgress(t *testing.T) {
@@ -257,9 +256,9 @@ func TestModel_View_InProgress(t *testing.T) {
 	view := viewString(m.View())
 
 	// Should contain progress info (package-manager style single line)
-	assert.Contains(t, view, "3/10")
+	require.Contains(t, view, "3/10")
 	// Should contain spinner
-	assert.NotEmpty(t, view)
+	require.NotEmpty(t, view)
 }
 
 func TestModel_View_Completed(t *testing.T) {
@@ -274,7 +273,7 @@ func TestModel_View_Completed(t *testing.T) {
 	view := viewString(m.View())
 
 	// View should be empty when done (summary printed via tea.Printf)
-	assert.Empty(t, view)
+	require.Empty(t, view)
 }
 
 func TestModel_Update_SpinnerTickMsg(t *testing.T) {
@@ -286,7 +285,7 @@ func TestModel_Update_SpinnerTickMsg(t *testing.T) {
 	_, cmd := model.Update(spinner.TickMsg{})
 
 	// Should return another tick command to keep spinner animating
-	assert.NotNil(t, cmd, "should return spinner tick command")
+	require.NotNil(t, cmd, "should return spinner tick command")
 }
 
 // TestMessageRecorder_Usage demonstrates how MessageRecorder can be used
@@ -300,24 +299,24 @@ func TestMessageRecorder_Usage(t *testing.T) {
 	recorder.Record(PhaseDetailMsg{Phase: PhaseTrunk, Message: "test"})
 	recorder.Record(ProgressTickMsg{Completed: 1, Total: 5})
 
-	assert.Equal(t, 3, recorder.Count())
+	require.Equal(t, 3, recorder.Count())
 
 	// Check for specific message types
 	hasPhaseStart := recorder.HasMessage(func(msg tea.Msg) bool {
 		_, ok := msg.(PhaseStartMsg)
 		return ok
 	})
-	assert.True(t, hasPhaseStart)
+	require.True(t, hasPhaseStart)
 
 	hasComplete := recorder.HasMessage(func(msg tea.Msg) bool {
 		_, ok := msg.(CompleteMsg)
 		return ok
 	})
-	assert.False(t, hasComplete)
+	require.False(t, hasComplete)
 
 	// Reset and verify
 	recorder.Reset()
-	assert.Equal(t, 0, recorder.Count())
+	require.Equal(t, 0, recorder.Count())
 }
 
 func TestModel_GetStatusText(t *testing.T) {
@@ -341,7 +340,7 @@ func TestModel_GetStatusText(t *testing.T) {
 			model := NewModel(10)
 			model.CurrentPhase = tt.phase
 			text := model.getStatusText()
-			assert.Equal(t, tt.expected, text)
+			require.Equal(t, tt.expected, text)
 		})
 	}
 }

@@ -3,7 +3,6 @@ package stack
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -17,6 +16,7 @@ import (
 )
 
 func TestInteractiveSyncHandler_Start(t *testing.T) {
+	t.Parallel()
 	mockRunner := tui.NewMockRunner()
 	model := syncComponent.NewModel(0)
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
@@ -29,11 +29,12 @@ func TestInteractiveSyncHandler_Start(t *testing.T) {
 
 	msg, ok := messages[0].(syncComponent.ProgressTickMsg)
 	require.True(t, ok, "expected ProgressTickMsg, got %T", messages[0])
-	assert.Equal(t, 0, msg.Completed)
-	assert.Equal(t, 10, msg.Total)
+	require.Equal(t, 0, msg.Completed)
+	require.Equal(t, 10, msg.Total)
 }
 
 func TestInteractiveSyncHandler_EmitEvent_PhaseStart(t *testing.T) {
+	t.Parallel()
 	mockRunner := tui.NewMockRunner()
 	model := syncComponent.NewModel(0)
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
@@ -50,10 +51,11 @@ func TestInteractiveSyncHandler_EmitEvent_PhaseStart(t *testing.T) {
 
 	msg, ok := messages[0].(syncComponent.PhaseStartMsg)
 	require.True(t, ok, "expected PhaseStartMsg, got %T", messages[0])
-	assert.Equal(t, syncComponent.PhaseTrunk, msg.Phase)
+	require.Equal(t, syncComponent.PhaseTrunk, msg.Phase)
 }
 
 func TestInteractiveSyncHandler_EmitEvent_Progress(t *testing.T) {
+	t.Parallel()
 	mockRunner := tui.NewMockRunner()
 	model := syncComponent.NewModel(0)
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
@@ -84,18 +86,19 @@ func TestInteractiveSyncHandler_EmitEvent_Progress(t *testing.T) {
 	// First message should be PhaseDetailMsg
 	detailMsg, ok := messages[0].(syncComponent.PhaseDetailMsg)
 	require.True(t, ok, "expected PhaseDetailMsg, got %T", messages[0])
-	assert.Equal(t, syncComponent.PhaseTrunk, detailMsg.Phase)
-	assert.Contains(t, detailMsg.Message, "main")
-	assert.Contains(t, detailMsg.Message, "abc1234")
+	require.Equal(t, syncComponent.PhaseTrunk, detailMsg.Phase)
+	require.Contains(t, detailMsg.Message, "main")
+	require.Contains(t, detailMsg.Message, "abc1234")
 
 	// Second message should be ProgressTickMsg
 	progressMsg, ok := messages[1].(syncComponent.ProgressTickMsg)
 	require.True(t, ok, "expected ProgressTickMsg, got %T", messages[1])
-	assert.Equal(t, 1, progressMsg.Completed)
-	assert.Equal(t, 5, progressMsg.Total)
+	require.Equal(t, 1, progressMsg.Completed)
+	require.Equal(t, 5, progressMsg.Total)
 }
 
 func TestInteractiveSyncHandler_Complete(t *testing.T) {
+	t.Parallel()
 	mockRunner := tui.NewMockRunner()
 	model := syncComponent.NewModel(0)
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
@@ -110,10 +113,11 @@ func TestInteractiveSyncHandler_Complete(t *testing.T) {
 
 	msg, ok := messages[0].(syncComponent.CompleteMsg)
 	require.True(t, ok, "expected CompleteMsg, got %T", messages[0])
-	assert.Contains(t, msg.Summary, "up to date")
+	require.Contains(t, msg.Summary, "up to date")
 }
 
 func TestInteractiveSyncHandler_OnRestackStart(t *testing.T) {
+	t.Parallel()
 	mockRunner := tui.NewMockRunner()
 	model := syncComponent.NewModel(0)
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
@@ -127,16 +131,17 @@ func TestInteractiveSyncHandler_OnRestackStart(t *testing.T) {
 	// First message should be ProgressTickMsg
 	progressMsg, ok := messages[0].(syncComponent.ProgressTickMsg)
 	require.True(t, ok, "expected ProgressTickMsg, got %T", messages[0])
-	assert.Equal(t, 0, progressMsg.Completed)
-	assert.Equal(t, 3, progressMsg.Total)
+	require.Equal(t, 0, progressMsg.Completed)
+	require.Equal(t, 3, progressMsg.Total)
 
 	// Second message should be PhaseStartMsg
 	phaseMsg, ok := messages[1].(syncComponent.PhaseStartMsg)
 	require.True(t, ok, "expected PhaseStartMsg, got %T", messages[1])
-	assert.Equal(t, syncComponent.PhaseRestack, phaseMsg.Phase)
+	require.Equal(t, syncComponent.PhaseRestack, phaseMsg.Phase)
 }
 
 func TestInteractiveSyncHandler_OnRestackBranch(t *testing.T) {
+	t.Parallel()
 	mockRunner := tui.NewMockRunner()
 	model := syncComponent.NewModel(0)
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
@@ -164,17 +169,18 @@ func TestInteractiveSyncHandler_OnRestackBranch(t *testing.T) {
 	// First message should be PhaseDetailMsg
 	detailMsg, ok := messages[0].(syncComponent.PhaseDetailMsg)
 	require.True(t, ok, "expected PhaseDetailMsg, got %T", messages[0])
-	assert.Equal(t, syncComponent.PhaseRestack, detailMsg.Phase)
-	assert.Contains(t, detailMsg.Message, "feature-branch")
-	assert.Contains(t, detailMsg.Message, "PR #42")
+	require.Equal(t, syncComponent.PhaseRestack, detailMsg.Phase)
+	require.Contains(t, detailMsg.Message, "feature-branch")
+	require.Contains(t, detailMsg.Message, "PR #42")
 
 	// Second message should be ProgressTickMsg
 	progressMsg, ok := messages[1].(syncComponent.ProgressTickMsg)
 	require.True(t, ok, "expected ProgressTickMsg, got %T", messages[1])
-	assert.Equal(t, 1, progressMsg.Completed)
+	require.Equal(t, 1, progressMsg.Completed)
 }
 
 func TestInteractiveSyncHandler_OnRestackComplete(t *testing.T) {
+	t.Parallel()
 	mockRunner := tui.NewMockRunner()
 	model := syncComponent.NewModel(0)
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
@@ -187,19 +193,21 @@ func TestInteractiveSyncHandler_OnRestackComplete(t *testing.T) {
 
 	msg, ok := messages[0].(syncComponent.CompleteMsg)
 	require.True(t, ok, "expected CompleteMsg, got %T", messages[0])
-	assert.Contains(t, msg.Summary, "restacked 5")
-	assert.Contains(t, msg.Summary, "skipped 2")
+	require.Contains(t, msg.Summary, "restacked 5")
+	require.Contains(t, msg.Summary, "skipped 2")
 }
 
 func TestInteractiveSyncHandler_IsInteractive(t *testing.T) {
+	t.Parallel()
 	mockRunner := tui.NewMockRunner()
 	model := syncComponent.NewModel(0)
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
-	assert.True(t, handler.IsInteractive())
+	require.True(t, handler.IsInteractive())
 }
 
 func TestSimpleSyncHandler_IsNotInteractive(t *testing.T) {
+	t.Parallel()
 	handler := NewSimpleSyncHandler(output.NewNullOutput())
-	assert.False(t, handler.IsInteractive())
+	require.False(t, handler.IsInteractive())
 }

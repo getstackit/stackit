@@ -52,8 +52,8 @@ const (
 ```go
 // BAD - N git processes for N branches
 for _, branch := range branches {
-    div, _ := eng.GetDivergencePoint(branch.GetName())
-    divPoints[branch.GetName()] = div
+    div, _ := eng.GetDivergencePoint(branch.Name())
+    divPoints[branch.Name()] = div
 }
 
 // GOOD - one batched, cache-backed pass
@@ -90,14 +90,27 @@ wg.Wait()
 type indexed struct{ i int; b Branch }
 items := make([]indexed, len(branches))
 for i, b := range branches { items[i] = indexed{i, b} }
-utils.Run(items, func(it indexed) { results[it.i] = expensive(it.b) })
+workpool.Run(items, func(it indexed) { results[it.i] = expensive(it.b) })
 ```
 
-- **`utils.Run`** — default `GOMAXPROCS` workers. Reach for this first; it's what `batchByBranch` and the log/annotation builders use.
-- **`utils.RunWithWorkers(items, n, fn)`** — when you need a specific cap (e.g. to throttle network calls below the CPU count).
+- **`workpool.Run`** — default `GOMAXPROCS` workers. Reach for this first; it's what `batchByBranch` and the log/annotation builders use.
+- **`workpool.RunN(items, n, fn)`** — when you need a specific cap (e.g. to throttle network calls below the CPU count).
+- **`workpool.RunAll(items, n, fn)`** — when workers can fail. Returns every error joined (no hand-rolled mutex + error slice); one worker runs items in order.
 - **Semaphore** (`make(chan struct{}, maxConcurrency)`) — when goroutines must coordinate cancellation or collect results through a channel rather than write indexed slots. See `internal/engine/rebase_validator.go` for the canonical pattern (parent-context check before acquiring the semaphore so an outer cancel short-circuits queued siblings).
 
 A single long-lived background goroutine running *alongside* the main work (one `go func` total, not one per item) is fine and does not need a pool.
+
+## Context
+
+- Anything that can spawn git/gh or hit the network takes `ctx context.Context`
+  as its first parameter, and passes it down. Do not mint
+  `context.Background()` in library code; it detaches the work from Ctrl-C and
+  from API request deadlines. Roots (`main`, `TestMain`, a long-lived
+  background owner) are the only places that create one.
+- Never pass or accept a nil context, and do not add `if ctx == nil` fallbacks.
+- Do not store a context in a struct. The exception is a Bubble Tea model,
+  whose `Update`/`View` signatures cannot take one: keep the context it was
+  built with in a field.
 
 ## Error Handling
 

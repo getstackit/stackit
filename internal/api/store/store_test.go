@@ -57,7 +57,7 @@ func sampleRepo() store.Repo {
 
 func TestStore_OpenRunsMigrationsAndListsEmpty(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 	st, err := store.Open(ctx, acquire(t))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
@@ -69,7 +69,7 @@ func TestStore_OpenRunsMigrationsAndListsEmpty(t *testing.T) {
 
 func TestStore_AddGetListDelete(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 	st, err := store.Open(ctx, acquire(t))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
@@ -103,7 +103,7 @@ func TestStore_AddGetListDelete(t *testing.T) {
 
 func TestStore_GetMissingReturnsNotFound(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 	st, err := store.Open(ctx, acquire(t))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
@@ -114,7 +114,7 @@ func TestStore_GetMissingReturnsNotFound(t *testing.T) {
 
 func TestStore_AddDuplicateIDFails(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 	st, err := store.Open(ctx, acquire(t))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
@@ -128,7 +128,7 @@ func TestStore_AddDuplicateIDFails(t *testing.T) {
 
 func TestStore_DeleteMissingIsNoOp(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 	st, err := store.Open(ctx, acquire(t))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
@@ -138,6 +138,6 @@ func TestStore_DeleteMissingIsNoOp(t *testing.T) {
 
 func TestStore_OpenEmptyConnStringErrors(t *testing.T) {
 	t.Parallel()
-	_, err := store.Open(context.Background(), "  ")
+	_, err := store.Open(t.Context(), "  ")
 	require.Error(t, err)
 }

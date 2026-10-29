@@ -1,7 +1,6 @@
 package merge_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,9 +27,9 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 		pr2 := git.PRNumber(102)
 		branch1 := s.Engine.GetBranch("branch1")
 		branch2 := s.Engine.GetBranch("branch2")
-		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfo(pr1))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch1, testhelpers.NewTestPrInfo(pr1))
 		require.NoError(t, err)
-		err = s.Engine.UpsertPrInfo(context.Background(), branch2, testhelpers.NewTestPrInfo(pr2))
+		err = s.Engine.UpsertPrInfo(t.Context(), branch2, testhelpers.NewTestPrInfo(pr2))
 		require.NoError(t, err)
 
 		s.Checkout("branch2")
@@ -72,9 +71,9 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 		pr2 := git.PRNumber(102)
 		branch1 := s.Engine.GetBranch("branch1")
 		branch2 := s.Engine.GetBranch("branch2")
-		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfoWithTitle(pr1, "Feature 1"))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch1, testhelpers.NewTestPrInfoWithTitle(pr1, "Feature 1"))
 		require.NoError(t, err)
-		err = s.Engine.UpsertPrInfo(context.Background(), branch2, testhelpers.NewTestPrInfoWithTitle(pr2, "Feature 2"))
+		err = s.Engine.UpsertPrInfo(t.Context(), branch2, testhelpers.NewTestPrInfoWithTitle(pr2, "Feature 2"))
 		require.NoError(t, err)
 
 		plan, _, err := merge.CreateMergePlan(s.Context.Context, s.Engine, s.Context.Output, s.Context.GitHubClient, merge.CreatePlanOptions{
@@ -104,9 +103,9 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 		pr2 := git.PRNumber(102)
 		branch1 := s.Engine.GetBranch("branch1")
 		branch2 := s.Engine.GetBranch("branch2")
-		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfoWithTitle(pr1, "Add user authentication"))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch1, testhelpers.NewTestPrInfoWithTitle(pr1, "Add user authentication"))
 		require.NoError(t, err)
-		err = s.Engine.UpsertPrInfo(context.Background(), branch2, testhelpers.NewTestPrInfoWithTitle(pr2, "Add user profile UI"))
+		err = s.Engine.UpsertPrInfo(t.Context(), branch2, testhelpers.NewTestPrInfoWithTitle(pr2, "Add user profile UI"))
 		require.NoError(t, err)
 
 		s.Checkout("branch2")
@@ -133,9 +132,9 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 
 		// Set scope on branches
 		scope := engine.NewScope("batch")
-		err := s.Engine.SetScope(context.Background(), s.Engine.GetBranch("batch/feature-a"), scope)
+		err := s.Engine.SetScope(t.Context(), s.Engine.GetBranch("batch/feature-a"), scope)
 		require.NoError(t, err)
-		err = s.Engine.SetScope(context.Background(), s.Engine.GetBranch("batch/feature-b"), scope)
+		err = s.Engine.SetScope(t.Context(), s.Engine.GetBranch("batch/feature-b"), scope)
 		require.NoError(t, err)
 
 		// Add PR info
@@ -143,9 +142,9 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 		pr2 := git.PRNumber(102)
 		branchA := s.Engine.GetBranch("batch/feature-a")
 		branchB := s.Engine.GetBranch("batch/feature-b")
-		err = s.Engine.UpsertPrInfo(context.Background(), branchA, testhelpers.NewTestPrInfoWithTitle(pr1, "Feature A"))
+		err = s.Engine.UpsertPrInfo(t.Context(), branchA, testhelpers.NewTestPrInfoWithTitle(pr1, "Feature A"))
 		require.NoError(t, err)
-		err = s.Engine.UpsertPrInfo(context.Background(), branchB, testhelpers.NewTestPrInfoWithTitle(pr2, "Feature B"))
+		err = s.Engine.UpsertPrInfo(t.Context(), branchB, testhelpers.NewTestPrInfoWithTitle(pr2, "Feature B"))
 		require.NoError(t, err)
 
 		s.Checkout("batch/feature-b")
@@ -199,9 +198,9 @@ func TestConsolidationStepExecution(t *testing.T) {
 		pr2 := git.PRNumber(102)
 		branch1 := s.Engine.GetBranch("branch1")
 		branch2 := s.Engine.GetBranch("branch2")
-		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfo(pr1))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch1, testhelpers.NewTestPrInfo(pr1))
 		require.NoError(t, err)
-		err = s.Engine.UpsertPrInfo(context.Background(), branch2, testhelpers.NewTestPrInfo(pr2))
+		err = s.Engine.UpsertPrInfo(t.Context(), branch2, testhelpers.NewTestPrInfo(pr2))
 		require.NoError(t, err)
 
 		s.Checkout("branch2")
@@ -235,9 +234,9 @@ func TestConsolidationErrorHandling(t *testing.T) {
 		pr2 := git.PRNumber(102)
 		branch1 := s.Engine.GetBranch("branch1")
 		branch2 := s.Engine.GetBranch("branch2")
-		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfoClosed(pr1))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch1, testhelpers.NewTestPrInfoClosed(pr1))
 		require.NoError(t, err)
-		err = s.Engine.UpsertPrInfo(context.Background(), branch2, testhelpers.NewTestPrInfo(pr2))
+		err = s.Engine.UpsertPrInfo(t.Context(), branch2, testhelpers.NewTestPrInfo(pr2))
 		require.NoError(t, err)
 
 		s.Checkout("branch2")
@@ -266,9 +265,9 @@ func TestConsolidationErrorHandling(t *testing.T) {
 		pr2 := git.PRNumber(102)
 		branch1 := s.Engine.GetBranch("branch1")
 		branch2 := s.Engine.GetBranch("branch2")
-		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfoDraft(pr1))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch1, testhelpers.NewTestPrInfoDraft(pr1))
 		require.NoError(t, err)
-		err = s.Engine.UpsertPrInfo(context.Background(), branch2, testhelpers.NewTestPrInfo(pr2))
+		err = s.Engine.UpsertPrInfo(t.Context(), branch2, testhelpers.NewTestPrInfo(pr2))
 		require.NoError(t, err)
 
 		s.Checkout("branch2")
@@ -308,7 +307,7 @@ func TestConsolidationErrorHandling(t *testing.T) {
 		// Add PR info
 		pr1 := git.PRNumber(101)
 		branch1 := s.Engine.GetBranch("branch1")
-		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfo(pr1))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch1, testhelpers.NewTestPrInfo(pr1))
 		require.NoError(t, err)
 
 		plan, _, err := merge.CreateMergePlan(s.Context.Context, s.Engine, s.Context.Output, s.Context.GitHubClient, merge.CreatePlanOptions{

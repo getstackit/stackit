@@ -28,7 +28,7 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*WorktreeResult, error)
 
 	branch := eng.GetBranch(opts.Branch)
 	if !branch.IsTracked() {
-		if _, err := eng.GetRevision(branch); err != nil {
+		if _, err := eng.GetRevision(ctx.Context, branch); err != nil {
 			return nil, fmt.Errorf("branch %s does not exist", output.BranchName(opts.Branch))
 		}
 		return nil, fmt.Errorf("branch %s is not tracked by stackit", output.BranchName(opts.Branch))
@@ -39,14 +39,14 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*WorktreeResult, error)
 		return nil, fmt.Errorf("branch %s is not part of a stack (its parent must be trunk)", output.BranchName(opts.Branch))
 	}
 	stackRoot := eng.GetBranch(stackRootName)
-	originalParent := eng.Trunk().GetName()
-	if parent := stackRoot.GetParent(); parent != nil {
-		originalParent = parent.GetName()
+	originalParent := eng.Trunk().Name()
+	if parent := stackRoot.Parent(); parent != nil {
+		originalParent = parent.Name()
 	}
 	if eng.IsWorktreeAnchor(stackRoot) {
 		return nil, fmt.Errorf("branch %s is already a worktree anchor", output.BranchName(stackRootName))
 	}
-	if existingWt, err := eng.GetWorktreeForStack(stackRootName); err != nil {
+	if existingWt, err := eng.GetWorktreeForStack(ctx.Context, stackRootName); err != nil {
 		return nil, fmt.Errorf("failed to check existing worktree: %w", err)
 	} else if existingWt != nil {
 		return nil, fmt.Errorf("stack already has a worktree at %s", existingWt.Path)
@@ -56,7 +56,7 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*WorktreeResult, error)
 	if name == "" {
 		name = stackRootName
 	}
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	trunk := eng.Trunk()
 	needsCheckout := currentBranch != nil && eng.GetStackRootForBranch(*currentBranch) == stackRootName
 	if needsCheckout {
@@ -75,7 +75,7 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*WorktreeResult, error)
 	if err != nil {
 		if needsCheckout && currentBranch != nil {
 			if restoreErr := eng.CheckoutBranch(ctx.Context, *currentBranch); restoreErr != nil {
-				out.Warn("Could not return to %s: %v", output.BranchName(currentBranch.GetName()), restoreErr)
+				out.Warn("Could not return to %s: %v", output.BranchName(currentBranch.Name()), restoreErr)
 			}
 		}
 		return nil, err

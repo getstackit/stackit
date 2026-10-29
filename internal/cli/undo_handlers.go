@@ -6,6 +6,7 @@ import (
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/term"
 	"github.com/getstackit/stackit/internal/tui"
 )
 
@@ -14,7 +15,7 @@ import (
 // Caller must defer runner.Cleanup() to restore terminal on exit.
 // Currently returns nil runner as interactive prompts are handled inline.
 func NewUndoUI(out output.Output, _ output.Logger) (*tui.Runner, undo.Handler) {
-	if tui.IsTTY() {
+	if term.IsInteractive() {
 		return nil, NewInteractiveUndoHandler(out)
 	}
 	return nil, NewSimpleUndoHandler(out)

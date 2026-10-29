@@ -4,8 +4,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-func registerPromptStories() {
-	RegisterStory(Story{
+func (r *storyRegistry) registerPromptStories() {
+	r.add(Story{
 		Name:        "Confirmation Prompt",
 		Category:    "Prompt",
 		Description: "A simple yes/no confirmation prompt",
@@ -14,7 +14,7 @@ func registerPromptStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "Text Input Prompt",
 		Category:    "Prompt",
 		Description: "A text input prompt for entering a value",
@@ -23,7 +23,7 @@ func registerPromptStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "Option Selector",
 		Category:    "Prompt",
 		Description: "A searchable list of options",
@@ -37,7 +37,7 @@ func registerPromptStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "Branch Selector",
 		Category:    "Prompt",
 		Description: "A searchable list of branches with tree visualization",
@@ -51,7 +51,7 @@ func registerPromptStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "Branch Reordering",
 		Category:    "Reorder",
 		Description: "Interactive interface for reordering branches in a stack",

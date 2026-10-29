@@ -70,7 +70,7 @@ func remoteMetadataScenario(t *testing.T) *scenario.Scenario {
 func countingContext(t *testing.T, s *scenario.Scenario) (*app.Context, *countingFetchRunner) {
 	t.Helper()
 	counting := &countingFetchRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{RepoRoot: s.Scene.Dir, Trunk: "main", Git: counting})
+	eng, err := engine.NewEngine(t.Context(), engine.Options{RepoRoot: s.Scene.Dir, Trunk: "main", Git: counting})
 	require.NoError(t, err)
 	ctx := app.NewContext(eng, app.WithRepoRoot(s.Scene.Dir), app.WithWriter(&bytes.Buffer{}), app.WithGitHubRunner(counting))
 	return ctx, counting
@@ -117,7 +117,7 @@ func TestDoctorDoesNotFetchAtStartup(t *testing.T) {
 	ctx, counting := countingContext(t, s)
 	// doctor's verdict (return value) is irrelevant here; we only assert it does
 	// no remote metadata fetch at startup.
-	_ = doctor.Action(ctx, doctor.Options{Trunk: "main"}, nil)
+	_ = doctor.Action(ctx.Context, doctor.Deps{Engine: ctx.Engine, GHRunner: ctx.GHRunner, RepoRoot: ctx.RepoRoot}, doctor.Options{Trunk: "main"}, nil)
 
 	require.Zero(t, counting.totalFetches(), "doctor must not fetch remote metadata at startup")
 }

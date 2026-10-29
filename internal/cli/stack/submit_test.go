@@ -1,7 +1,6 @@
 package stack_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -77,7 +76,7 @@ Dry run complete
 				}
 			}
 
-			eng, err := engine.NewEngine(engine.Options{RepoRoot: s.Dir, Trunk: "main"})
+			eng, err := engine.NewEngine(t.Context(), engine.Options{RepoRoot: s.Dir, Trunk: "main"})
 			if err != nil {
 				return err
 			}
@@ -87,7 +86,7 @@ Dry run complete
 				"branch-c": testhelpers.NewTestPrInfoFull(103, "", "", "OPEN", "branch-b", "https://github.com/getstackit/stackit/pull/103", false),
 			}
 			for name, prInfo := range prs {
-				if err := eng.UpsertPrInfo(context.Background(), eng.GetBranch(name), prInfo); err != nil {
+				if err := eng.UpsertPrInfo(t.Context(), eng.GetBranch(name), prInfo); err != nil {
 					return err
 				}
 			}

@@ -38,7 +38,7 @@ func (r *runner) ReadCommitInfo(ctx context.Context, refs ...string) ReadResults
 	if len(queries) == 0 {
 		return result
 	}
-	out, err := r.runGitInternal(ctx, strings.Join(queries, "\n")+"\n", nil, false, "cat-file", "--batch")
+	out, err := r.runStdinRaw(ctx, strings.Join(queries, "\n")+"\n", "cat-file", "--batch")
 	if err != nil {
 		for _, name := range names {
 			result.Fail(name, err)

@@ -17,8 +17,8 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 		return nil
 	}
 
-	branchName := branch.GetName()
-	oldTip, err := branch.GetRevision()
+	branchName := branch.Name()
+	oldTip, err := branch.Revision(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get branch revision for %s: %w", branchName, err)
 	}
@@ -59,7 +59,7 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 	}()
 
 	// Get all commits in the branch
-	commitSHAs, err := branch.GetCommitIDs()
+	commitSHAs, err := branch.CommitIDs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get commits for branch %s: %w", branchName, err)
 	}
@@ -181,7 +181,7 @@ func (e *engineImpl) applyHunksForCommit(ctx context.Context, commitSHA string, 
 }
 
 // FindTargetCommitForHunk finds the first commit downstack where the hunk doesn't commute
-func (e *engineImpl) FindTargetCommitForHunk(hunk git.Hunk, commitSHAs []string) (string, int, error) {
+func (e *engineImpl) FindTargetCommitForHunk(ctx context.Context, hunk git.Hunk, commitSHAs []string) (string, int, error) {
 	if len(commitSHAs) == 0 {
 		return "", -1, nil
 	}
@@ -189,14 +189,14 @@ func (e *engineImpl) FindTargetCommitForHunk(hunk git.Hunk, commitSHAs []string)
 	// Iterate through commits from newest to oldest
 	for i, commitSHA := range commitSHAs {
 		// Get parent commit SHA
-		parentSHA, err := e.git.ReadRevisions(context.Background(), commitSHA+"^").One()
+		parentSHA, err := e.git.ReadRevisions(ctx, commitSHA+"^").One()
 		if err != nil {
 			// If we can't get parent, skip this commit
 			continue
 		}
 
 		// Check if hunk commutes with this commit
-		commutes, err := e.git.CheckCommutation(hunk, commitSHA, parentSHA)
+		commutes, err := e.git.CheckCommutation(ctx, hunk, commitSHA, parentSHA)
 		if err != nil {
 			return "", -1, fmt.Errorf("failed to check commutation: %w", err)
 		}

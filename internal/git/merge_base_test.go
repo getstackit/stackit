@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"os/exec"
 	"testing"
 
@@ -23,17 +22,17 @@ func TestIsAncestor(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get initial commit SHA
-		initialSha, err := runner.RunGitCommandWithContext(context.Background(), "rev-parse", "HEAD")
+		initialSha, err := runner.Run(t.Context(), "rev-parse", "HEAD")
 		require.NoError(t, err)
 
 		// Create another commit
 		err = scene.Repo.CreateChangeAndCommit("second", "second")
 		require.NoError(t, err)
-		secondSha, err := scene.Repo.GetCurrentSHA()
+		secondSha, err := scene.Repo.CurrentSHA()
 		require.NoError(t, err)
 
 		// Initial should be ancestor of second
-		isAncestor, err := runner.IsAncestor(context.Background(), initialSha, secondSha)
+		isAncestor, err := runner.IsAncestor(t.Context(), initialSha, secondSha)
 		require.NoError(t, err)
 		require.True(t, isAncestor, "initial commit should be ancestor of second commit")
 	})
@@ -47,17 +46,17 @@ func TestIsAncestor(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get initial commit SHA
-		initialSha, err := runner.RunGitCommandWithContext(context.Background(), "rev-parse", "HEAD")
+		initialSha, err := runner.Run(t.Context(), "rev-parse", "HEAD")
 		require.NoError(t, err)
 
 		// Create another commit
 		err = scene.Repo.CreateChangeAndCommit("second", "second")
 		require.NoError(t, err)
-		secondSha, err := scene.Repo.GetCurrentSHA()
+		secondSha, err := scene.Repo.CurrentSHA()
 		require.NoError(t, err)
 
 		// Second should NOT be ancestor of initial
-		isAncestor, err := runner.IsAncestor(context.Background(), secondSha, initialSha)
+		isAncestor, err := runner.IsAncestor(t.Context(), secondSha, initialSha)
 		require.NoError(t, err)
 		require.False(t, isAncestor, "second commit should not be ancestor of initial commit")
 	})
@@ -70,11 +69,11 @@ func TestIsAncestor(t *testing.T) {
 		err := runner.InitDefaultRepo()
 		require.NoError(t, err)
 
-		sha, err := runner.RunGitCommandWithContext(context.Background(), "rev-parse", "HEAD")
+		sha, err := runner.Run(t.Context(), "rev-parse", "HEAD")
 		require.NoError(t, err)
 
 		// Same commit should be considered its own ancestor
-		isAncestor, err := runner.IsAncestor(context.Background(), sha, sha)
+		isAncestor, err := runner.IsAncestor(t.Context(), sha, sha)
 		require.NoError(t, err)
 		require.True(t, isAncestor, "commit should be its own ancestor")
 	})
@@ -100,7 +99,7 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get initial SHA from remote
-		initialSha, err := remoteScene.Repo.GetCurrentSHA()
+		initialSha, err := remoteScene.Repo.CurrentSHA()
 		require.NoError(t, err)
 
 		// 2. Setup a "local" repository by cloning
@@ -113,7 +112,7 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		// 3. Add commits to remote (simulating PR merge)
 		err = remoteScene.Repo.CreateChangeAndCommit("feature", "feature")
 		require.NoError(t, err)
-		newSha, err := remoteScene.Repo.GetCurrentSHA()
+		newSha, err := remoteScene.Repo.CurrentSHA()
 		require.NoError(t, err)
 		err = remoteScene.Repo.PushBranch("upstream", "main")
 		require.NoError(t, err)
@@ -124,17 +123,17 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		require.NoError(t, err)
 
 		// 5. Fetch the new commits (but don't pull)
-		_, err = runner.RunGitCommandWithContext(context.Background(),
+		_, err = runner.Run(t.Context(),
 			"fetch", "origin", "refs/heads/main:refs/remotes/origin/main")
 		require.NoError(t, err)
 
 		// 6. Test IsAncestor with the newly fetched commit
-		isAncestor, err := runner.IsAncestor(context.Background(), initialSha, newSha)
+		isAncestor, err := runner.IsAncestor(t.Context(), initialSha, newSha)
 		require.NoError(t, err)
 		require.True(t, isAncestor, "initial should be ancestor of new commit after fetch")
 
 		// Also verify the reverse is false
-		isAncestor, err = runner.IsAncestor(context.Background(), newSha, initialSha)
+		isAncestor, err = runner.IsAncestor(t.Context(), newSha, initialSha)
 		require.NoError(t, err)
 		require.False(t, isAncestor, "new commit should not be ancestor of initial")
 	})
@@ -149,7 +148,7 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get initial commit
-		initialSha, err := runner.RunGitCommandWithContext(context.Background(), "rev-parse", "HEAD")
+		initialSha, err := runner.Run(t.Context(), "rev-parse", "HEAD")
 		require.NoError(t, err)
 
 		// Create branch A with one commit
@@ -157,7 +156,7 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		require.NoError(t, err)
 		err = scene.Repo.CreateChangeAndCommit("change-a", "a")
 		require.NoError(t, err)
-		shaA, err := scene.Repo.GetCurrentSHA()
+		shaA, err := scene.Repo.CurrentSHA()
 		require.NoError(t, err)
 
 		// Go back to initial and create branch B with different commit
@@ -167,24 +166,24 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		require.NoError(t, err)
 		err = scene.Repo.CreateChangeAndCommit("change-b", "b")
 		require.NoError(t, err)
-		shaB, err := scene.Repo.GetCurrentSHA()
+		shaB, err := scene.Repo.CurrentSHA()
 		require.NoError(t, err)
 
 		// Neither should be ancestor of the other (diverged)
-		isAncestor, err := runner.IsAncestor(context.Background(), shaA, shaB)
+		isAncestor, err := runner.IsAncestor(t.Context(), shaA, shaB)
 		require.NoError(t, err)
 		require.False(t, isAncestor, "diverged commit A should not be ancestor of B")
 
-		isAncestor, err = runner.IsAncestor(context.Background(), shaB, shaA)
+		isAncestor, err = runner.IsAncestor(t.Context(), shaB, shaA)
 		require.NoError(t, err)
 		require.False(t, isAncestor, "diverged commit B should not be ancestor of A")
 
 		// But initial should be ancestor of both
-		isAncestor, err = runner.IsAncestor(context.Background(), initialSha, shaA)
+		isAncestor, err = runner.IsAncestor(t.Context(), initialSha, shaA)
 		require.NoError(t, err)
 		require.True(t, isAncestor, "initial should be ancestor of A")
 
-		isAncestor, err = runner.IsAncestor(context.Background(), initialSha, shaB)
+		isAncestor, err = runner.IsAncestor(t.Context(), initialSha, shaB)
 		require.NoError(t, err)
 		require.True(t, isAncestor, "initial should be ancestor of B")
 	})

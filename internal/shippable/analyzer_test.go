@@ -28,7 +28,7 @@ func newCountingAnalyzer(t *testing.T, dir string) (*Analyzer, engine.Engine, *c
 	t.Helper()
 
 	counting := &countingRemoteRunner{Runner: git.NewRunnerWithPath(dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: dir,
 		Trunk:    "main",
 		Git:      counting,
@@ -48,7 +48,7 @@ func TestAnalyzerSkipsRemoteStatusForIncompleteStacks(t *testing.T) {
 			WithStack(map[string]string{"P": "main", "C": "P"})
 		analyzer, _, counting := newCountingAnalyzer(t, s.Scene.Dir)
 
-		stack, err := analyzer.AnalyzeStack(context.Background(), stackview.StackInfo{
+		stack, err := analyzer.AnalyzeStack(t.Context(), stackview.StackInfo{
 			RootBranch:  "P",
 			AllBranches: []string{"P", "C"},
 		})
@@ -65,10 +65,10 @@ func TestAnalyzerSkipsRemoteStatusForIncompleteStacks(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{"P": "main", "C": "P"})
 		analyzer, eng, counting := newCountingAnalyzer(t, s.Scene.Dir)
-		require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("P"), testhelpers.NewTestPrInfoDraft(101)))
-		require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("C"), testhelpers.NewTestPrInfoDraft(102)))
+		require.NoError(t, eng.UpsertPrInfo(t.Context(), eng.GetBranch("P"), testhelpers.NewTestPrInfoDraft(101)))
+		require.NoError(t, eng.UpsertPrInfo(t.Context(), eng.GetBranch("C"), testhelpers.NewTestPrInfoDraft(102)))
 
-		stack, err := analyzer.AnalyzeStack(context.Background(), stackview.StackInfo{
+		stack, err := analyzer.AnalyzeStack(t.Context(), stackview.StackInfo{
 			RootBranch:  "P",
 			AllBranches: []string{"P", "C"},
 		})
@@ -86,10 +86,10 @@ func TestAnalyzerReadsRemoteStatusOnceForUpdateStack(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{"P": "main", "C": "P"})
 	analyzer, eng, counting := newCountingAnalyzer(t, s.Scene.Dir)
-	require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("P"), testhelpers.NewTestPrInfo(101)))
-	require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("C"), testhelpers.NewTestPrInfo(102)))
+	require.NoError(t, eng.UpsertPrInfo(t.Context(), eng.GetBranch("P"), testhelpers.NewTestPrInfo(101)))
+	require.NoError(t, eng.UpsertPrInfo(t.Context(), eng.GetBranch("C"), testhelpers.NewTestPrInfo(102)))
 
-	stack, err := analyzer.AnalyzeStack(context.Background(), stackview.StackInfo{
+	stack, err := analyzer.AnalyzeStack(t.Context(), stackview.StackInfo{
 		RootBranch:  "P",
 		AllBranches: []string{"P", "C"},
 	})
@@ -106,10 +106,10 @@ func TestAnalyzeAllReadsRemoteStatusOnceAcrossStacks(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{"P1": "main", "P2": "main"})
 	analyzer, eng, counting := newCountingAnalyzer(t, s.Scene.Dir)
-	require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("P1"), testhelpers.NewTestPrInfo(101)))
-	require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("P2"), testhelpers.NewTestPrInfo(102)))
+	require.NoError(t, eng.UpsertPrInfo(t.Context(), eng.GetBranch("P1"), testhelpers.NewTestPrInfo(101)))
+	require.NoError(t, eng.UpsertPrInfo(t.Context(), eng.GetBranch("P2"), testhelpers.NewTestPrInfo(102)))
 
-	result, err := analyzer.AnalyzeAll(context.Background())
+	result, err := analyzer.AnalyzeAll(t.Context())
 	require.NoError(t, err)
 
 	require.Len(t, result.Stacks, 2)

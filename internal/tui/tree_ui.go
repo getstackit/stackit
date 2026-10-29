@@ -6,6 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getstackit/stackit/internal/term"
+
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -19,7 +23,6 @@ import (
 	"github.com/getstackit/stackit/internal/tui/components/tree"
 	"github.com/getstackit/stackit/internal/tui/keys"
 	"github.com/getstackit/stackit/internal/tui/style"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 const (
@@ -46,7 +49,7 @@ type TreeEngine interface {
 	engine.StackView
 	stackview.WorktreeSource
 	stackview.AnnotationReader
-	BatchBranchStats(branches engine.Branches) map[string]engine.BranchStat
+	BatchBranchStats(ctx context.Context, branches engine.Branches) map[string]engine.BranchStat
 }
 
 // TreeModel is the bubbletea model for the interactive log
@@ -125,13 +128,13 @@ func NewTreeModel(ctx context.Context, eng TreeEngine, ghClient github.Client, o
 
 	// Detect worktrees (builds both empty and stack-root maps in one call)
 	start := time.Now()
-	worktrees := stackview.BuildWorktreeIndex(eng)
+	worktrees := stackview.BuildWorktreeIndex(ctx, eng)
 	emptyWorktreeNames := worktrees.EmptyAnchorNames()
 	treeDebug("BuildWorktreeIndex completed in %v, found %d empty worktrees", time.Since(start), len(worktrees.Empty))
 
 	// Create renderer synchronously for instant display
 	start = time.Now()
-	renderer := NewStackTreeRendererWithOptions(eng, engine.SortStrategySmart, filter, emptyWorktreeNames)
+	renderer := NewStackTreeRendererWithOptions(ctx, eng, engine.SortStrategySmart, filter, emptyWorktreeNames)
 	treeDebug("NewStackTreeRendererWithOptions completed in %v", time.Since(start))
 
 	// Build minimal annotations synchronously (includes worktree info, no git/network calls)
@@ -139,7 +142,7 @@ func NewTreeModel(ctx context.Context, eng TreeEngine, ghClient github.Client, o
 	allBranches := eng.AllBranches()
 	annotations := make(map[string]tree.BranchAnnotation)
 	for _, b := range allBranches {
-		annotations[b.GetName()] = TreeAnnotation(stackview.MinimalAnnotation(eng, b, worktrees))
+		annotations[b.Name()] = TreeAnnotation(stackview.MinimalAnnotation(eng, b, worktrees))
 	}
 	// Apply annotation overrides (e.g., custom labels for move operation)
 	if opts.AnnotationOverrides != nil {
@@ -156,10 +159,10 @@ func NewTreeModel(ctx context.Context, eng TreeEngine, ghClient github.Client, o
 
 	// Set initial selection
 	start = time.Now()
-	trunkName := eng.Trunk().GetName()
+	trunkName := eng.Trunk().Name()
 	selectedBranch := ""
-	if current := eng.CurrentBranch(); current != nil {
-		selectedBranch = current.GetName()
+	if current := eng.CurrentBranch(ctx); current != nil {
+		selectedBranch = current.Name()
 	} else {
 		selectedBranch = trunkName
 	}
@@ -168,7 +171,7 @@ func NewTreeModel(ctx context.Context, eng TreeEngine, ghClient github.Client, o
 	// Initialize search matches (all branches match when no search query)
 	searchMatches := make(map[string]bool)
 	for _, b := range allBranches {
-		searchMatches[b.GetName()] = true
+		searchMatches[b.Name()] = true
 	}
 
 	treeDebug("NewTreeModel completed in %v", time.Since(initStart))
@@ -310,13 +313,13 @@ func (m *TreeModel) enrichData() tea.Cmd {
 		ciStatuses := ciRes.statuses
 
 		// Detect worktrees (builds both empty and stack-root maps in one call)
-		worktrees := stackview.BuildWorktreeIndex(eng)
+		worktrees := stackview.BuildWorktreeIndex(ctx, eng)
 
 		// Resolve the git-computed annotation stats (short SHA, commit count, diff
 		// stats) for all branches as one batched value, instead of warming the
 		// engine-global caches. Forge status (CI) and worktree data above are
 		// separate concerns, joined into the annotation below.
-		stats := eng.BatchBranchStats(allBranches)
+		stats := eng.BatchBranchStats(ctx, allBranches)
 
 		// Collect full annotations
 		start := time.Now()
@@ -327,14 +330,14 @@ func (m *TreeModel) enrichData() tea.Cmd {
 		// Build into a positional slice so concurrent workers don't race on a
 		// shared map, then assemble the map serially.
 		built := make([]tree.BranchAnnotation, len(allBranches))
-		utils.Run(indexedBranches(allBranches), func(item indexedBranch) {
-			built[item.index] = TreeAnnotation(stackview.FullAnnotation(eng, item.branch, stats[item.branch.GetName()], enrichment, stackview.AnnotationOptions{
+		workpool.Run(indexedBranches(allBranches), func(item indexedBranch) {
+			built[item.index] = TreeAnnotation(stackview.FullAnnotation(ctx, eng, item.branch, stats[item.branch.Name()], enrichment, stackview.AnnotationOptions{
 				SkipCommitMessages: true,
 			}))
 		})
 		annotations := make(map[string]tree.BranchAnnotation, len(allBranches))
 		for i, b := range allBranches {
-			annotations[b.GetName()] = built[i]
+			annotations[b.Name()] = built[i]
 		}
 		treeDebug("Collected full annotations for %d branches in %v", len(allBranches), time.Since(start))
 
@@ -641,15 +644,15 @@ func (m *TreeModel) updateSearchMatches() {
 	if m.searchQuery == "" {
 		// All branches match when search is empty
 		for _, b := range m.allBranches {
-			m.searchMatches[b.GetName()] = true
+			m.searchMatches[b.Name()] = true
 		}
 		return
 	}
 
 	query := strings.ToLower(m.searchQuery)
 	for _, b := range m.allBranches {
-		branchName := strings.ToLower(b.GetName())
-		m.searchMatches[b.GetName()] = strings.Contains(branchName, query)
+		branchName := strings.ToLower(b.Name())
+		m.searchMatches[b.Name()] = strings.Contains(branchName, query)
 	}
 }
 
@@ -797,7 +800,7 @@ func (m *TreeModel) renderValidationFooter() string {
 
 // PromptTreeSelect runs the interactive log in selection mode and returns the selected branch name
 func PromptTreeSelect(ctx context.Context, eng TreeEngine, ghClient github.Client, opts TreeOptions) (string, error) {
-	if err := CheckInteractiveAllowed(); err != nil {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return "", err
 	}
 

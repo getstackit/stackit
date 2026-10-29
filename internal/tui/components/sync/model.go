@@ -13,7 +13,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/tui/core"
 	"github.com/getstackit/stackit/internal/tui/style"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Phase represents a sync phase
@@ -73,9 +72,9 @@ type Model struct {
 	// spinner reflects what's happening during slow phases.
 	//
 	// phaseHeaders holds each phase's pending header text; headers tracks the
-	// commit decision (the same utils.LazyHeaders rule the streaming handler uses).
+	// commit decision (the same LazyHeaders rule the streaming handler uses).
 	phaseHeaders map[Phase]string
-	headers      *utils.LazyHeaders[Phase]
+	headers      *LazyHeaders[Phase]
 }
 
 // PhaseStartMsg indicates a phase has started
@@ -125,7 +124,7 @@ func NewModel(totalOps int) *Model {
 		Progress:     p,
 		spinner:      s,
 		phaseHeaders: make(map[Phase]string),
-		headers:      utils.NewLazyHeaders[Phase](),
+		headers:      NewLazyHeaders[Phase](),
 	}
 	m.Width = 80 // Set BaseModel's Width
 	return m

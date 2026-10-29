@@ -23,7 +23,7 @@ func (s WorktreeStatus) HasUnstagedChanges() bool { return s.Unstaged || s.Untra
 // ReadWorktreeStatus reads all three flags in one process. Explicit untracked
 // reporting keeps guards independent of status.showUntrackedFiles configuration.
 func (r *runner) ReadWorktreeStatus(ctx context.Context) (WorktreeStatus, error) {
-	out, err := r.RunGitCommandRawWithContext(ctx, "status", "--porcelain=v1", "-z", "--untracked-files=normal")
+	out, err := r.RunRaw(ctx, "status", "--porcelain=v1", "-z", "--untracked-files=normal")
 	if err != nil {
 		return WorktreeStatus{}, err
 	}

@@ -39,7 +39,7 @@ func TestBuildRepoOmitsCurrentUserWhenPublic(t *testing.T) {
 	t.Run("private includes the operator identity", func(t *testing.T) {
 		t.Parallel()
 		a := NewViewAssembler(s.Engine, gh, "origin", VisibilityPrivate)
-		repo := a.buildRepo(context.Background())
+		repo := a.buildRepo(t.Context())
 		require.Equal(t, "operator-login", repo.CurrentUser)
 		require.Equal(t, "acme", repo.Owner)
 		require.Equal(t, "widgets", repo.Repo)
@@ -48,7 +48,7 @@ func TestBuildRepoOmitsCurrentUserWhenPublic(t *testing.T) {
 	t.Run("public omits the operator identity", func(t *testing.T) {
 		t.Parallel()
 		a := NewViewAssembler(s.Engine, gh, "origin", VisibilityPublic)
-		repo := a.buildRepo(context.Background())
+		repo := a.buildRepo(t.Context())
 		require.Empty(t, repo.CurrentUser, "a public read-only server must not leak who runs it")
 		// Repo coordinates are public information (they match the PRs on
 		// GitHub) and stay populated.
@@ -72,12 +72,12 @@ func TestBuildSurvivesDetachedHEAD(t *testing.T) {
 	head, err := s.Scene.Repo.GetRevision("HEAD")
 	require.NoError(t, err)
 	require.NoError(t, s.Scene.Repo.CheckoutDetached(head))
-	require.Nil(t, s.Engine.CurrentBranch(), "scenario must be in detached HEAD")
+	require.Nil(t, s.Engine.CurrentBranch(t.Context()), "scenario must be in detached HEAD")
 
 	// gh is nil: the anonymous public read path with no GitHub calls, mirroring
 	// the request that panicked.
 	a := NewViewAssembler(s.Engine, nil, "origin", VisibilityPublic)
-	view, err := a.Build(context.Background())
+	view, err := a.Build(t.Context())
 	require.NoError(t, err)
 	require.Empty(t, view.Repo.CurrentBranch, "detached HEAD has no current branch")
 	require.NotEmpty(t, view.Stacks, "the stack should still be mapped while detached")
@@ -113,7 +113,7 @@ func TestBuildReadsRemoteStatusOnceAcrossStacks(t *testing.T) {
 	}
 
 	counting := &countingFetchRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      counting,
@@ -121,7 +121,7 @@ func TestBuildReadsRemoteStatusOnceAcrossStacks(t *testing.T) {
 	require.NoError(t, err)
 
 	a := NewViewAssembler(eng, nil, "origin", VisibilityPublic)
-	view, err := a.Build(context.Background())
+	view, err := a.Build(t.Context())
 	require.NoError(t, err)
 	require.Len(t, view.Stacks, 2, "stack-a and stack-b are independent stacks off trunk")
 

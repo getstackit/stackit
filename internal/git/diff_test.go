@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,7 +23,7 @@ func TestIsDiffEmpty(t *testing.T) {
 		require.NoError(t, err)
 
 		// Branch with no changes should be empty
-		diff, err := runner.ReadDiffs(context.Background(), git.DiffCheckOnly, git.RevRange{Base: mainRev, Head: "main"}).One()
+		diff, err := runner.ReadDiffs(t.Context(), git.DiffCheckOnly, git.RevRange{Base: mainRev, Head: "main"}).One()
 		require.NoError(t, err)
 		require.True(t, diff.Empty)
 	})
@@ -47,7 +46,7 @@ func TestIsDiffEmpty(t *testing.T) {
 		require.NoError(t, err)
 
 		// Branch should not be empty
-		diff, err := runner.ReadDiffs(context.Background(), git.DiffCheckOnly, git.RevRange{Base: mainRev, Head: "branch1"}).One()
+		diff, err := runner.ReadDiffs(t.Context(), git.DiffCheckOnly, git.RevRange{Base: mainRev, Head: "branch1"}).One()
 		require.NoError(t, err)
 		require.False(t, diff.Empty)
 	})
@@ -70,7 +69,7 @@ func TestIsDiffEmpty(t *testing.T) {
 		require.NoError(t, err)
 
 		// Branch with no commits should be empty
-		diff, err := runner.ReadDiffs(context.Background(), git.DiffCheckOnly, git.RevRange{Base: mainRev, Head: "branch1"}).One()
+		diff, err := runner.ReadDiffs(t.Context(), git.DiffCheckOnly, git.RevRange{Base: mainRev, Head: "branch1"}).One()
 		require.NoError(t, err)
 		require.True(t, diff.Empty)
 	})
@@ -83,7 +82,7 @@ func TestGetUnmergedFiles(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		files, err := runner.GetUnmergedFiles(context.Background())
+		files, err := runner.GetUnmergedFiles(t.Context())
 		require.NoError(t, err)
 		require.Empty(t, files)
 	})
@@ -117,11 +116,11 @@ func TestGetUnmergedFiles(t *testing.T) {
 
 		// Start rebase (will conflict)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		_, err = runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
+		_, err = runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 
 		// Should have unmerged files
-		files, err := runner.GetUnmergedFiles(context.Background())
+		files, err := runner.GetUnmergedFiles(t.Context())
 		require.NoError(t, err)
 		require.NotEmpty(t, files)
 		require.Contains(t, files, "conflict_test.txt")

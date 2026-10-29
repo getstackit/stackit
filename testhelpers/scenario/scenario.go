@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
@@ -18,7 +20,6 @@ import (
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/testhelpers"
 )
 
@@ -95,7 +96,7 @@ func newScenarioWithScene(t *testing.T, scene *testhelpers.Scene) *Scenario {
 	t.Helper()
 
 	// Force non-interactive mode for tests in the current process
-	tui.SetInteractive(false)
+	term.SetInteractive(false)
 
 	cfg, cfgErr := config.LoadConfig(scene.Dir)
 	trunk := cfg.Trunk()
@@ -108,7 +109,7 @@ func newScenarioWithScene(t *testing.T, scene *testhelpers.Scene) *Scenario {
 	}
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 	metadata := git.NewMetadataStore(runner)
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot:          scene.Dir,
 		Trunk:             trunk,
 		MaxUndoStackDepth: maxUndoDepth,
@@ -238,7 +239,7 @@ func (s *Scenario) CreateBranchFromQuiet(name, startPoint string) *Scenario {
 func (s *Scenario) Rebuild() *Scenario {
 	s.T.Helper()
 	if s.Engine != nil {
-		err := s.Engine.Rebuild(s.Engine.Trunk().GetName())
+		err := s.Engine.Rebuild(s.T.Context(), s.Engine.Trunk().Name())
 		require.NoError(s.T, err)
 	}
 	return s
@@ -273,7 +274,7 @@ func (s *Scenario) SyncRemoteTrunkToLocal() *Scenario {
 	s.T.Helper()
 	trunk := defaultTrunk
 	if s.Engine != nil {
-		trunk = s.Engine.Trunk().GetName()
+		trunk = s.Engine.Trunk().Name()
 	}
 	sha, err := s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "--verify", trunk)
 	require.NoError(s.T, err)
@@ -297,7 +298,7 @@ func (s *Scenario) WithStack(structure map[string]string) *Scenario {
 	s.T.Helper()
 
 	// Ensure we have an initial commit on main if it's the root
-	if s.Engine.Trunk().GetName() == defaultTrunk {
+	if s.Engine.Trunk().Name() == defaultTrunk {
 		messages, _ := s.Scene.Repo.ListCurrentBranchCommitMessages()
 		if len(messages) == 0 {
 			s.WithInitialCommit()
@@ -308,7 +309,7 @@ func (s *Scenario) WithStack(structure map[string]string) *Scenario {
 	// For simplicity in tests, we'll just keep trying until all are created
 	// or we stop making progress.
 	created := make(map[string]bool)
-	created[s.Engine.Trunk().GetName()] = true
+	created[s.Engine.Trunk().Name()] = true
 
 	for len(created) < len(structure)+1 {
 		progress := false
@@ -345,12 +346,12 @@ func (s *Scenario) ExpectStackStructure(expected map[string]string) *Scenario {
 	s.T.Helper()
 	for branch, expectedParent := range expected {
 		branchObj := s.Engine.GetBranch(branch)
-		actualParent := branchObj.GetParent()
+		actualParent := branchObj.Parent()
 		if actualParent == nil {
 			s.T.Errorf("Parent of %s is nil, expected %s", branch, expectedParent)
 			continue
 		}
-		require.Equal(s.T, expectedParent, actualParent.GetName(), "Parent of %s does not match", branch)
+		require.Equal(s.T, expectedParent, actualParent.Name(), "Parent of %s does not match", branch)
 	}
 	return s
 }
@@ -362,20 +363,20 @@ func (s *Scenario) ExpectStackStructure(expected map[string]string) *Scenario {
 func (s *Scenario) BranchCommitCount(branch string) int {
 	s.T.Helper()
 	b := s.Engine.GetBranch(branch)
-	return s.Engine.BatchBranchStats(engine.BranchesOf(b))[branch].CommitCount
+	return s.Engine.BatchBranchStats(s.T.Context(), engine.BranchesOf(b))[branch].CommitCount
 }
 
 // ExpectBranchFixed asserts that a branch is considered "fixed" (no restack needed) by the engine.
 func (s *Scenario) ExpectBranchFixed(branch string) *Scenario {
 	s.T.Helper()
-	require.True(s.T, s.Engine.GetBranch(branch).IsBranchUpToDate(), "Branch %s should be up to date", branch)
+	require.True(s.T, s.Engine.GetBranch(branch).IsBranchUpToDate(s.T.Context()), "Branch %s should be up to date", branch)
 	return s
 }
 
 // ExpectBranchNotFixed asserts that a branch is NOT considered "fixed" by the engine.
 func (s *Scenario) ExpectBranchNotFixed(branch string) *Scenario {
 	s.T.Helper()
-	require.False(s.T, s.Engine.GetBranch(branch).IsBranchUpToDate(), "Branch %s should NOT be up to date", branch)
+	require.False(s.T, s.Engine.GetBranch(branch).IsBranchUpToDate(s.T.Context()), "Branch %s should NOT be up to date", branch)
 	return s
 }
 
@@ -449,7 +450,7 @@ func (s *Scenario) WithLinearStack(names ...string) *Scenario {
 	}
 
 	// Ensure we have an initial commit on trunk
-	trunk := s.Engine.Trunk().GetName()
+	trunk := s.Engine.Trunk().Name()
 	messages, _ := s.Scene.Repo.ListCurrentBranchCommitMessages()
 	if len(messages) == 0 {
 		s.WithInitialCommit()

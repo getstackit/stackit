@@ -14,7 +14,7 @@ func (r *runner) StashPush(ctx context.Context, message string) (string, error) 
 	if message != "" {
 		args = append(args, "-m", message)
 	}
-	output, err := r.RunGitCommandWithContext(ctx, args...)
+	output, err := r.Run(ctx, args...)
 	if err != nil {
 		return "", fmt.Errorf("stash push failed: %w", err)
 	}
@@ -34,7 +34,7 @@ func (r *runner) StashPushStaged(ctx context.Context, message string) (string, e
 	if message != "" {
 		args = append(args, "-m", message)
 	}
-	output, err := r.RunGitCommandWithContext(ctx, args...)
+	output, err := r.Run(ctx, args...)
 	if err != nil {
 		return "", fmt.Errorf("stash push --staged failed: %w", err)
 	}
@@ -49,14 +49,14 @@ func (r *runner) StashDrop(ctx context.Context, ref string) error {
 	if ref == "" {
 		return errors.New("stash drop requires an explicit stash ref")
 	}
-	if _, err := r.RunGitCommandWithContext(ctx, gitCmdStash, "drop", ref); err != nil {
+	if _, err := r.Run(ctx, gitCmdStash, "drop", ref); err != nil {
 		return fmt.Errorf("stash drop failed: %w", err)
 	}
 	return nil
 }
 
 func (r *runner) StashPop(ctx context.Context) error {
-	_, err := r.RunGitCommandWithContext(ctx, gitCmdStash, "pop")
+	_, err := r.Run(ctx, gitCmdStash, "pop")
 	if err != nil {
 		return fmt.Errorf("stash pop failed: %w", err)
 	}
@@ -71,14 +71,14 @@ func (r *runner) StashPopRef(ctx context.Context, ref string) error {
 	if ref == "" {
 		return errors.New("stash pop requires an explicit stash ref")
 	}
-	if _, err := r.RunGitCommandWithContext(ctx, gitCmdStash, "pop", ref); err != nil {
+	if _, err := r.Run(ctx, gitCmdStash, "pop", ref); err != nil {
 		return fmt.Errorf("stash pop failed: %w", err)
 	}
 	return nil
 }
 
 func (r *runner) ListStash(ctx context.Context) (string, error) {
-	return r.RunGitCommandWithContext(ctx, gitCmdStash, "list")
+	return r.Run(ctx, gitCmdStash, "list")
 }
 
 // StashApplyMode selects how a stash entry is put back onto the working tree.
@@ -112,7 +112,7 @@ func (r *runner) StashCreate(ctx context.Context, message string) (StashCapture,
 	if message != "" {
 		args = append(args, message)
 	}
-	output, err := r.RunGitCommandWithContext(ctx, args...)
+	output, err := r.Run(ctx, args...)
 	if err == nil {
 		return StashCapture{SHA: strings.TrimSpace(output)}, nil
 	}
@@ -120,12 +120,12 @@ func (r *runner) StashCreate(ctx context.Context, message string) (StashCapture,
 	// Git cannot stash an index containing intent-to-add entries. Retry with
 	// those files staged in a temporary index, preserving the real index and
 	// its staged/unstaged split. Save the flags separately for restoration.
-	pathsOutput, pathsErr := r.RunGitCommandRawWithContext(ctx, "diff", "--no-renames", "--name-only", "--diff-filter=A", "--ita-invisible-in-index", "-z", "--")
+	pathsOutput, pathsErr := r.RunRaw(ctx, "diff", "--no-renames", "--name-only", "--diff-filter=A", "--ita-invisible-in-index", "-z", "--")
 	paths := splitNulTerminated(pathsOutput)
 	if pathsErr != nil || len(paths) == 0 {
 		return StashCapture{}, fmt.Errorf("stash create failed: %w", err)
 	}
-	indexTree, err := r.RunGitCommandWithContext(ctx, "write-tree")
+	indexTree, err := r.Run(ctx, "write-tree")
 	if err != nil {
 		return StashCapture{}, fmt.Errorf("failed to capture index tree: %w", err)
 	}
@@ -138,16 +138,16 @@ func (r *runner) StashCreate(ctx context.Context, message string) (StashCapture,
 		return StashCapture{}, err
 	}
 	env := []string{"GIT_INDEX_FILE=" + index.Name()}
-	if _, err := r.RunGitCommandWithEnv(ctx, env, "read-tree", strings.TrimSpace(indexTree)); err != nil {
+	if _, err := r.RunWithEnv(ctx, env, "read-tree", strings.TrimSpace(indexTree)); err != nil {
 		return StashCapture{}, fmt.Errorf("failed to initialize capture index: %w", err)
 	}
 	for chunk := range slices.Chunk(paths, restorePathBatchSize) {
 		addArgs := append([]string{gitLiteralPathspecs, gitCmdAdd, "--force", "--"}, chunk...)
-		if _, err := r.RunGitCommandWithEnv(ctx, env, addArgs...); err != nil {
+		if _, err := r.RunWithEnv(ctx, env, addArgs...); err != nil {
 			return StashCapture{}, fmt.Errorf("failed to capture intent-to-add files: %w", err)
 		}
 	}
-	output, err = r.RunGitCommandWithEnv(ctx, env, args...)
+	output, err = r.RunWithEnv(ctx, env, args...)
 	if err != nil {
 		return StashCapture{}, fmt.Errorf("stash create with intent-to-add failed: %w", err)
 	}
@@ -159,7 +159,7 @@ func (r *runner) StashCreate(ctx context.Context, message string) (StashCapture,
 func (r *runner) RestoreIntentToAdd(ctx context.Context, paths []string) error {
 	for chunk := range slices.Chunk(paths, restorePathBatchSize) {
 		args := append([]string{gitLiteralPathspecs, "reset", "-N", "HEAD", "--"}, chunk...)
-		if _, err := r.RunGitCommandWithContext(ctx, args...); err != nil {
+		if _, err := r.Run(ctx, args...); err != nil {
 			return fmt.Errorf("failed to restore intent-to-add flags: %w", err)
 		}
 	}
@@ -180,7 +180,7 @@ func (r *runner) StashApplyRef(ctx context.Context, ref string, mode StashApplyM
 		args = append(args, "--index")
 	}
 	args = append(args, ref)
-	if _, err := r.RunGitCommandWithContext(ctx, args...); err != nil {
+	if _, err := r.Run(ctx, args...); err != nil {
 		return fmt.Errorf("stash apply failed: %w", err)
 	}
 	return nil

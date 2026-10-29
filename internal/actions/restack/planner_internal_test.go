@@ -1,4 +1,4 @@
-package actions
+package restack
 
 import (
 	"os"
@@ -191,8 +191,8 @@ func TestClassifyValidatedBranches(t *testing.T) {
 		require.Empty(t, conflicts)
 		require.Empty(t, blocked)
 		require.Len(t, success, 2)
-		require.Equal(t, "a", success[0].GetName())
-		require.Equal(t, "b", success[1].GetName())
+		require.Equal(t, "a", success[0].Name())
+		require.Equal(t, "b", success[1].Name())
 	})
 
 	t.Run("frozen and anchor branches succeed without a NewSHA", func(t *testing.T) {
@@ -248,7 +248,7 @@ func TestClassifyValidatedBranches(t *testing.T) {
 		require.Equal(t, []string{"beta-conflict"}, conflicts)
 		require.Equal(t, []string{"alpha-blocked"}, blocked)
 		require.Len(t, success, 1, "only gamma-ok (with confirmed NewSHA) should succeed")
-		require.Equal(t, "gamma-ok", success[0].GetName())
+		require.Equal(t, "gamma-ok", success[0].Name())
 	})
 
 	t.Run("branches not in the plan are ignored", func(t *testing.T) {
@@ -270,6 +270,6 @@ func TestClassifyValidatedBranches(t *testing.T) {
 		require.Empty(t, conflicts)
 		require.Empty(t, blocked)
 		require.Len(t, success, 1)
-		require.Equal(t, "a", success[0].GetName())
+		require.Equal(t, "a", success[0].Name())
 	})
 }

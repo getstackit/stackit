@@ -1,7 +1,6 @@
 package doctor
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -20,7 +19,7 @@ func TestCheckEmptyBranches(t *testing.T) {
 		CreateBranch("nochanges").
 		Checkout("main")
 
-	empty := checkEmptyBranches(s.Engine)
+	empty := checkEmptyBranches(t.Context(), s.Engine)
 
 	require.ElementsMatch(t, []string{"nochanges"}, empty)
 }
@@ -38,7 +37,7 @@ func TestCheckStackStatePrunesOrphanedMetadataInOneBatch(t *testing.T) {
 		RunGit("branch", "-D", "orphan2")
 
 	h := &recordingHandler{}
-	warnings, errors := checkStackState(context.Background(), s.Engine, h, 0, 0, true)
+	warnings, errors := checkStackState(t.Context(), s.Engine, h, 0, 0, true)
 
 	require.Equal(t, 0, errors)
 	require.Equal(t, 0, warnings)
@@ -51,7 +50,7 @@ func TestCheckStackStatePrunesOrphanedMetadataInOneBatch(t *testing.T) {
 	require.Contains(t, messages, "Pruned orphaned metadata for deleted branch orphan2")
 	require.Contains(t, messages, "All 2 orphaned metadata ref(s) pruned")
 
-	refs, err := s.Engine.ListMetadataRefs()
+	refs, err := s.Engine.ListMetadataRefs(t.Context())
 	require.NoError(t, err)
 	require.NotContains(t, refs, "orphan1")
 	require.NotContains(t, refs, "orphan2")

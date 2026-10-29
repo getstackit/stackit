@@ -92,7 +92,7 @@ func TestRestackAction(t *testing.T) {
 		var names []string
 		for _, group := range plan.groups {
 			for _, branch := range group.sortedBranches {
-				names = append(names, branch.GetName())
+				names = append(names, branch.Name())
 			}
 		}
 		require.Equal(t, []string{"feature", "feature-child"}, names)
@@ -109,7 +109,7 @@ func TestRestackAction(t *testing.T) {
 			})
 
 		originalNewWorktreeEngine := newWorktreeEngine
-		newWorktreeEngine = func(engine.WorktreeEngineOptions) (engine.Engine, error) {
+		newWorktreeEngine = func(context.Context, engine.WorktreeEngineOptions) (engine.Engine, error) {
 			return nil, errors.New("boom")
 		}
 		t.Cleanup(func() {
@@ -183,7 +183,7 @@ func TestRestackAction(t *testing.T) {
 		require.Equal(t, []string{"feature"}, recorder.branchesWith(RestackConflict))
 		require.NotNil(t, recorder.summary)
 		require.Equal(t, []string{"feature"}, recorder.summary.Conflicts)
-		require.False(t, s.Git.IsRebaseInProgress(context.Background()))
+		require.False(t, s.Git.IsRebaseInProgress(t.Context()))
 	})
 
 	t.Run("resolving mid-stack conflict applies ancestors before entering workflow", func(t *testing.T) {
@@ -201,7 +201,7 @@ func TestRestackAction(t *testing.T) {
 		s.CreateBranch("b")
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("b change", "conflict"))
 		s.TrackBranch("b", "a")
-		bBefore, err := s.Engine.GetRevision(engine.NewBranch("b", nil))
+		bBefore, err := s.Engine.GetRevision(t.Context(), engine.NewBranch("b", nil))
 		require.NoError(t, err)
 
 		s.Checkout("main")
@@ -225,15 +225,15 @@ func TestRestackAction(t *testing.T) {
 		// conflict state. Before the fix this errored with "expected conflict
 		// on b but rebase completed successfully" and left HEAD detached.
 		require.ErrorIs(t, err, stackiterrors.ErrConflictWorkflow)
-		require.True(t, s.Git.IsRebaseInProgress(context.Background()))
+		require.True(t, s.Git.IsRebaseInProgress(t.Context()))
 
 		continuation, err := config.GetContinuationState(s.Scene.Dir)
 		require.NoError(t, err)
 		require.Equal(t, bBefore, continuation.ExpectedBranchRevision)
 
-		mainRev, err := s.Engine.GetRevision(engine.NewBranch("main", nil))
+		mainRev, err := s.Engine.GetRevision(t.Context(), engine.NewBranch("main", nil))
 		require.NoError(t, err)
-		isAncestor, err := s.Git.IsAncestor(context.Background(), mainRev, "a")
+		isAncestor, err := s.Git.IsAncestor(t.Context(), mainRev, "a")
 		require.NoError(t, err)
 		require.True(t, isAncestor, "ancestor a must be restacked onto the new trunk before entering the conflict workflow")
 	})
@@ -248,7 +248,7 @@ func TestRestackAction(t *testing.T) {
 		s.CreateBranch("feature")
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("feature change", "conflict"))
 		s.TrackBranch("feature", "main")
-		featureBefore, err := s.Engine.GetRevision(engine.NewBranch("feature", nil))
+		featureBefore, err := s.Engine.GetRevision(t.Context(), engine.NewBranch("feature", nil))
 		require.NoError(t, err)
 
 		s.Checkout("main")
@@ -267,9 +267,9 @@ func TestRestackAction(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, handler.prompted)
 		require.Equal(t, []string{"feature"}, handler.conflicts)
-		require.False(t, s.Git.IsRebaseInProgress(context.Background()))
+		require.False(t, s.Git.IsRebaseInProgress(t.Context()))
 
-		featureRev, err := s.Engine.GetRevision(engine.NewBranch("feature", nil))
+		featureRev, err := s.Engine.GetRevision(t.Context(), engine.NewBranch("feature", nil))
 		require.NoError(t, err)
 		require.Equal(t, featureBefore, featureRev)
 	})
@@ -289,7 +289,7 @@ func TestConflictedStack(t *testing.T) {
 		})
 
 	eng := s.Context.Engine
-	group := restackPlannedGroup{sortedBranches: eng.SortBranchesTopologically(
+	group := restackPlannedGroup{sortedBranches: eng.SortBranchesTopologically(t.Context(),
 		engine.BranchesFromNames(eng, []string{"a", "a-child", "b"}),
 	)}
 

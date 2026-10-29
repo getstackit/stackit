@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -32,7 +31,7 @@ func TestIsMerged(t *testing.T) {
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Branch is not merged
-		merged, err := runner.IsMerged(context.Background(), "branch1", "main")
+		merged, err := runner.IsMerged(t.Context(), "branch1", "main")
 		require.NoError(t, err)
 		require.False(t, merged)
 	})
@@ -57,7 +56,7 @@ func TestIsMerged(t *testing.T) {
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Branch should be merged
-		merged, err := runner.IsMerged(context.Background(), "branch1", "main")
+		merged, err := runner.IsMerged(t.Context(), "branch1", "main")
 		require.NoError(t, err)
 		require.True(t, merged)
 	})
@@ -88,7 +87,7 @@ func TestIsMerged(t *testing.T) {
 		}
 
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
-		merged, err := runner.IsMerged(context.Background(), "branch1", "main")
+		merged, err := runner.IsMerged(t.Context(), "branch1", "main")
 		require.NoError(t, err)
 		require.True(t, merged)
 	})
@@ -119,11 +118,11 @@ func TestIsMerged(t *testing.T) {
 
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
-		merged, err := runner.IsMerged(context.Background(), "branch1", "main")
+		merged, err := runner.IsMerged(t.Context(), "branch1", "main")
 		require.NoError(t, err)
 		require.False(t, merged, "cheap IsMerged must not detect a multi-commit squash")
 
-		squashMerged, err := runner.IsSquashMerged(context.Background(), "branch1", "main", git.NewSquashMergeCache())
+		squashMerged, err := runner.IsSquashMerged(t.Context(), "branch1", "main", git.NewSquashMergeCache())
 		require.NoError(t, err)
 		require.True(t, squashMerged, "IsSquashMerged must detect the aggregate squash")
 	})
@@ -188,11 +187,11 @@ func TestIsSquashMergedCachesTargetCommitPatchIDs(t *testing.T) {
 	runner := git.NewRunnerWithPath(scene.Repo.Dir, logger)
 
 	cache := git.NewSquashMergeCache()
-	merged, err := runner.IsSquashMerged(context.Background(), "branch1", "main", cache)
+	merged, err := runner.IsSquashMerged(t.Context(), "branch1", "main", cache)
 	require.NoError(t, err)
 	require.False(t, merged)
 
-	merged, err = runner.IsSquashMerged(context.Background(), "branch2", "main", cache)
+	merged, err = runner.IsSquashMerged(t.Context(), "branch2", "main", cache)
 	require.NoError(t, err)
 	require.False(t, merged)
 

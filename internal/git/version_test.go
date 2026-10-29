@@ -1,7 +1,6 @@
 package git
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -60,9 +59,9 @@ func TestGitVersionClearsMinimum(t *testing.T) {
 	t.Parallel()
 
 	r := &runner{}
-	version, err := r.GitVersion(context.Background())
+	version, err := r.GitVersion(t.Context())
 	require.NoError(t, err)
-	require.NoError(t, r.requireGitVersion(context.Background(), MinimumGitVersion, "test"),
+	require.NoError(t, r.requireGitVersion(t.Context(), MinimumGitVersion, "test"),
 		"installed git %s is below the minimum this test suite assumes", version)
 }
 
@@ -72,7 +71,7 @@ func TestRequireGitVersionDistinguishesTooOldFromUnknown(t *testing.T) {
 	r := &runner{}
 
 	// Too old: name the versions so the user knows what they have.
-	err := r.requireGitVersion(context.Background(), Version{Major: 99}, "git future-feature")
+	err := r.requireGitVersion(t.Context(), Version{Major: 99}, "git future-feature")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "requires Git 99.0 or later")
 	require.Contains(t, err.Error(), "please upgrade")
@@ -80,7 +79,7 @@ func TestRequireGitVersionDistinguishesTooOldFromUnknown(t *testing.T) {
 	// Unknown: a probe failure must NOT be reported as an old git. Point the
 	// runner at a directory with no git to force the probe to fail.
 	broken := &runner{repoRoot: "/nonexistent-stackit-version-probe"}
-	brokenErr := broken.requireGitVersion(context.Background(), MinimumGitVersion, "git worktree list -z")
+	brokenErr := broken.requireGitVersion(t.Context(), MinimumGitVersion, "git worktree list -z")
 	require.Error(t, brokenErr)
 	require.Contains(t, brokenErr.Error(), "could not be determined")
 	require.NotContains(t, brokenErr.Error(), "please upgrade")
@@ -92,13 +91,13 @@ func TestGitVersionDoesNotCacheFailure(t *testing.T) {
 	t.Parallel()
 
 	r := &runner{repoRoot: "/nonexistent-stackit-version-probe"}
-	_, err := r.GitVersion(context.Background())
+	_, err := r.GitVersion(t.Context())
 	require.Error(t, err)
 	require.False(t, r.gitVersionParsed, "a failed probe must not be cached")
 
 	// Same runner, now able to reach git: the earlier failure must not persist.
 	r.repoRoot = ""
-	version, err := r.GitVersion(context.Background())
+	version, err := r.GitVersion(t.Context())
 	require.NoError(t, err, "a failed probe must be retried, not latched")
 	require.Positive(t, version.Major)
 }

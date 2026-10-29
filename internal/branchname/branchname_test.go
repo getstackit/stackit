@@ -1,4 +1,4 @@
-package utils
+package branchname
 
 import (
 	"strings"
@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSanitizeBranchName(t *testing.T) {
+func TestSanitize(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -100,38 +100,38 @@ func TestSanitizeBranchName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := SanitizeBranchName(tt.input)
+			result := Sanitize(tt.input)
 			require.Equal(t, tt.expected, result)
 		})
 	}
 }
 
-func TestSanitizeBranchName_MaxLength(t *testing.T) {
+func TestSanitize_MaxLength(t *testing.T) {
 	t.Parallel()
 
-	// Create a string longer than MaxBranchNameByteLength
-	longName := strings.Repeat("a", MaxBranchNameByteLength+50)
+	// Create a string longer than MaxByteLength
+	longName := strings.Repeat("a", MaxByteLength+50)
 
-	result := SanitizeBranchName(longName)
+	result := Sanitize(longName)
 
-	require.LessOrEqual(t, len(result), MaxBranchNameByteLength)
-	require.Len(t, result, MaxBranchNameByteLength)
+	require.LessOrEqual(t, len(result), MaxByteLength)
+	require.Len(t, result, MaxByteLength)
 }
 
-func TestSanitizeBranchName_MaxLengthTrimsTrailingHyphen(t *testing.T) {
+func TestSanitize_MaxLengthTrimsTrailingHyphen(t *testing.T) {
 	t.Parallel()
 
 	// Create a string that when truncated would end with a hyphen
-	// MaxBranchNameByteLength is 234, so we create a string where position 234 is a hyphen
-	longName := strings.Repeat("a", MaxBranchNameByteLength-1) + "-" + strings.Repeat("b", 50)
+	// MaxByteLength is 234, so we create a string where position 234 is a hyphen
+	longName := strings.Repeat("a", MaxByteLength-1) + "-" + strings.Repeat("b", 50)
 
-	result := SanitizeBranchName(longName)
+	result := Sanitize(longName)
 
-	require.LessOrEqual(t, len(result), MaxBranchNameByteLength)
+	require.LessOrEqual(t, len(result), MaxByteLength)
 	require.False(t, strings.HasSuffix(result, "-"), "result should not end with hyphen")
 }
 
-func TestGenerateBranchNameFromMessage(t *testing.T) {
+func TestFromMessage(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -239,13 +239,13 @@ func TestGenerateBranchNameFromMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := GenerateBranchNameFromMessage(tt.message)
+			result := FromMessage(tt.message)
 			require.Equal(t, tt.expected, result)
 		})
 	}
 }
 
-func TestValidateBranchName(t *testing.T) {
+func TestValidate(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -365,13 +365,13 @@ func TestValidateBranchName(t *testing.T) {
 		},
 		{
 			name:        "too long",
-			branchName:  strings.Repeat("a", MaxBranchNameByteLength+1),
+			branchName:  strings.Repeat("a", MaxByteLength+1),
 			expectError: true,
 			errorMsg:    "exceeds maximum length",
 		},
 		{
 			name:        "max length is valid",
-			branchName:  strings.Repeat("a", MaxBranchNameByteLength),
+			branchName:  strings.Repeat("a", MaxByteLength),
 			expectError: false,
 		},
 	}
@@ -379,7 +379,7 @@ func TestValidateBranchName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := ValidateBranchName(tt.branchName)
+			err := Validate(tt.branchName)
 			if tt.expectError {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.errorMsg)

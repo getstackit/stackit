@@ -25,7 +25,7 @@ func TestDiscoverIndependentStacks(t *testing.T) {
 				"stack-b-child": "stack-b",
 			})
 
-		stacks := engine.DiscoverIndependentStacks(s.Engine)
+		stacks := engine.DiscoverIndependentStacks(t.Context(), s.Engine)
 
 		require.Equal(t, []engine.IndependentStack{
 			{
@@ -44,7 +44,7 @@ func TestDiscoverIndependentStacks(t *testing.T) {
 
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		stacks := engine.DiscoverIndependentStacks(s.Engine)
+		stacks := engine.DiscoverIndependentStacks(t.Context(), s.Engine)
 
 		require.Empty(t, stacks)
 	})
@@ -59,7 +59,7 @@ func TestDiscoverIndependentStacks(t *testing.T) {
 				"child-b": "root",
 			})
 
-		stacks := engine.DiscoverIndependentStacks(s.Engine)
+		stacks := engine.DiscoverIndependentStacks(t.Context(), s.Engine)
 
 		require.Equal(t, []engine.IndependentStack{
 			{

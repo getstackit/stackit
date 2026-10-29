@@ -32,7 +32,7 @@ func TestUndoAction(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Get initial state
-		initialFeatureSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		initialFeatureSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 
 		// Take snapshot
@@ -47,12 +47,12 @@ func TestUndoAction(t *testing.T) {
 			Commit("additional change")
 
 		// Verify SHA changed
-		newFeatureSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		newFeatureSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 		require.NotEqual(t, initialFeatureSHA, newFeatureSHA)
 
 		// Test restore directly via engine (bypasses confirmation prompt)
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		require.Len(t, snapshots, 1)
 
@@ -60,8 +60,8 @@ func TestUndoAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify state restored
-		s.Engine.Rebuild(s.Engine.Trunk().GetName())
-		restoredFeatureSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().Name())
+		restoredFeatureSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, initialFeatureSHA, restoredFeatureSHA)
 	})
@@ -92,7 +92,7 @@ func TestUndoAction(t *testing.T) {
 			TrackBranch("feature1", "main")
 
 		// Get initial state BEFORE taking snapshot
-		initialFeature1SHA, err := s.Engine.GetBranch("feature1").GetRevision()
+		initialFeature1SHA, err := s.Engine.GetBranch("feature1").Revision(t.Context())
 		require.NoError(t, err)
 
 		// Take first snapshot (captures initial state)
@@ -107,7 +107,7 @@ func TestUndoAction(t *testing.T) {
 			Commit("feature1 change 2")
 
 		// Get SHA after first change
-		afterFirstChangeSHA, err := s.Engine.GetBranch("feature1").GetRevision()
+		afterFirstChangeSHA, err := s.Engine.GetBranch("feature1").Revision(t.Context())
 		require.NoError(t, err)
 		require.NotEqual(t, initialFeature1SHA, afterFirstChangeSHA)
 
@@ -122,12 +122,12 @@ func TestUndoAction(t *testing.T) {
 		s.Commit("feature1 change 3")
 
 		// Get SHA after second change
-		afterSecondChangeSHA, err := s.Engine.GetBranch("feature1").GetRevision()
+		afterSecondChangeSHA, err := s.Engine.GetBranch("feature1").Revision(t.Context())
 		require.NoError(t, err)
 		require.NotEqual(t, afterFirstChangeSHA, afterSecondChangeSHA)
 
 		// Restore to first snapshot (undoing second operation) via engine directly
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		require.Len(t, snapshots, 2)
 
@@ -137,8 +137,8 @@ func TestUndoAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify state restored to Snapshot 2 (after first change, not initial)
-		s.Engine.Rebuild(s.Engine.Trunk().GetName())
-		restoredFeature1SHA, err := s.Engine.GetBranch("feature1").GetRevision()
+		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().Name())
+		restoredFeature1SHA, err := s.Engine.GetBranch("feature1").Revision(t.Context())
 		require.NoError(t, err)
 		// Should restore to state after first change
 		require.Equal(t, afterFirstChangeSHA, restoredFeature1SHA)
@@ -172,22 +172,22 @@ func TestUndoAfterCreate(t *testing.T) {
 		allBranches := s.Engine.AllBranches()
 		branches := make([]string, len(allBranches))
 		for i, b := range allBranches {
-			branches[i] = b.GetName()
+			branches[i] = b.Name()
 		}
 		require.Contains(t, branches, "feature")
 
 		// Undo via engine directly (bypasses confirmation)
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		err = s.Engine.RestoreSnapshot(s.Context, snapshots[0].ID)
 		require.NoError(t, err)
 
 		// Verify branch was deleted (it didn't exist in the snapshot)
-		s.Engine.Rebuild(s.Engine.Trunk().GetName())
+		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().Name())
 		allBranches2 := s.Engine.AllBranches()
 		branches = make([]string, len(allBranches2))
 		for i, b := range allBranches2 {
-			branches[i] = b.GetName()
+			branches[i] = b.Name()
 		}
 		require.NotContains(t, branches, "feature")
 	})
@@ -209,9 +209,9 @@ func TestUndoAfterMove(t *testing.T) {
 
 		// Get initial parent
 		branchinitialParent := s.Engine.GetBranch("feature2")
-		initialParent := branchinitialParent.GetParent()
+		initialParent := branchinitialParent.Parent()
 		require.NotNil(t, initialParent)
-		require.Equal(t, "feature1", initialParent.GetName())
+		require.Equal(t, "feature1", initialParent.Name())
 
 		// Take snapshot before move
 		err := s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{
@@ -226,26 +226,27 @@ func TestUndoAfterMove(t *testing.T) {
 
 		// Verify parent changed
 		branchnewParent := s.Engine.GetBranch("feature2")
-		newParent := branchnewParent.GetParent()
+		newParent := branchnewParent.Parent()
 		require.NotNil(t, newParent)
-		require.Equal(t, "main", newParent.GetName())
+		require.Equal(t, "main", newParent.Name())
 
 		// Undo via engine directly (bypasses confirmation)
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		err = s.Engine.RestoreSnapshot(s.Context, snapshots[0].ID)
 		require.NoError(t, err)
 
 		// Verify parent restored
-		s.Engine.Rebuild(s.Engine.Trunk().GetName())
+		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().Name())
 		branchrestoredParent := s.Engine.GetBranch("feature2")
-		restoredParent := branchrestoredParent.GetParent()
+		restoredParent := branchrestoredParent.Parent()
 		require.NotNil(t, restoredParent)
-		require.Equal(t, initialParent.GetName(), restoredParent.GetName())
+		require.Equal(t, initialParent.Name(), restoredParent.Name())
 	})
 }
 
 func TestUndoWarnsWhenLinearModeRestoresFork(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit().
 		CreateBranch("base").

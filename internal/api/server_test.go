@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 )
 
 func TestNormalizeAPIPrefixes(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    []string
@@ -35,6 +35,7 @@ func TestNormalizeAPIPrefixes(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got := normalizeAPIPrefixes(tc.input)
 			if len(got) != len(tc.expected) {
 				t.Fatalf("want %d entries, got %d (%v)", len(tc.expected), len(got), got)
@@ -49,6 +50,7 @@ func TestNormalizeAPIPrefixes(t *testing.T) {
 }
 
 func TestIsAPIPath(t *testing.T) {
+	t.Parallel()
 	prefixes := []string{"/api/v1"}
 
 	tests := []struct {
@@ -71,14 +73,16 @@ func TestIsAPIPath(t *testing.T) {
 }
 
 func TestServerShutdownIsIdempotentWithoutHTTPServer(t *testing.T) {
+	t.Parallel()
 	server := NewServer(ServerConfig{})
 
-	if err := server.Shutdown(context.Background()); err != nil {
+	if err := server.Shutdown(t.Context()); err != nil {
 		t.Fatalf("shutdown returned error: %v", err)
 	}
 }
 
 func TestRegistryCloseClosesEntryBroadcasters(t *testing.T) {
+	t.Parallel()
 	reg := registry.New()
 	b := registry.NewBroadcaster()
 	entry := &registry.RepoEntry{

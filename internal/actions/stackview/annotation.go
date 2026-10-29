@@ -1,6 +1,8 @@
 package stackview
 
 import (
+	"context"
+
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
@@ -99,7 +101,7 @@ func MinimalAnnotation(eng AnnotationReader, branch engine.Branch, worktrees *Wo
 		IsLocked:      branch.IsLocked(),
 		IsFrozen:      branch.IsFrozen(),
 		Scope:         eng.GetScope(branch).String(),
-		ExplicitScope: branch.GetExplicitScope().String(),
+		ExplicitScope: branch.ExplicitScope().String(),
 	}
 	worktrees.apply(eng, branch, &ann)
 	return ann
@@ -107,14 +109,14 @@ func MinimalAnnotation(eng AnnotationReader, branch engine.Branch, worktrees *Wo
 
 // FullAnnotation returns BaseAnnotation joined with the enrichment's CI and
 // review status and worktree info. A nil enrichment yields the base annotation.
-func FullAnnotation(eng AnnotationReader, branch engine.Branch, stat engine.BranchStat, enrichment *Enrichment, opts AnnotationOptions) BranchAnnotation {
-	ann := BaseAnnotation(eng, branch, stat, opts)
+func FullAnnotation(ctx context.Context, eng AnnotationReader, branch engine.Branch, stat engine.BranchStat, enrichment *Enrichment, opts AnnotationOptions) BranchAnnotation {
+	ann := BaseAnnotation(ctx, eng, branch, stat, opts)
 	if enrichment == nil {
 		return ann
 	}
 
 	if !branch.IsTrunk() {
-		if status := enrichment.CIStatuses.Get(branch.GetName()); status != nil {
+		if status := enrichment.CIStatuses.Get(branch.Name()); status != nil {
 			ann.Check = checkState(status)
 			ann.Review = reviewState(status.ReviewDecision)
 		}
@@ -129,12 +131,12 @@ func FullAnnotation(eng AnnotationReader, branch engine.Branch, stat engine.Bran
 // come from stat, a batched value the caller resolves with BatchBranchStats —
 // code annotating a set of branches must build that batch rather than reading
 // per branch.
-func BaseAnnotation(eng ScopeReader, branch engine.Branch, stat engine.BranchStat, opts AnnotationOptions) BranchAnnotation {
+func BaseAnnotation(ctx context.Context, eng ScopeReader, branch engine.Branch, stat engine.BranchStat, opts AnnotationOptions) BranchAnnotation {
 	ann := BranchAnnotation{
 		IsLocked:      branch.IsLocked(),
 		IsFrozen:      branch.IsFrozen(),
 		Scope:         eng.GetScope(branch).String(),
-		ExplicitScope: branch.GetExplicitScope().String(),
+		ExplicitScope: branch.ExplicitScope().String(),
 		LocalSHA:      stat.ShortSHA,
 	}
 
@@ -142,7 +144,7 @@ func BaseAnnotation(eng ScopeReader, branch engine.Branch, stat engine.BranchSta
 		return ann
 	}
 
-	if prInfo, _ := branch.GetPrInfo(); prInfo != nil {
+	if prInfo, _ := branch.PrInfo(); prInfo != nil {
 		ann.PRNumber = prInfo.Number()
 		ann.PRState = prInfo.State()
 		ann.IsDraft = prInfo.IsDraft()
@@ -151,7 +153,7 @@ func BaseAnnotation(eng ScopeReader, branch engine.Branch, stat engine.BranchSta
 
 	// Commit messages for the detailed view; otherwise the batched count.
 	if !opts.SkipCommitMessages {
-		if commits, err := branch.GetAllCommits(); err == nil {
+		if commits, err := branch.AllCommits(ctx); err == nil {
 			ann.CommitMessages = commits.Onelines()
 			ann.CommitCount = len(commits)
 		}
@@ -159,7 +161,7 @@ func BaseAnnotation(eng ScopeReader, branch engine.Branch, stat engine.BranchSta
 		ann.CommitCount = stat.CommitCount
 	}
 
-	if merged := branch.GetMergedDownstack(); len(merged) > 0 {
+	if merged := branch.MergedDownstack(); len(merged) > 0 {
 		ann.MergedDownstack = merged
 	}
 

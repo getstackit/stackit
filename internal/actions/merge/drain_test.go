@@ -106,6 +106,7 @@ func remoteMetadataParent(t *testing.T, repo *testhelpers.GitRepo, remoteDir, br
 // PR as "not at the bottom of the stack" — leaving it unstable so automerge
 // refuses it, one stall per remaining PR.
 func TestDrainPushesRestackedBranchesToRemote(t *testing.T) {
+	t.Parallel()
 	scene := testhelpers.NewRemoteSceneParallel(t)
 	repo := scene.Repo
 
@@ -114,7 +115,7 @@ func TestDrainPushesRestackedBranchesToRemote(t *testing.T) {
 	remoteDir = strings.TrimSpace(remoteDir)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	eng, err := engine.NewEngine(engine.Options{RepoRoot: scene.Dir, Trunk: "main", Git: runner})
+	eng, err := engine.NewEngine(t.Context(), engine.Options{RepoRoot: scene.Dir, Trunk: "main", Git: runner})
 	require.NoError(t, err)
 
 	// main -> a -> b, both with open PRs and both pushed.
@@ -122,13 +123,13 @@ func TestDrainPushesRestackedBranchesToRemote(t *testing.T) {
 		require.NoError(t, repo.CreateAndCheckoutBranch(b))
 		require.NoError(t, repo.CreateChangeAndCommit("content "+b, b))
 	}
-	require.NoError(t, eng.Rebuild("main"))
-	require.NoError(t, eng.TrackBranch(context.Background(), "a", "main"))
-	require.NoError(t, eng.TrackBranch(context.Background(), "b", "a"))
-	require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("a"), testhelpers.NewTestPrInfo(101)))
-	require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("b"), testhelpers.NewTestPrInfo(102)))
+	require.NoError(t, eng.Rebuild(t.Context(), "main"))
+	require.NoError(t, eng.TrackBranch(t.Context(), "a", "main"))
+	require.NoError(t, eng.TrackBranch(t.Context(), "b", "a"))
+	require.NoError(t, eng.UpsertPrInfo(t.Context(), eng.GetBranch("a"), testhelpers.NewTestPrInfo(101)))
+	require.NoError(t, eng.UpsertPrInfo(t.Context(), eng.GetBranch("b"), testhelpers.NewTestPrInfo(102)))
 	require.NoError(t, repo.RunGitCommand("push", "origin", "a", "b"))
-	require.NoError(t, eng.PushMetadataForBranches(context.Background(), []string{"a", "b"}))
+	require.NoError(t, eng.PushMetadataForBranches(t.Context(), []string{"a", "b"}))
 
 	// Before draining, b's recorded parent on the remote is a.
 	require.Equal(t, "a", remoteMetadataParent(t, repo, remoteDir, "b"),

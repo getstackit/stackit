@@ -12,7 +12,7 @@ import (
 
 func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentBranch engine.Branch, eng foldEngine, splog output.Output, _ Options) error {
 	// Build StackGraph for efficient traversals
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(gctx, engine.SortStrategyAlphabetical)
 
 	// Get all children of parent (siblings + current branch)
 	allChildren := graph.ChildBranches(parentBranch)
@@ -20,7 +20,7 @@ func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentB
 	// Identify siblings (children of parent excluding current branch)
 	siblings := engine.Branches{}
 	for _, child := range allChildren {
-		if child.GetName() != currentBranch.GetName() {
+		if child.Name() != currentBranch.Name() {
 			siblings = siblings.Append(child)
 		}
 	}
@@ -44,10 +44,10 @@ func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentB
 	// merge-base calculation against the grandparent (now its parent).
 	// DeleteBranch preserved the old divergence point, which would drop the
 	// merged commits at restack; DivergenceRecompute pulls them back in.
-	refreshedCurrent := eng.GetBranch(currentBranch.GetName())
-	if grandparent := refreshedCurrent.GetParent(); grandparent != nil {
+	refreshedCurrent := eng.GetBranch(currentBranch.Name())
+	if grandparent := refreshedCurrent.Parent(); grandparent != nil {
 		if err := eng.SetParent(gctx, refreshedCurrent, *grandparent, engine.DivergenceRecompute); err != nil {
-			return fmt.Errorf("failed to reset divergence for %s: %w", currentBranch.GetName(), err)
+			return fmt.Errorf("failed to reset divergence for %s: %w", currentBranch.Name(), err)
 		}
 	}
 
@@ -55,18 +55,18 @@ func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentB
 	// propagated automatically, and capturing divergence points up front keeps
 	// related siblings correct.
 	if len(siblings) > 0 {
-		if err := eng.ReparentBranchesToParents(gctx, engine.MovesTo(siblings.Names(), refreshedCurrent.GetName()), engine.ReparentOpts{}); err != nil {
-			return fmt.Errorf("failed to reparent siblings to %s: %w", currentBranch.GetName(), err)
+		if err := eng.ReparentBranchesToParents(gctx, engine.MovesTo(siblings.Names(), refreshedCurrent.Name()), engine.ReparentOpts{}); err != nil {
+			return fmt.Errorf("failed to reparent siblings to %s: %w", currentBranch.Name(), err)
 		}
 	}
 
 	splog.Info("Folded %s into %s (kept %s).",
-		output.CurrentBranch(parentBranch.GetName()),
-		output.BranchName(currentBranch.GetName()),
-		output.BranchName(currentBranch.GetName()))
+		output.CurrentBranch(parentBranch.Name()),
+		output.BranchName(currentBranch.Name()),
+		output.BranchName(currentBranch.Name()))
 
 	// Rebuild graph with fresh engine state after deletion
-	graph = eng.Graph(engine.SortStrategyAlphabetical)
+	graph = eng.Graph(gctx, engine.SortStrategyAlphabetical)
 
 	// Restack current branch and all its descendants
 	branchesToRestack := graph.Range(currentBranch, engine.StackRange{

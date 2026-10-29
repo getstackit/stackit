@@ -22,7 +22,7 @@ func (f *fakeRewriteEngine) DetachAndResetBranchChanges(_ context.Context, branc
 }
 
 func (f *fakeRewriteEngine) ForceCheckoutBranch(_ context.Context, branch engine.Branch) error {
-	f.calls = append(f.calls, "checkout "+branch.GetName())
+	f.calls = append(f.calls, "checkout "+branch.Name())
 	return f.checkoutErr
 }
 

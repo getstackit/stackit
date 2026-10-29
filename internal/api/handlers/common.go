@@ -3,9 +3,10 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/getstackit/stackit/internal/branchname"
+
 	"github.com/getstackit/stackit/internal/api/auth"
 	"github.com/getstackit/stackit/internal/api/registry"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Visibility controls whether a handler may expose operator- or
@@ -61,11 +62,11 @@ func visibleTo(entry *registry.RepoEntry, user string) bool {
 }
 
 // validateBranchName runs branch name through the same validator the CLI
-// uses (utils.ValidateBranchName) before any handler hands it to git. The
+// uses (branchname.Validate) before any handler hands it to git. The
 // error message intentionally does not include the user-supplied name so
 // the response can't reflect arbitrary content back to a caller.
 func validateBranchName(w http.ResponseWriter, name string) bool {
-	if err := utils.ValidateBranchName(name); err != nil {
+	if err := branchname.Validate(name); err != nil {
 		http.Error(w, "invalid branch name", http.StatusBadRequest)
 		return false
 	}

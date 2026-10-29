@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,7 +25,7 @@ func TestGetRecentCommits_DuplicateTrailers(t *testing.T) {
 	require.NoError(t, err)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommits(context.Background(), "main", 1)
+	commits, err := runner.GetRecentCommits(t.Context(), "main", 1)
 	require.NoError(t, err)
 	require.Len(t, commits, 1)
 
@@ -48,7 +47,7 @@ func TestGetRecentCommits_WithoutTrailers(t *testing.T) {
 	require.NoError(t, err)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommits(context.Background(), "main", 1)
+	commits, err := runner.GetRecentCommits(t.Context(), "main", 1)
 	require.NoError(t, err)
 	require.Len(t, commits, 1)
 
@@ -84,7 +83,7 @@ func TestGetRecentCommits_MultipleCommits(t *testing.T) {
 	require.NoError(t, err)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommits(context.Background(), "main", 3)
+	commits, err := runner.GetRecentCommits(t.Context(), "main", 3)
 	require.NoError(t, err)
 	require.Len(t, commits, 3)
 
@@ -117,7 +116,7 @@ func TestGetRecentCommits_ParsesPRNumberSuffix(t *testing.T) {
 	require.NoError(t, err)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommits(context.Background(), "main", 1)
+	commits, err := runner.GetRecentCommits(t.Context(), "main", 1)
 	require.NoError(t, err)
 	require.Len(t, commits, 1)
 	require.Equal(t, git.PRNumber(123), commits[0].PRNumber)
@@ -143,7 +142,7 @@ func TestGetRecentCommits_MergeCommitSkipsTrailerSubject(t *testing.T) {
 	require.NoError(t, err)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommits(context.Background(), "main", 1)
+	commits, err := runner.GetRecentCommits(t.Context(), "main", 1)
 	require.NoError(t, err)
 	require.Len(t, commits, 1)
 
@@ -170,7 +169,7 @@ func TestGetRecentCommits_MergeCommitWithTitleBeforeTrailers(t *testing.T) {
 	require.NoError(t, err)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommits(context.Background(), "main", 1)
+	commits, err := runner.GetRecentCommits(t.Context(), "main", 1)
 	require.NoError(t, err)
 	require.Len(t, commits, 1)
 
@@ -201,7 +200,7 @@ func TestGetRecentCommitsInRange(t *testing.T) {
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 
 	// Range excludes the tagged baseline; newest first, parses trailers.
-	commits, err := runner.GetRecentCommitsInRange(context.Background(), "v0..main")
+	commits, err := runner.GetRecentCommitsInRange(t.Context(), "v0..main")
 	require.NoError(t, err)
 	require.Len(t, commits, 2)
 	require.Equal(t, "Consolidate stack", commits[0].Subject)
@@ -230,7 +229,7 @@ func TestGetRecentCommitsInRange_FirstParentOnly(t *testing.T) {
 	))
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommitsInRange(context.Background(), "v0..main")
+	commits, err := runner.GetRecentCommitsInRange(t.Context(), "v0..main")
 	require.NoError(t, err)
 	require.Len(t, commits, 1)
 	require.Equal(t, "Feature title (#42)", commits[0].Subject)
@@ -242,7 +241,7 @@ func TestGetRecentCommitsInRange_Empty(t *testing.T) {
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommitsInRange(context.Background(), "")
+	commits, err := runner.GetRecentCommitsInRange(t.Context(), "")
 	require.NoError(t, err)
 	require.Empty(t, commits)
 }

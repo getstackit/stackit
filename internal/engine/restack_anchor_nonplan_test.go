@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,7 +25,7 @@ func withWorktreeAnchor(t *testing.T, s *scenario.Scenario, name string) {
 	t.Helper()
 	s.CreateBranchFromQuiet(name, "main").Rebuild()
 	s.TrackBranch(name, "main")
-	require.NoError(t, s.Engine.SetBranchType(s.Engine.GetBranch(name), git.BranchTypeWorktreeAnchor))
+	require.NoError(t, s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch(name), git.BranchTypeWorktreeAnchor))
 }
 
 // TestRestackBranchesFastForwardsWorktreeAnchor covers the ordering half of
@@ -40,15 +39,15 @@ func TestRestackBranchesFastForwardsWorktreeAnchor(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	withWorktreeAnchor(t, s, "anchor")
 
-	oldSHA, err := s.Engine.GetBranch("anchor").GetRevision()
+	oldSHA, err := s.Engine.GetBranch("anchor").Revision(t.Context())
 	require.NoError(t, err)
 
 	s.Checkout("main").Commit("main update").Rebuild()
-	trunkSHA, err := s.Engine.Trunk().GetRevision()
+	trunkSHA, err := s.Engine.Trunk().Revision(t.Context())
 	require.NoError(t, err)
 	require.NotEqual(t, oldSHA, trunkSHA)
 
-	_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("anchor")), engine.RestackOpts{})
+	_, err = s.Engine.RestackBranches(t.Context(), engine.BranchesOf(s.Engine.GetBranch("anchor")), engine.RestackOpts{})
 	require.NoError(t, err)
 
 	anchorSHA, err := s.Scene.Repo.GetBranchSHA("anchor")
@@ -78,7 +77,7 @@ func TestRestackBranchesDoesNotReplayTrunkOntoAnchorChild(t *testing.T) {
 	for round, msg := range []string{"trunk one", "trunk two"} {
 		s.Checkout("main").Commit(msg).Rebuild()
 
-		_, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature")), engine.RestackOpts{})
+		_, err := s.Engine.RestackBranches(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature")), engine.RestackOpts{})
 		require.NoError(t, err)
 
 		require.Equal(t, 1, s.BranchCommitCount("feature"),
@@ -106,17 +105,17 @@ func TestRestackBranchesMissingRecordedRevDoesNotReplayTrunk(t *testing.T) {
 
 	// Trunk advances and feature is restacked onto it, leaving the anchor stale.
 	s.Checkout("main").Commit("trunk one").Rebuild()
-	_, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature")), engine.RestackOpts{})
+	_, err := s.Engine.RestackBranches(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature")), engine.RestackOpts{})
 	require.NoError(t, err)
 
 	// Legacy on-disk stack: no recorded parent revision.
-	meta, err := s.Metadata.ReadMetadata(context.Background(), "feature").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "feature").One()
 	require.NoError(t, err)
-	require.NoError(t, s.Metadata.WriteMetadata("feature", meta.WithParentBranchRevision(nil)))
-	require.NoError(t, s.Engine.Rebuild("main"))
+	require.NoError(t, s.Metadata.WriteMetadata(t.Context(), "feature", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 
 	s.Checkout("main").Commit("trunk two").Rebuild()
-	_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature")), engine.RestackOpts{})
+	_, err = s.Engine.RestackBranches(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature")), engine.RestackOpts{})
 	require.NoError(t, err)
 
 	require.Equal(t, 1, s.BranchCommitCount("feature"),

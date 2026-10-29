@@ -5,11 +5,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Options contains options for the track command
@@ -24,12 +25,12 @@ type Options struct {
 // because the adapter hands it to the TUI.
 type trackEngine interface {
 	engine.BranchLookup
-	CurrentBranch() *engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
 	Trunk() engine.Branch
 	AllBranches() engine.Branches
 	BranchNames() *engine.BranchSet
-	GetRevision(branch engine.Branch) (string, error)
-	BatchRevisions(branches engine.Branches) engine.RevisionMap
+	GetRevision(ctx context.Context, branch engine.Branch) (string, error)
+	BatchRevisions(ctx context.Context, branches engine.Branches) engine.RevisionMap
 	GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error)
 	IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error)
 	FindMostRecentTrackedAncestors(ctx context.Context, branchName string) ([]string, error)
@@ -47,9 +48,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	var eng trackEngine = ctx.Engine
 	branchName := opts.BranchName
 	if branchName == "" {
-		currentBranch := eng.CurrentBranch()
+		currentBranch := eng.CurrentBranch(ctx.Context)
 		if currentBranch != nil {
-			branchName = currentBranch.GetName()
+			branchName = currentBranch.Name()
 		}
 	}
 	if branchName != "" {
@@ -70,7 +71,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if opts.Parent != "" {
 		parent := opts.Parent
 		// Validate parent exists
-		if parent != eng.Trunk().GetName() && !eng.BranchNames().Contains(parent) {
+		if parent != eng.Trunk().Name() && !eng.BranchNames().Contains(parent) {
 			return fmt.Errorf("parent branch %s does not exist", parent)
 		}
 
@@ -87,7 +88,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		// Validate parent is an ancestor (unless force is used)
 		if !opts.Force {
-			revisions := eng.BatchRevisions(engine.BranchesOf(parentBranch, eng.GetBranch(branchName)))
+			revisions := eng.BatchRevisions(ctx.Context, engine.BranchesOf(parentBranch, eng.GetBranch(branchName)))
 			parentRev, ok := revisions.Rev(parent)
 			if !ok {
 				return errors.New("failed to get parent revision")
@@ -155,7 +156,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 		// Try auto-detection (single unambiguous non-trunk tracked ancestor)
 		var parentBranch string
 		ancestors, err := eng.FindMostRecentTrackedAncestors(ctx.Context, branchName)
-		if err == nil && len(ancestors) == 1 && ancestors[0] != eng.Trunk().GetName() {
+		if err == nil && len(ancestors) == 1 && ancestors[0] != eng.Trunk().Name() {
 			candidate := ancestors[0]
 			candidateBranch := eng.GetBranch(candidate)
 			// Skip worktree anchors for auto-detection
@@ -203,7 +204,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 	untrackedChildren := []string{}
 
 	// branchRev is loop-invariant; a failed lookup just disables child detection.
-	branchRev, revErr := eng.GetRevision(eng.GetBranch(branchName))
+	branchRev, revErr := eng.GetRevision(ctx.Context, eng.GetBranch(branchName))
 	if revErr == nil {
 		// GetMergeBase spawns a git subprocess per call with no batch/cached
 		// equivalent, so candidates are checked concurrently with a bounded
@@ -215,15 +216,15 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 		}
 		candidates := make([]indexedCandidate, 0, len(allBranches))
 		for _, candidateBranch := range allBranches {
-			if candidateBranch.GetName() == branchName {
+			if candidateBranch.Name() == branchName {
 				continue
 			}
 			candidates = append(candidates, indexedCandidate{index: len(candidates), candidate: candidateBranch})
 		}
 
 		isChild := make([]bool, len(candidates))
-		utils.Run(candidates, func(item indexedCandidate) {
-			mergeBase, err := eng.GetMergeBase(ctx.Context, item.candidate.GetName(), branchName)
+		workpool.Run(candidates, func(item indexedCandidate) {
+			mergeBase, err := eng.GetMergeBase(ctx.Context, item.candidate.Name(), branchName)
 			if err != nil {
 				return
 			}
@@ -233,7 +234,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 
 		for _, item := range candidates {
 			if isChild[item.index] {
-				untrackedChildren = append(untrackedChildren, item.candidate.GetName())
+				untrackedChildren = append(untrackedChildren, item.candidate.Name())
 			}
 		}
 	}

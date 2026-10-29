@@ -4,9 +4,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/getstackit/stackit/internal/git"
+
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // syncStackBranches pulls stack branches that are behind their remote counterparts.
@@ -17,7 +18,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 	eng := ctx.Engine
 	nav := ctx.Navigator()
 	gctx := ctx.Context
-	remote := eng.GetRemote()
+	remote := eng.GetRemote(ctx.Context)
 
 	// Emit phase started event
 	handler.EmitEvent(Event{Phase: PhaseBranches, Type: EventStarted})
@@ -51,7 +52,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 			return context.Cause(gctx)
 		}
 
-		branchName := branch.GetName()
+		branchName := branch.Name()
 
 		// Skip trunk
 		if eng.IsTrunk(branch) {
@@ -122,7 +123,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 			return context.Cause(gctx)
 		}
 
-		branchName := branch.GetName()
+		branchName := branch.Name()
 
 		pullStart := time.Now()
 		var result engine.PullResult
@@ -134,7 +135,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 		}
 		ctx.Logger.Info("update branch from remote completed branch=%v durationMs=%v", branchName, time.Since(pullStart).Milliseconds())
 
-		if applyBranchSyncResult(branch, result, err, handler, summary) {
+		if applyBranchSyncResult(ctx.Context, branch, result, err, handler, summary) {
 			branchesSynced++
 		}
 	}
@@ -147,8 +148,8 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 // pull/update result and reports whether the branch was fast-forwarded. It is
 // shared by the batched local-update path and the per-branch fetch fallback so
 // both behave identically.
-func applyBranchSyncResult(branch engine.Branch, result engine.PullResult, err error, handler Handler, summary *Summary) (synced bool) {
-	branchName := branch.GetName()
+func applyBranchSyncResult(ctx context.Context, branch engine.Branch, result engine.PullResult, err error, handler Handler, summary *Summary) (synced bool) {
+	branchName := branch.Name()
 
 	if err != nil {
 		// Treat errors as conflicts - warn and continue
@@ -167,8 +168,8 @@ func applyBranchSyncResult(branch engine.Branch, result engine.PullResult, err e
 	case engine.PullDone:
 		// Get the new revision (GetRevision reads live git, so it reflects the
 		// just-applied fast-forward without an engine rebuild).
-		rev, _ := branch.GetRevision()
-		revShort := utils.ShortRevision(rev, 0)
+		rev, _ := branch.Revision(ctx)
+		revShort := git.ShortRevision(rev, 0)
 		handler.EmitEvent(Event{
 			Phase:       PhaseBranches,
 			Type:        EventCompleted,

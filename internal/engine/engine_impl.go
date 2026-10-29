@@ -130,7 +130,7 @@ type WorktreeEngineOptions struct {
 // NewEngineForWorktree creates an engine for a worktree session using a snapshot
 // from the parent engine. This skips rebuildInternal since worktrees share .git
 // with the parent and the metadata is identical.
-func NewEngineForWorktree(opts WorktreeEngineOptions) (Engine, error) {
+func NewEngineForWorktree(ctx context.Context, opts WorktreeEngineOptions) (Engine, error) {
 	g := git.NewRunnerWithPath(opts.WorktreePath.String(), nil)
 
 	if err := g.InitDefaultRepo(); err != nil {
@@ -156,7 +156,7 @@ func NewEngineForWorktree(opts WorktreeEngineOptions) (Engine, error) {
 	}
 
 	// Get current branch (1 cheap git call — needed for worktree's HEAD)
-	currentBranch, err := g.GetCurrentBranch()
+	currentBranch, err := g.GetCurrentBranch(ctx)
 	if err != nil {
 		currentBranch = ""
 	}
@@ -172,7 +172,7 @@ func NewEngineForWorktree(opts WorktreeEngineOptions) (Engine, error) {
 }
 
 // NewEngine creates a new engine instance
-func NewEngine(opts Options) (Engine, error) {
+func NewEngine(ctx context.Context, opts Options) (Engine, error) {
 	g := opts.Git
 	if g == nil {
 		g = git.NewRunnerWithPath(opts.RepoRoot, nil)
@@ -215,7 +215,7 @@ func NewEngine(opts Options) (Engine, error) {
 		e.metadata.SetLogger(opts.Logger)
 	}
 
-	currentBranch, err := g.GetCurrentBranch()
+	currentBranch, err := g.GetCurrentBranch(ctx)
 	if err != nil {
 		currentBranch = ""
 	}
@@ -227,11 +227,11 @@ func NewEngine(opts Options) (Engine, error) {
 	// commands can validate existence without a metadata read.
 	switch opts.LoadMode {
 	case LoadModeBranchesOnly:
-		if err := e.loadBranchList(); err != nil {
+		if err := e.loadBranchList(ctx); err != nil {
 			return nil, fmt.Errorf("failed to load branch list: %w", err)
 		}
 	case LoadModeShared:
-		if err := e.loadBranchList(); err != nil {
+		if err := e.loadBranchList(ctx); err != nil {
 			return nil, fmt.Errorf("failed to load branch list: %w", err)
 		}
 		e.ensureSharedLoaded()
@@ -239,7 +239,7 @@ func NewEngine(opts Options) (Engine, error) {
 		fallthrough
 	default:
 		// Don't refresh currentBranch here since we just set it
-		if err := e.rebuildInternal(skipCurrentBranchRefresh); err != nil {
+		if err := e.rebuildInternal(ctx, skipCurrentBranchRefresh); err != nil {
 			return nil, fmt.Errorf("failed to rebuild engine: %w", err)
 		}
 	}
@@ -249,8 +249,8 @@ func NewEngine(opts Options) (Engine, error) {
 
 // loadBranchList populates only e.state.branches via a single GetAllBranchNames
 // call. Used by lighter LoadModes that defer metadata reads.
-func (e *engineImpl) loadBranchList() error {
-	branches, err := e.git.GetAllBranchNames(context.Background())
+func (e *engineImpl) loadBranchList(ctx context.Context) error {
+	branches, err := e.git.GetAllBranchNames(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}
@@ -360,8 +360,8 @@ func (e *engineImpl) ensureLocalLoaded() {
 }
 
 // Reset clears all branch metadata and rebuilds with new trunk
-func (e *engineImpl) Reset(newTrunkName string) error {
-	metadataRefs, err := e.metadata.ListMetadata()
+func (e *engineImpl) Reset(ctx context.Context, newTrunkName string) error {
+	metadataRefs, err := e.metadata.ListMetadata(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get metadata refs: %w", err)
 	}
@@ -371,7 +371,7 @@ func (e *engineImpl) Reset(newTrunkName string) error {
 		for branchName := range metadataRefs {
 			refNames = append(refNames, git.MetadataRefName(branchName))
 		}
-		if err := e.git.DeleteRefs(context.Background(), refNames...); err != nil {
+		if err := e.git.DeleteRefs(ctx, refNames...); err != nil {
 			return fmt.Errorf("failed to delete metadata refs: %w", err)
 		}
 	}
@@ -380,7 +380,7 @@ func (e *engineImpl) Reset(newTrunkName string) error {
 	e.trunk = newTrunkName
 	e.mu.Unlock()
 
-	return e.rebuild()
+	return e.rebuild(ctx)
 }
 
 // readState returns the cached BranchState for a branch by name, or nil if
@@ -397,12 +397,12 @@ func (e *engineImpl) readState(name string) *BranchState {
 }
 
 // Rebuild reloads branch cache with new trunk
-func (e *engineImpl) Rebuild(newTrunkName string) error {
+func (e *engineImpl) Rebuild(ctx context.Context, newTrunkName string) error {
 	e.mu.Lock()
 	e.trunk = newTrunkName
 	e.mu.Unlock()
 
-	return e.rebuild()
+	return e.rebuild(ctx)
 }
 
 // RebuildBranches refreshes cached state for only the named branches, re-reading

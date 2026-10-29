@@ -3,7 +3,7 @@ package git
 import (
 	"context"
 
-	"github.com/getstackit/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/term"
 )
 
 // CommitOptions contains options for creating a commit
@@ -17,7 +17,7 @@ type CommitOptions struct {
 	NoVerify    bool
 }
 
-func (r *runner) CommitWithOptions(opts CommitOptions) error {
+func (r *runner) CommitWithOptions(ctx context.Context, opts CommitOptions) error {
 	args := []string{"commit"}
 
 	if opts.Amend {
@@ -48,23 +48,25 @@ func (r *runner) CommitWithOptions(opts CommitOptions) error {
 	}
 	// If we're in non-interactive mode, or if we have a message and aren't explicitly editing,
 	// use the streaming runner to show hook output while capturing for error handling.
-	if !utils.IsInteractive() || (opts.Message != "" && !opts.Edit) || (opts.Amend && opts.NoEdit) {
-		_, err := r.runGitStreaming(context.Background(), args...)
+	if !term.IsInteractive() || (opts.Message != "" && !opts.Edit) || (opts.Amend && opts.NoEdit) {
+		c := gitCommand(args...)
+		c.output = outputStream
+		_, err := r.exec(ctx, c)
 		if err != nil {
 			return err
 		}
 		return nil
 	}
 
-	err := r.RunGitCommandInteractive(args...)
+	err := r.RunInteractive(ctx, args...)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *runner) Commit(message string, verbose int, noVerify bool) error {
-	return r.CommitWithOptions(CommitOptions{
+func (r *runner) Commit(ctx context.Context, message string, verbose int, noVerify bool) error {
+	return r.CommitWithOptions(ctx, CommitOptions{
 		Message:  message,
 		Verbose:  verbose,
 		NoVerify: noVerify,
@@ -72,7 +74,7 @@ func (r *runner) Commit(message string, verbose int, noVerify bool) error {
 }
 
 func (r *runner) CommitAmendNoEdit(ctx context.Context) error {
-	_, err := r.RunGitCommandWithContext(ctx, "commit", "-a", "--amend", "--no-edit", "--no-verify")
+	_, err := r.Run(ctx, "commit", "-a", "--amend", "--no-edit", "--no-verify")
 	if err != nil {
 		return err
 	}

@@ -32,8 +32,8 @@ type PRManager interface {
 	PushBranches(ctx context.Context, remote string, specs []git.PushSpec, opts git.PushOptions) git.PushResults
 	// Navigation comment ID caching (stored in local metadata)
 	GetNavigationCommentID(branch Branch) (int64, error)
-	SetNavigationCommentID(branch Branch, commentID int64) error
-	ClearNavigationCommentID(branch Branch) error
+	SetNavigationCommentID(ctx context.Context, branch Branch, commentID int64) error
+	ClearNavigationCommentID(ctx context.Context, branch Branch) error
 }
 
 // SyncManager provides operations for syncing and restacking branches
@@ -75,15 +75,15 @@ type StackRewriter interface {
 
 // RemoteMetadataManager provides operations for syncing branch metadata with remote
 type RemoteMetadataManager interface {
-	IsRemoteSyncEnabled() bool
+	IsRemoteSyncEnabled(ctx context.Context) bool
 	BatchSetLastModifiedBy(ctx context.Context, branchNames []string) error
 	LoadRemoteMetadataCache(ctx context.Context) error
 	ApplyRemoteMetadataForBranches(ctx context.Context, branchNames []string) error
-	GetRemoteMetadataCache() RemoteMetadataView
+	RemoteMetadataCache() RemoteMetadataView
 	ComputeAllMetadataDiffs() ([]*MetadataDiff, error)
 	AcceptRemoteMetadata(ctx context.Context, branch string) error
 	RejectRemoteMetadata(branch string)
-	FindOrphanedLocalMetadata() ([]OrphanedMetadataInfo, error)
+	FindOrphanedLocalMetadata(ctx context.Context) ([]OrphanedMetadataInfo, error)
 	// CleanOrphanedMetadata deletes metadata refs for branches whose local
 	// branch is gone (deleteRefs) and clears the local-only hash for branches
 	// that remain (clearLocalHash), in a single transaction.
@@ -105,7 +105,7 @@ type RemoteMetadataManager interface {
 	// ConfigureStackMetadataSync adds the stack-metadata refspec to the configured remote.
 	ConfigureStackMetadataSync(ctx context.Context) error
 	// ListStackMetadata returns a map of local stack IDs to their ref SHAs.
-	ListStackMetadata() (map[string]string, error)
+	ListStackMetadata(ctx context.Context) (map[string]string, error)
 	// DeleteStackMetadata removes the local stack-metadata refs for the given
 	// stack IDs in a single batched ref update.
 	DeleteStackMetadata(ctx context.Context, stackIDs []string) error
@@ -209,7 +209,7 @@ type Options struct {
 // Thread-safe: All methods are safe for concurrent use
 type UndoManager interface {
 	TakeSnapshot(ctx context.Context, opts SnapshotOptions) error
-	GetSnapshots() ([]SnapshotInfo, error)
+	Snapshots() ([]SnapshotInfo, error)
 	LoadSnapshot(snapshotID string) (*Snapshot, error)
 	RestoreSnapshot(ctx context.Context, snapshotID string) error
 	RestoreWorktree(ctx context.Context, snapshotID string) (bool, error)

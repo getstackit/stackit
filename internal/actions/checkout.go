@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -63,9 +64,9 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 
 	switch {
 	case opts.CheckoutTrunk:
-		branchName = eng.Trunk().GetName()
+		branchName = eng.Trunk().Name()
 	case opts.BranchName != "":
-		branchName, err = resolveBranchName(eng, out, opts.BranchName)
+		branchName, err = resolveBranchName(ctx.Context, eng, out, opts.BranchName)
 		if err != nil {
 			return CheckoutResult{}, err
 		}
@@ -76,18 +77,18 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 		}
 		if branchName == "" {
 			// User canceled - stay on current branch
-			currentBranch := eng.CurrentBranch()
+			currentBranch := eng.CurrentBranch(ctx.Context)
 			currentBranchName := "trunk"
 			if currentBranch != nil {
-				currentBranchName = currentBranch.GetName()
+				currentBranchName = currentBranch.Name()
 			}
 			out.Info("No branch selected; staying on %s.", output.CurrentBranch(currentBranchName))
 			return CheckoutResult{}, nil
 		}
 	}
 
-	currentBranch := eng.CurrentBranch()
-	if currentBranch != nil && branchName == currentBranch.GetName() {
+	currentBranch := eng.CurrentBranch(ctx.Context)
+	if currentBranch != nil && branchName == currentBranch.Name() {
 		if !ctx.Quiet {
 			out.Info("Already on %s.", output.CurrentBranch(branchName))
 		}
@@ -99,7 +100,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 	// Block checking out worktree anchor branches directly
 	if branch.IsWorktreeAnchor() {
 		// Find the worktree name for a better error message
-		wtInfo, _ := eng.GetWorktreeForStack(branchName)
+		wtInfo, _ := eng.GetWorktreeForStack(ctx.Context, branchName)
 		displayName := branchName
 		if wtInfo != nil && wtInfo.Name != "" {
 			displayName = wtInfo.Name.String()
@@ -128,7 +129,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 
 	previousBranch := "trunk"
 	if currentBranch != nil {
-		previousBranch = currentBranch.GetName()
+		previousBranch = currentBranch.Name()
 	}
 	ctx.Logger.Info("branch changed from=%v to=%v", previousBranch, branchName)
 
@@ -159,16 +160,16 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 		IncludeCurrent:    false,
 		RecursiveChildren: false,
 	}
-	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+	graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	downstack := graph.Range(branch, rng)
 
 	// Limit the number of branches we check to avoid slow metadata reads
 	const maxDownstackChecks = 10
 	downstackToCheck := downstack.Last(maxDownstackChecks).Reverse()
-	statuses := ctx.Engine.ReadBranchStatuses(engine.BranchesOf(branch).Append(downstackToCheck...))
+	statuses := ctx.Engine.ReadBranchStatuses(ctx.Context, engine.BranchesOf(branch).Append(downstackToCheck...))
 
 	if !statuses.IsUpToDate(branch) {
-		parent := branch.GetParentOrTrunk()
+		parent := branch.ParentOrTrunk()
 		ctx.Output.Info("This branch has fallen behind %s - you may want to %s.",
 			output.BranchName(parent),
 			output.Cyan("stackit restack --upstack"))
@@ -178,9 +179,9 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 	// Check nearest ancestors first (but limit to last maxDownstackChecks branches)
 	for _, ancestor := range downstackToCheck {
 		if !statuses.IsUpToDate(ancestor) {
-			parent := ancestor.GetParentOrTrunk()
+			parent := ancestor.ParentOrTrunk()
 			ctx.Output.Info("The downstack branch %s has fallen behind %s - you may want to %s.",
-				output.BranchName(ancestor.GetName()),
+				output.BranchName(ancestor.Name()),
 				output.BranchName(parent),
 				output.Cyan("stackit restack"))
 			return
@@ -228,7 +229,7 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 			switchTarget = ctx.WorktreeInfo.MainRepoDir
 		} else if targetStackRoot != currentStackRoot {
 			// Target is in a different stack - check if that stack has a worktree
-			targetWorktree, err := ctx.Engine.GetWorktreeForStack(targetStackRoot)
+			targetWorktree, err := ctx.Engine.GetWorktreeForStack(ctx.Context, targetStackRoot)
 			switch {
 			case err == nil && targetWorktree != nil && worktreePathUsable(ctx, targetStackRoot, targetWorktree.Path):
 				switchTarget = targetWorktree.Path.String()
@@ -256,7 +257,7 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 		return "", nil, nil
 	}
 
-	targetWorktree, err := ctx.Engine.GetWorktreeForStack(targetStackRoot)
+	targetWorktree, err := ctx.Engine.GetWorktreeForStack(ctx.Context, targetStackRoot)
 	if err != nil || targetWorktree == nil {
 		return "", nil, nil
 	}
@@ -275,7 +276,7 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 
 // resolveBranchName resolves a user input to a branch name.
 // It tries: exact match → scope match (topmost branch) → fuzzy match.
-func resolveBranchName(eng engine.Engine, out output.Output, input string) (string, error) {
+func resolveBranchName(ctx context.Context, eng engine.Engine, out output.Output, input string) (string, error) {
 	branchNames := eng.BranchNames()
 	if branchNames.Contains(input) {
 		return input, nil
@@ -291,8 +292,8 @@ func resolveBranchName(eng engine.Engine, out output.Output, input string) (stri
 		}
 	}
 	if len(scopeBranches) > 0 {
-		sorted := eng.SortBranchesTopologically(scopeBranches)
-		topmost := sorted[len(sorted)-1].GetName()
+		sorted := eng.SortBranchesTopologically(ctx, scopeBranches)
+		topmost := sorted[len(sorted)-1].Name()
 		out.Info("Matched scope %s.", output.Dim(input))
 		return topmost, nil
 	}

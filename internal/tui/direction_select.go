@@ -1,9 +1,12 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"slices"
 	"strings"
+
+	"github.com/getstackit/stackit/internal/term"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
@@ -209,9 +212,9 @@ type DirectionSelectModel struct {
 }
 
 // NewDirectionSelectModel creates a model for selecting split direction
-func NewDirectionSelectModel(eng engine.StackView, currentBranch, parentBranch string, children []string) *DirectionSelectModel {
+func NewDirectionSelectModel(ctx context.Context, eng engine.StackView, currentBranch, parentBranch string, children []string) *DirectionSelectModel {
 	// Build the path from trunk to current branch
-	graph := eng.Graph(engine.SortStrategySmart)
+	graph := eng.Graph(ctx, engine.SortStrategySmart)
 
 	var stackPath []string
 	current := currentBranch
@@ -406,12 +409,12 @@ func (m *DirectionSelectModel) Back() bool {
 }
 
 // PromptDirectionSelect shows an interactive direction selector and returns the chosen direction
-func PromptDirectionSelect(eng engine.StackView, currentBranch, parentBranch string, children []string) (Direction, error) {
-	if err := CheckInteractiveAllowed(); err != nil {
+func PromptDirectionSelect(ctx context.Context, eng engine.StackView, currentBranch, parentBranch string, children []string) (Direction, error) {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return "", err
 	}
 
-	m := NewDirectionSelectModel(eng, currentBranch, parentBranch, children)
+	m := NewDirectionSelectModel(ctx, eng, currentBranch, parentBranch, children)
 
 	p := tea.NewProgram(m, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout))
 	model, err := p.Run()

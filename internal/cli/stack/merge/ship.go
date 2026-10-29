@@ -233,7 +233,7 @@ func promptForShipDescription(ctx *app.Context, branches []mergeAction.BranchMer
 	}
 
 	rootBranch := ctx.Engine.GetBranch(branches[0].BranchName)
-	desc := ctx.Engine.GetStackDescription(rootBranch)
+	desc := ctx.Engine.GetStackDescription(ctx.Context, rootBranch)
 	if desc != nil && !desc.IsEmpty() {
 		return
 	}
@@ -266,7 +266,7 @@ func runMultiStackShip(ctx *app.Context, opts shipMultiStackOptions) error {
 	out := ctx.Output
 
 	// Discover available stacks
-	availableStacks, err := mergeAction.DiscoverStacks(ctx.Engine)
+	availableStacks, err := mergeAction.DiscoverStacks(ctx.Context, ctx.Engine)
 	if err != nil {
 		return fmt.Errorf("failed to discover stacks: %w", err)
 	}

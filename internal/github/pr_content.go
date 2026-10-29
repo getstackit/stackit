@@ -3,8 +3,9 @@ package github
 import (
 	"context"
 
+	"github.com/getstackit/stackit/internal/xslices"
+
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // PRContent is the current title and body of a pull request, fetched in bulk.
@@ -21,7 +22,7 @@ func BatchGetPRContentGraphQL(ctx context.Context, runner GitCommandRunner, repo
 		return make(map[git.PRNumber]PRContent), nil
 	}
 
-	unique := utils.Unique(prNumbers)
+	unique := xslices.Unique(prNumbers)
 
 	query := buildPRContentQuery(unique)
 	variables := map[string]any{

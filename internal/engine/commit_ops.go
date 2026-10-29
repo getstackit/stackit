@@ -7,8 +7,8 @@ import (
 )
 
 // Commit creates a new commit with the given options.
-func (e *engineImpl) Commit(_ context.Context, opts git.CommitOptions) error {
-	return e.git.CommitWithOptions(opts)
+func (e *engineImpl) Commit(ctx context.Context, opts git.CommitOptions) error {
+	return e.git.CommitWithOptions(ctx, opts)
 }
 
 // StageAll stages all changes

@@ -1,7 +1,6 @@
 package provision_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/getstackit/stackit/internal/api/provision"
@@ -16,7 +15,7 @@ func TestBuildEntry(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
-	entry, err := provision.BuildEntry(context.Background(), provision.EntryParams{
+	entry, err := provision.BuildEntry(t.Context(), provision.EntryParams{
 		ID:          "owner-repo",
 		DisplayName: "owner/repo",
 		Path:        scene.Dir,

@@ -39,7 +39,7 @@ func TestUntrackAction(t *testing.T) {
 		s.WithInitialCommit().
 			CreateBranchQuiet("untracked")
 
-		err := untrack.Action(s.Context, untrack.Options{
+		err := untrack.Action(t.Context(), deps(s), untrack.Options{
 			BranchName: "untracked",
 		}, nil)
 		require.Error(t, err)
@@ -56,7 +56,7 @@ func TestUntrackAction(t *testing.T) {
 
 		require.True(t, s.Engine.GetBranch("feature").IsTracked())
 
-		err := untrack.Action(s.Context, untrack.Options{
+		err := untrack.Action(t.Context(), deps(s), untrack.Options{
 			BranchName: "feature",
 		}, nil)
 		require.NoError(t, err)
@@ -83,7 +83,7 @@ func TestUntrackAction(t *testing.T) {
 			confirmResult: false, // Would decline if asked
 		}
 
-		err := untrack.Action(s.Context, untrack.Options{
+		err := untrack.Action(t.Context(), deps(s), untrack.Options{
 			BranchName: "feature",
 			Force:      true,
 		}, handler)
@@ -110,7 +110,7 @@ func TestUntrackAction(t *testing.T) {
 			confirmResult: true, // Confirm untrack
 		}
 
-		err := untrack.Action(s.Context, untrack.Options{
+		err := untrack.Action(t.Context(), deps(s), untrack.Options{
 			BranchName: "feature",
 		}, handler)
 		require.NoError(t, err)
@@ -138,7 +138,7 @@ func TestUntrackAction(t *testing.T) {
 			confirmResult: false, // Decline untrack
 		}
 
-		err := untrack.Action(s.Context, untrack.Options{
+		err := untrack.Action(t.Context(), deps(s), untrack.Options{
 			BranchName: "feature",
 		}, handler)
 		require.NoError(t, err)
@@ -161,7 +161,7 @@ func TestUntrackAction(t *testing.T) {
 			Checkout("feature")
 
 		// nil handler uses NullHandler which returns false (cancel)
-		err := untrack.Action(s.Context, untrack.Options{
+		err := untrack.Action(t.Context(), deps(s), untrack.Options{
 			BranchName: "feature",
 		}, nil)
 		require.NoError(t, err)
@@ -194,7 +194,7 @@ func TestUntrackAction(t *testing.T) {
 			confirmResult: true,
 		}
 
-		err := untrack.Action(s.Context, untrack.Options{
+		err := untrack.Action(t.Context(), deps(s), untrack.Options{
 			BranchName: "feature",
 		}, handler)
 		require.NoError(t, err)
@@ -205,4 +205,8 @@ func TestUntrackAction(t *testing.T) {
 		require.False(t, s.Engine.GetBranch("child2").IsTracked())
 		require.False(t, s.Engine.GetBranch("grandchild").IsTracked())
 	})
+}
+
+func deps(s *scenario.Scenario) untrack.Deps {
+	return untrack.Deps{Engine: s.Context.Engine, Out: s.Context.Output}
 }

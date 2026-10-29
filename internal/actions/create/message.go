@@ -3,9 +3,10 @@ package create
 import (
 	"errors"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/editor"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 func getCommitMessage(ctx *app.Context) (string, error) {
@@ -19,7 +20,7 @@ func getCommitMessage(ctx *app.Context) (string, error) {
 		return "", err
 	}
 
-	return utils.CleanCommitMessage(msg), nil
+	return editor.CleanMessage(msg), nil
 }
 
 // getCommitMessageForBranch gets the commit message, reading from stdin if needed.
@@ -31,7 +32,7 @@ func getCommitMessageForBranch(ctx *app.Context, opts *Options, commitMessage st
 	}
 
 	// Try reading from stdin first (even in non-interactive mode)
-	stdinMsg, err := utils.ReadFromStdin()
+	stdinMsg, err := term.ReadStdin()
 	if err == nil && stdinMsg != "" {
 		return stdinMsg, nil
 	}
@@ -39,7 +40,7 @@ func getCommitMessageForBranch(ctx *app.Context, opts *Options, commitMessage st
 	// If branch name is provided, we can create the branch without a message
 	// (will result in empty commit if there are staged changes)
 	if opts.BranchName != "" {
-		if !utils.IsInteractive() {
+		if !term.IsInteractive() {
 			return "", nil // Allow empty message when branch name is explicit
 		}
 		// Interactive: prompt for commit message via editor
@@ -51,7 +52,7 @@ func getCommitMessageForBranch(ctx *app.Context, opts *Options, commitMessage st
 	}
 
 	// No branch name and no message - need one for branch generation
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return "", errors.New("must specify either a branch name or commit message")
 	}
 

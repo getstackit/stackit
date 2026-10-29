@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -20,14 +21,14 @@ import (
 func EnsureCanModifyHere(ctx *app.Context, branches ...engine.Branch) error {
 	// Resolve ownership for every branch from a single listing instead of one
 	// OwningWorktree call (two git reads each) per branch.
-	owners, err := LoadWorktreeOwners(ctx.Engine)
+	owners, err := LoadWorktreeOwners(ctx.Context, ctx.Engine)
 	if err != nil {
 		return fmt.Errorf("cannot list managed worktrees: %w", err)
 	}
 
 	seen := make(map[string]struct{}, len(branches))
 	for _, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 		if branchName == "" {
 			continue
 		}
@@ -79,8 +80,8 @@ type WorktreeOwners struct {
 }
 
 // LoadWorktreeOwners reads every worktree registration once.
-func LoadWorktreeOwners(eng engine.Engine) (WorktreeOwners, error) {
-	byStackRoot, err := eng.WorktreeOwnershipByStackRoot()
+func LoadWorktreeOwners(ctx context.Context, eng engine.Engine) (WorktreeOwners, error) {
+	byStackRoot, err := eng.WorktreeOwnershipByStackRoot(ctx)
 	if err != nil {
 		return WorktreeOwners{}, err
 	}

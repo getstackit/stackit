@@ -1,7 +1,6 @@
 package pluck
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -22,7 +21,7 @@ func TestInvalidOntoTargets(t *testing.T) {
 			"c": "b",
 		})
 
-	require.Equal(t, map[string]bool{"b": true, "c": true}, InvalidOntoTargets(s.Engine, "b"))
+	require.Equal(t, map[string]bool{"b": true, "c": true}, InvalidOntoTargets(t.Context(), s.Engine, "b"))
 }
 
 func TestPluckStackID(t *testing.T) {
@@ -130,15 +129,15 @@ func TestPluckAction(t *testing.T) {
 
 		// Verify branch2 is now on main
 		branch2 := s.Engine.GetBranch("branch2")
-		parent2 := branch2.GetParent()
+		parent2 := branch2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName())
+		require.Equal(t, "main", parent2.Name())
 
 		// Verify branch3 was reparented to branch1 (not main!)
 		branch3 := s.Engine.GetBranch("branch3")
-		parent3 := branch3.GetParent()
+		parent3 := branch3.Parent()
 		require.NotNil(t, parent3)
-		require.Equal(t, "branch1", parent3.GetName())
+		require.Equal(t, "branch1", parent3.Name())
 	})
 
 	t.Run("plucks branch with no children", func(t *testing.T) {
@@ -158,15 +157,15 @@ func TestPluckAction(t *testing.T) {
 
 		// Verify branch2 is now on main
 		branch2 := s.Engine.GetBranch("branch2")
-		parent2 := branch2.GetParent()
+		parent2 := branch2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName())
+		require.Equal(t, "main", parent2.Name())
 
 		// branch1 should still be on main
 		branch1 := s.Engine.GetBranch("branch1")
-		parent1 := branch1.GetParent()
+		parent1 := branch1.Parent()
 		require.NotNil(t, parent1)
-		require.Equal(t, "main", parent1.GetName())
+		require.Equal(t, "main", parent1.Name())
 	})
 
 	t.Run("plucks branch with multiple children", func(t *testing.T) {
@@ -192,27 +191,27 @@ func TestPluckAction(t *testing.T) {
 
 		// Verify branch2 is now on branchX
 		branch2 := s.Engine.GetBranch("branch2")
-		parent2 := branch2.GetParent()
+		parent2 := branch2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "branchX", parent2.GetName())
+		require.Equal(t, "branchX", parent2.Name())
 
 		// Verify child2a is on branch1
 		child2a := s.Engine.GetBranch("child2a")
-		parentC2a := child2a.GetParent()
+		parentC2a := child2a.Parent()
 		require.NotNil(t, parentC2a)
-		require.Equal(t, "branch1", parentC2a.GetName())
+		require.Equal(t, "branch1", parentC2a.Name())
 
 		// Verify child2b is on branch1
 		child2b := s.Engine.GetBranch("child2b")
-		parentC2b := child2b.GetParent()
+		parentC2b := child2b.Parent()
 		require.NotNil(t, parentC2b)
-		require.Equal(t, "branch1", parentC2b.GetName())
+		require.Equal(t, "branch1", parentC2b.Name())
 
 		// Verify grandch is still on child2a (unchanged)
 		grandch := s.Engine.GetBranch("grandch")
-		parentGC := grandch.GetParent()
+		parentGC := grandch.Parent()
 		require.NotNil(t, parentGC)
-		require.Equal(t, "child2a", parentGC.GetName())
+		require.Equal(t, "child2a", parentGC.Name())
 	})
 
 	t.Run("defaults source to current branch", func(t *testing.T) {
@@ -235,9 +234,9 @@ func TestPluckAction(t *testing.T) {
 
 		// Verify branch2 was plucked
 		branch2 := s.Engine.GetBranch("branch2")
-		parent2 := branch2.GetParent()
+		parent2 := branch2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName())
+		require.Equal(t, "main", parent2.Name())
 	})
 
 	t.Run("prevents plucking trunk branch", func(t *testing.T) {
@@ -287,7 +286,7 @@ func TestPluckAction(t *testing.T) {
 
 		// A rejected pluck must not leave an undo snapshot behind: no-op entries
 		// evict real recovery points once undo.max-depth is reached.
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		require.Empty(t, snapshots, "rejected cyclic pluck should not record a snapshot")
 	})
@@ -399,7 +398,7 @@ func TestPluckAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch2 only has its own commit
-		branch2CommitsData, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branch2"))
+		branch2CommitsData, err := s.Engine.GetAllCommits(t.Context(), s.Engine.GetBranch("branch2"))
 		branch2Commits := branch2CommitsData.Subjects()
 		require.NoError(t, err)
 		require.Len(t, branch2Commits, 1)
@@ -418,7 +417,7 @@ func TestPluckAction(t *testing.T) {
 		branch2 := s.Engine.GetBranch("branch2")
 		prNumber := git.PRNumber(456)
 		prInfo := engine.NewPrInfo(engine.PrInfoFields{Number: &prNumber, Title: "Test Pluck PR", Body: "Test Body", State: "OPEN", Base: "branch1", URL: "https://github.com/owner/repo/pull/456"})
-		err := s.Engine.UpsertPrInfo(context.Background(), branch2, prInfo)
+		err := s.Engine.UpsertPrInfo(t.Context(), branch2, prInfo)
 		require.NoError(t, err)
 
 		// Pluck branch2 to main
@@ -430,7 +429,7 @@ func TestPluckAction(t *testing.T) {
 
 		// Verify PR info is preserved
 		pluckedBranch2 := s.Engine.GetBranch("branch2")
-		newPrInfo, err := pluckedBranch2.GetPrInfo()
+		newPrInfo, err := pluckedBranch2.PrInfo()
 		require.NoError(t, err)
 		require.NotNil(t, newPrInfo)
 		require.Equal(t, git.PRNumber(456), *newPrInfo.Number())
@@ -455,17 +454,17 @@ func TestPluckAction(t *testing.T) {
 
 		// branch2 should be on main
 		branch2 := s.Engine.GetBranch("branch2")
-		parent2 := branch2.GetParent()
-		require.Equal(t, "main", parent2.GetName())
+		parent2 := branch2.Parent()
+		require.Equal(t, "main", parent2.Name())
 
 		// branch3 should be on branch1 (grandparent), NOT branch2
 		// This is what distinguishes pluck from move
 		branch3 := s.Engine.GetBranch("branch3")
-		parent3 := branch3.GetParent()
-		require.Equal(t, "branch1", parent3.GetName())
+		parent3 := branch3.Parent()
+		require.Equal(t, "branch1", parent3.Name())
 
 		// Verify branch2 has no children
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+		graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 		branch2Children := graph.Children(branch2)
 		require.Empty(t, branch2Children)
 	})
@@ -488,9 +487,9 @@ func TestPluckAction(t *testing.T) {
 
 		// Verify branch1 is now on untracked
 		branch1 := s.Engine.GetBranch("branch1")
-		parent1 := branch1.GetParent()
+		parent1 := branch1.Parent()
 		require.NotNil(t, parent1)
-		require.Equal(t, "untracked", parent1.GetName())
+		require.Equal(t, "untracked", parent1.Name())
 	})
 
 	t.Run("plucks middle branch in a linear stack", func(t *testing.T) {
@@ -509,7 +508,7 @@ func TestPluckAction(t *testing.T) {
 
 		// Rebuild the engine with linear stacks, as the CLI does for
 		// stack.shape=linear.
-		linearEngine, err := engine.NewEngine(engine.Options{
+		linearEngine, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot:     s.Scene.Dir,
 			Trunk:        "main",
 			LinearStacks: true,
@@ -523,8 +522,8 @@ func TestPluckAction(t *testing.T) {
 			Onto:   "main",
 		}, nil))
 
-		require.Equal(t, "main", s.Engine.GetBranch("branch2").GetParent().GetName())
-		require.Equal(t, "branch1", s.Engine.GetBranch("branch3").GetParent().GetName())
+		require.Equal(t, "main", s.Engine.GetBranch("branch2").Parent().Name())
+		require.Equal(t, "branch1", s.Engine.GetBranch("branch3").Parent().Name())
 	})
 
 	t.Run("plucks from middle of stack correctly", func(t *testing.T) {
@@ -548,17 +547,17 @@ func TestPluckAction(t *testing.T) {
 
 		// B is on main
 		branchB := s.Engine.GetBranch("B")
-		parentB := branchB.GetParent()
-		require.Equal(t, "main", parentB.GetName())
+		parentB := branchB.Parent()
+		require.Equal(t, "main", parentB.Name())
 
 		// C is on A (B's old parent)
 		branchC := s.Engine.GetBranch("C")
-		parentC := branchC.GetParent()
-		require.Equal(t, "A", parentC.GetName())
+		parentC := branchC.Parent()
+		require.Equal(t, "A", parentC.Name())
 
 		// D is still on C
 		branchD := s.Engine.GetBranch("D")
-		parentD := branchD.GetParent()
-		require.Equal(t, "C", parentD.GetName())
+		parentD := branchD.Parent()
+		require.Equal(t, "C", parentD.Name())
 	})
 }

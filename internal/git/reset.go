@@ -36,7 +36,7 @@ func (r *runner) MixedReset(ctx context.Context, revision string) error {
 // resetWorktree shells out to native git so the caller's context (deadline,
 // cancellation) is honored.
 func (r *runner) resetWorktree(ctx context.Context, revision, modeFlag string) error {
-	if _, err := r.RunGitCommandWithContext(ctx, "reset", modeFlag, revision); err != nil {
+	if _, err := r.Run(ctx, "reset", modeFlag, revision); err != nil {
 		return err
 	}
 	return nil

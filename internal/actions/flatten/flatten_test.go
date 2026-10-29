@@ -1,7 +1,6 @@
 package flatten_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -41,9 +40,9 @@ func TestFlattenAction(t *testing.T) {
 		branchB := s.Engine.GetBranch("B")
 		branchC := s.Engine.GetBranch("C")
 
-		require.Equal(t, "main", branchA.GetParent().GetName())
-		require.Equal(t, "main", branchB.GetParent().GetName())
-		require.Equal(t, "main", branchC.GetParent().GetName())
+		require.Equal(t, "main", branchA.Parent().Name())
+		require.Equal(t, "main", branchB.Parent().Name())
+		require.Equal(t, "main", branchC.Parent().Name())
 	})
 
 	t.Run("respects dependencies", func(t *testing.T) {
@@ -73,8 +72,8 @@ func TestFlattenAction(t *testing.T) {
 		branchA := s.Engine.GetBranch("A")
 		branchB := s.Engine.GetBranch("B")
 
-		require.Equal(t, "main", branchA.GetParent().GetName())
-		require.Equal(t, "A", branchB.GetParent().GetName())
+		require.Equal(t, "main", branchA.Parent().Name())
+		require.Equal(t, "A", branchB.Parent().Name())
 	})
 
 	t.Run("partial flatten", func(t *testing.T) {
@@ -118,9 +117,9 @@ func TestFlattenAction(t *testing.T) {
 		branchB := s.Engine.GetBranch("B")
 		branchC := s.Engine.GetBranch("C")
 
-		require.Equal(t, "main", branchA.GetParent().GetName())
-		require.Equal(t, "A", branchB.GetParent().GetName())
-		require.Equal(t, "main", branchC.GetParent().GetName())
+		require.Equal(t, "main", branchA.Parent().Name())
+		require.Equal(t, "A", branchB.Parent().Name())
+		require.Equal(t, "main", branchC.Parent().Name())
 	})
 
 	t.Run("handles already flat stack", func(t *testing.T) {
@@ -141,8 +140,8 @@ func TestFlattenAction(t *testing.T) {
 		branchB := s.Engine.GetBranch("B")
 
 		// Both should still be on main
-		require.Equal(t, "main", branchA.GetParent().GetName())
-		require.Equal(t, "main", branchB.GetParent().GetName())
+		require.Equal(t, "main", branchA.Parent().Name())
+		require.Equal(t, "main", branchB.Parent().Name())
 	})
 
 	t.Run("uses current branch when none specified", func(t *testing.T) {
@@ -165,8 +164,8 @@ func TestFlattenAction(t *testing.T) {
 		branchA := s.Engine.GetBranch("A")
 		branchB := s.Engine.GetBranch("B")
 
-		require.Equal(t, "main", branchA.GetParent().GetName())
-		require.Equal(t, "main", branchB.GetParent().GetName())
+		require.Equal(t, "main", branchA.Parent().Name())
+		require.Equal(t, "main", branchB.Parent().Name())
 	})
 
 	t.Run("returns error for untracked branch", func(t *testing.T) {
@@ -230,12 +229,12 @@ func TestFlattenAction(t *testing.T) {
 		branchC := s.Engine.GetBranch("C")
 
 		t.Logf("After flatten: A->%s, B->%s, C->%s",
-			branchA.GetParent().GetName(),
-			branchB.GetParent().GetName(),
-			branchC.GetParent().GetName())
+			branchA.Parent().Name(),
+			branchB.Parent().Name(),
+			branchC.Parent().Name())
 
 		// A should move to main (independent - adds new file)
-		require.Equal(t, "main", branchA.GetParent().GetName(), "A should be on main")
+		require.Equal(t, "main", branchA.Parent().Name(), "A should be on main")
 
 		// Key assertion: the flatten should complete without errors.
 		// The exact positions of B and C depend on what the flatten algorithm
@@ -270,16 +269,16 @@ func TestFlattenAction(t *testing.T) {
 		require.Equal(t, "1", bCommitsBefore, "B should have 1 commit on top of A")
 
 		// Clear B's ParentBranchRevision metadata to trigger the fallback path
-		meta, err := s.Metadata.ReadMetadata(context.Background(), "B").One()
+		meta, err := s.Metadata.ReadMetadata(t.Context(), "B").One()
 		require.NoError(t, err)
 		meta = meta.WithParentBranchRevision(nil)
-		err = s.Metadata.WriteMetadata("B", meta)
+		err = s.Metadata.WriteMetadata(t.Context(), "B", meta)
 		require.NoError(t, err)
 
 		s.Rebuild()
 
 		// Verify metadata was cleared
-		meta, err = s.Metadata.ReadMetadata(context.Background(), "B").One()
+		meta, err = s.Metadata.ReadMetadata(t.Context(), "B").One()
 		require.NoError(t, err)
 		require.Nil(t, meta.GetParentBranchRevision())
 
@@ -291,7 +290,7 @@ func TestFlattenAction(t *testing.T) {
 
 		// Verify B is now parented on main
 		branchB := s.Engine.GetBranch("B")
-		require.Equal(t, "main", branchB.GetParent().GetName())
+		require.Equal(t, "main", branchB.Parent().Name())
 
 		// Critical assertion: B should still have exactly 1 commit on top of main
 		// If the bug were present (using merge-base), B would have A's commits too

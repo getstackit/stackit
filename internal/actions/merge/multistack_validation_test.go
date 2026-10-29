@@ -1,10 +1,8 @@
 package merge
 
 import (
-	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -18,7 +16,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 
 		// Create a branch and push it
 		s.CreateBranchQuiet("feature1").
-			TrackBranch("feature1", s.Engine.Trunk().GetName())
+			TrackBranch("feature1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("feature1-content", "file1"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "feature1"))
 		s.Rebuild()
@@ -28,8 +26,8 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		}
 
 		// Should pass - branch matches remote
-		err := validateBranchesMatchRemote(context.Background(), s.Engine, stacks, s.Context.Output)
-		assert.NoError(t, err)
+		err := validateBranchesMatchRemote(t.Context(), s.Engine, stacks, s.Context.Output)
+		require.NoError(t, err)
 	})
 
 	t.Run("fails when branch differs from remote", func(t *testing.T) {
@@ -38,7 +36,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 
 		// Create a branch and push it
 		s.CreateBranchQuiet("feature1").
-			TrackBranch("feature1", s.Engine.Trunk().GetName())
+			TrackBranch("feature1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("feature1-content", "file1"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "feature1"))
 		s.Rebuild()
@@ -52,11 +50,11 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		}
 
 		// Should fail - branch differs from remote
-		err := validateBranchesMatchRemote(context.Background(), s.Engine, stacks, s.Context.Output)
+		err := validateBranchesMatchRemote(t.Context(), s.Engine, stacks, s.Context.Output)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "cannot ship")
-		assert.Contains(t, err.Error(), "differ from remote")
-		assert.Contains(t, err.Error(), "1 branch")
+		require.Contains(t, err.Error(), "cannot ship")
+		require.Contains(t, err.Error(), "differ from remote")
+		require.Contains(t, err.Error(), "1 branch")
 	})
 
 	t.Run("fails with multiple mismatched branches", func(t *testing.T) {
@@ -65,7 +63,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 
 		// Create first branch and push
 		s.CreateBranchQuiet("feature1").
-			TrackBranch("feature1", s.Engine.Trunk().GetName())
+			TrackBranch("feature1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("feature1-content", "file1"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "feature1"))
 		s.Rebuild()
@@ -90,9 +88,9 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		}
 
 		// Should fail with count of 2
-		err := validateBranchesMatchRemote(context.Background(), s.Engine, stacks, s.Context.Output)
+		err := validateBranchesMatchRemote(t.Context(), s.Engine, stacks, s.Context.Output)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "2 branch")
+		require.Contains(t, err.Error(), "2 branch")
 	})
 
 	t.Run("passes with multiple stacks all matching remote", func(t *testing.T) {
@@ -101,15 +99,15 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 
 		// Create stack1
 		s.CreateBranchQuiet("stack1-b1").
-			TrackBranch("stack1-b1", s.Engine.Trunk().GetName())
+			TrackBranch("stack1-b1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("s1-content", "s1file"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "stack1-b1"))
 		s.Rebuild().
-			CheckoutQuiet(s.Engine.Trunk().GetName())
+			CheckoutQuiet(s.Engine.Trunk().Name())
 
 		// Create stack2
 		s.CreateBranchQuiet("stack2-b1").
-			TrackBranch("stack2-b1", s.Engine.Trunk().GetName())
+			TrackBranch("stack2-b1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("s2-content", "s2file"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "stack2-b1"))
 		s.Rebuild()
@@ -120,8 +118,8 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		}
 
 		// Should pass - all branches match remote
-		err := validateBranchesMatchRemote(context.Background(), s.Engine, stacks, s.Context.Output)
-		assert.NoError(t, err)
+		err := validateBranchesMatchRemote(t.Context(), s.Engine, stacks, s.Context.Output)
+		require.NoError(t, err)
 	})
 
 	t.Run("fails when one stack has mismatched branch", func(t *testing.T) {
@@ -130,15 +128,15 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 
 		// Create stack1 - will match remote
 		s.CreateBranchQuiet("stack1-b1").
-			TrackBranch("stack1-b1", s.Engine.Trunk().GetName())
+			TrackBranch("stack1-b1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("s1-content", "s1file"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "stack1-b1"))
 		s.Rebuild().
-			CheckoutQuiet(s.Engine.Trunk().GetName())
+			CheckoutQuiet(s.Engine.Trunk().Name())
 
 		// Create stack2 - will differ from remote
 		s.CreateBranchQuiet("stack2-b1").
-			TrackBranch("stack2-b1", s.Engine.Trunk().GetName())
+			TrackBranch("stack2-b1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("s2-content", "s2file"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "stack2-b1"))
 		s.Rebuild()
@@ -153,9 +151,9 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		}
 
 		// Should fail - stack2 branch differs from remote
-		err := validateBranchesMatchRemote(context.Background(), s.Engine, stacks, s.Context.Output)
+		err := validateBranchesMatchRemote(t.Context(), s.Engine, stacks, s.Context.Output)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "1 branch")
+		require.Contains(t, err.Error(), "1 branch")
 	})
 
 	t.Run("handles branch not on remote gracefully", func(t *testing.T) {
@@ -164,7 +162,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 
 		// Create a branch but don't push it
 		s.CreateBranchQuiet("feature1").
-			TrackBranch("feature1", s.Engine.Trunk().GetName())
+			TrackBranch("feature1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("feature1-content", "file1"))
 		s.Rebuild()
 
@@ -173,8 +171,8 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		}
 
 		// Should fail - branch doesn't exist on remote (doesn't match)
-		err := validateBranchesMatchRemote(context.Background(), s.Engine, stacks, s.Context.Output)
+		err := validateBranchesMatchRemote(t.Context(), s.Engine, stacks, s.Context.Output)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "differ from remote")
+		require.Contains(t, err.Error(), "differ from remote")
 	})
 }

@@ -33,13 +33,13 @@ type moveEngine interface {
 	validation.BranchValidationEngine
 	Trunk() engine.Branch
 	IsTrunk(branch engine.Branch) bool
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
-	SortBranchesTopologically(branches engine.Branches) engine.Branches
-	GetRevision(branch engine.Branch) (string, error)
-	GetAllCommits(branch engine.Branch) (git.Commits, error)
-	GetDivergencePoint(branchName string) (string, error)
-	BatchRevisions(branches engine.Branches) engine.RevisionMap
-	BatchDivergencePoints(branches engine.Branches) engine.RevisionMap
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+	SortBranchesTopologically(ctx context.Context, branches engine.Branches) engine.Branches
+	GetRevision(ctx context.Context, branch engine.Branch) (string, error)
+	GetAllCommits(ctx context.Context, branch engine.Branch) (git.Commits, error)
+	GetDivergencePoint(ctx context.Context, branchName string) (string, error)
+	BatchRevisions(ctx context.Context, branches engine.Branches) engine.RevisionMap
+	BatchDivergencePoints(ctx context.Context, branches engine.Branches) engine.RevisionMap
 	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec) (*engine.RebaseValidation, error)
 	ReparentBranch(ctx context.Context, branch engine.Branch, newParent engine.Branch) error
 	AssignBranchesToNewStack(ctx context.Context, root engine.Branch, branches engine.Branches) (string, error)
@@ -70,7 +70,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	}
 	defer h.Cleanup()
 
-	source, err := resolveSource(eng, opts.Source)
+	source, err := resolveSource(ctx.Context, eng, opts.Source)
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 		return err
 	}
 
-	plan, err := buildMovePlan(eng, out, source, opts.Onto, opts.RebaseSpecs)
+	plan, err := buildMovePlan(ctx.Context, eng, out, source, opts.Onto, opts.RebaseSpecs)
 	if err != nil {
 		return err
 	}
@@ -130,13 +130,13 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	return nil
 }
 
-func resolveSource(eng moveEngine, source string) (string, error) {
+func resolveSource(ctx context.Context, eng moveEngine, source string) (string, error) {
 	if source == "" {
-		currentBranch := eng.CurrentBranch()
+		currentBranch := eng.CurrentBranch(ctx)
 		if currentBranch == nil {
 			return "", errors.New("not on a branch and no source branch specified")
 		}
-		return currentBranch.GetName(), nil
+		return currentBranch.Name(), nil
 	}
 	return source, nil
 }
@@ -178,8 +178,8 @@ func validateMoveTargets(eng moveEngine, source, onto string) error {
 	return nil
 }
 
-func buildMovePlan(eng moveEngine, out output.Output, source, onto string, rebaseSpecs []engine.RebaseSpec) (*movePlan, error) {
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+func buildMovePlan(ctx context.Context, eng moveEngine, out output.Output, source, onto string, rebaseSpecs []engine.RebaseSpec) (*movePlan, error) {
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	sourceBranch := eng.GetBranch(source)
 	ontoBranch := eng.GetBranch(onto)
@@ -194,12 +194,12 @@ func buildMovePlan(eng moveEngine, out output.Output, source, onto string, rebas
 		RecursiveParents:  false,
 	})
 
-	oldParent := sourceBranch.GetParent()
-	oldParentName := sourceBranch.GetParentOrTrunk()
-	oldParentRev, _ := eng.GetDivergencePoint(source)
+	oldParent := sourceBranch.Parent()
+	oldParentName := sourceBranch.ParentOrTrunk()
+	oldParentRev, _ := eng.GetDivergencePoint(ctx, source)
 
 	if len(rebaseSpecs) == 0 {
-		rebaseSpecs = BuildRebaseSpecs(eng, out, source, onto, oldParent, oldParentRev, descendants)
+		rebaseSpecs = BuildRebaseSpecs(ctx, eng, out, source, onto, oldParent, oldParentRev, descendants)
 	}
 
 	return &movePlan{
@@ -230,7 +230,7 @@ func confirmInteractive(ctx *app.Context, h Handler, plan *movePlan) (bool, erro
 	out := ctx.Output
 
 	validation, validationErr := eng.ValidateRebases(ctx.Context, plan.rebaseSpecs)
-	commitsData, _ := eng.GetAllCommits(plan.sourceBranch)
+	commitsData, _ := eng.GetAllCommits(ctx.Context, plan.sourceBranch)
 	commits := commitsData.Subjects()
 
 	preview := buildPreview(plan, commits, validation, validationErr)
@@ -292,7 +292,7 @@ func buildPreview(plan *movePlan, commits []string, validation *engine.RebaseVal
 
 func descendantNames(descendants engine.Branches, source string) []string {
 	return descendants.Filter(func(d engine.Branch) bool {
-		return d.GetName() != source
+		return d.Name() != source
 	}).Names()
 }
 
@@ -304,8 +304,8 @@ func maybeRename(ctx *app.Context, h Handler, opts Options, plan *movePlan) (boo
 	sourceBranch := plan.sourceBranch
 	ontoBranch := plan.ontoBranch
 
-	sourceScope := sourceBranch.GetScope()
-	ontoScope := ontoBranch.GetScope()
+	sourceScope := sourceBranch.Scope()
+	ontoScope := ontoBranch.Scope()
 	if sourceScope.IsDefined() && ontoScope.IsDefined() && !sourceScope.Equal(ontoScope) {
 		shouldRename := false
 		if h.IsInteractive() && strings.Contains(source, sourceScope.String()) {
@@ -338,7 +338,7 @@ func restackAndMark(ctx *app.Context, plan *movePlan, sourceBranch engine.Branch
 	var eng moveEngine = ctx.Engine
 	out := ctx.Output
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	out.Info("Moved %s from %s to %s.",
 		output.CurrentBranch(plan.source),
@@ -356,7 +356,7 @@ func restackAndMark(ctx *app.Context, plan *movePlan, sourceBranch engine.Branch
 	}
 
 	affectedBranches := []string{plan.source}
-	if plan.oldParentName != eng.Trunk().GetName() {
+	if plan.oldParentName != eng.Trunk().Name() {
 		affectedBranches = append(affectedBranches, plan.oldParentName)
 	}
 	if err := eng.MarkBranchesForPRBodyUpdate(ctx, affectedBranches); err != nil {
@@ -390,7 +390,7 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 	validation, validationErr := eng.ValidateRebases(gctx, rebaseSpecs)
 
 	// Get commits that will be moved
-	commitsData, _ := eng.GetAllCommits(sourceBranch)
+	commitsData, _ := eng.GetAllCommits(ctx.Context, sourceBranch)
 	commits := commitsData.Subjects()
 
 	// Get descendant names (excluding source itself)
@@ -450,13 +450,13 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 
 // BuildRebaseSpecs builds the rebase specifications for validating/executing the move.
 // Exported so it can be used by the selection validation callback.
-func BuildRebaseSpecs(eng moveEngine, out output.Output, source, onto string, oldParent *engine.Branch, oldParentRev string, descendants engine.Branches) []engine.RebaseSpec {
+func BuildRebaseSpecs(ctx context.Context, eng moveEngine, out output.Output, source, onto string, oldParent *engine.Branch, oldParentRev string, descendants engine.Branches) []engine.RebaseSpec {
 	rebaseSpecs := make([]engine.RebaseSpec, 0, len(descendants))
 
 	ontoBranch := eng.GetBranch(onto)
 
 	// Get the target parent's revision for the source branch rebase
-	ontoRev, err := eng.GetRevision(ontoBranch)
+	ontoRev, err := eng.GetRevision(ctx, ontoBranch)
 	if err != nil {
 		out.Debug("Failed to get revision for %s: %v", onto, err)
 	}
@@ -467,13 +467,13 @@ func BuildRebaseSpecs(eng moveEngine, out output.Output, source, onto string, ol
 		// Fallback to current parent's revision when metadata doesn't have it
 		if oldParent != nil {
 			var revErr error
-			sourceOldUpstream, revErr = eng.GetRevision(*oldParent)
+			sourceOldUpstream, revErr = eng.GetRevision(ctx, *oldParent)
 			if revErr != nil {
-				out.Debug("Failed to get revision for old parent %s: %v", oldParent.GetName(), revErr)
+				out.Debug("Failed to get revision for old parent %s: %v", oldParent.Name(), revErr)
 			}
 		} else {
 			var revErr error
-			sourceOldUpstream, revErr = eng.GetRevision(eng.Trunk())
+			sourceOldUpstream, revErr = eng.GetRevision(ctx, eng.Trunk())
 			if revErr != nil {
 				out.Debug("Failed to get revision for trunk: %v", revErr)
 			}
@@ -487,40 +487,40 @@ func BuildRebaseSpecs(eng moveEngine, out output.Output, source, onto string, ol
 
 	// For descendants, each will be rebased onto its parent (which is part of the moving stack)
 	// Since these are topologically ordered, each parent will be rebased before its children
-	sortedDescendants := eng.SortBranchesTopologically(descendants)
+	sortedDescendants := eng.SortBranchesTopologically(ctx, descendants)
 
 	// Prefetch every descendant's parent revision and divergence point in one
 	// batch instead of a git rev-parse and metadata read per descendant.
 	parents := make(engine.Branches, 0, len(sortedDescendants))
 	for _, d := range sortedDescendants {
-		if parent := d.GetParent(); parent != nil {
+		if parent := d.Parent(); parent != nil {
 			parents = append(parents, *parent)
 		}
 	}
-	parentRevs := eng.BatchRevisions(parents)
-	divergencePoints := eng.BatchDivergencePoints(sortedDescendants)
+	parentRevs := eng.BatchRevisions(ctx, parents)
+	divergencePoints := eng.BatchDivergencePoints(ctx, sortedDescendants)
 
 	for _, d := range sortedDescendants {
-		if d.GetName() == source {
+		if d.Name() == source {
 			continue // Already handled above
 		}
-		parent := d.GetParent()
+		parent := d.Parent()
 		if parent == nil {
 			continue
 		}
-		parentRev, ok := parentRevs[parent.GetName()]
+		parentRev, ok := parentRevs[parent.Name()]
 		if !ok {
-			out.Debug("Failed to get revision for parent %s of %s", parent.GetName(), d.GetName())
+			out.Debug("Failed to get revision for parent %s of %s", parent.Name(), d.Name())
 		}
 
 		// Get the old upstream (divergence point)
-		dOldUpstream, ok := divergencePoints.Rev(d.GetName())
+		dOldUpstream, ok := divergencePoints.Rev(d.Name())
 		if !ok || dOldUpstream == "" {
 			dOldUpstream = parentRev // Fallback
 		}
 
 		rebaseSpecs = append(rebaseSpecs, engine.RebaseSpec{
-			Branch:      d.GetName(),
+			Branch:      d.Name(),
 			NewParent:   parentRev,
 			OldUpstream: dOldUpstream,
 		})

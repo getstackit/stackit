@@ -4,13 +4,14 @@ package stack
 import (
 	"errors"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/tui"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewReorderCmd creates the reorder command
@@ -29,7 +30,7 @@ branches will be restacked in the new order.`,
 				opts := actions.ReorderOptions{}
 				// The Bubble Tea editor needs a TTY; without one the action
 				// falls back to editing the order as text in $EDITOR.
-				if utils.IsTTY() {
+				if term.IsInteractive() {
 					opts.Editor = tuiOrderEditor{}
 				}
 				return actions.ReorderAction(ctx, opts)

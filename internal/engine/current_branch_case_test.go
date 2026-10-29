@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,9 +28,9 @@ func TestCurrentBranchResolvesRefCasing(t *testing.T) {
 		s.RunGit("symbolic-ref", "HEAD", "refs/heads/Claude/feature")
 		s.Rebuild()
 
-		current := s.Engine.CurrentBranch()
+		current := s.Engine.CurrentBranch(t.Context())
 		require.NotNil(t, current)
-		require.Equal(t, "claude/feature", current.GetName())
+		require.Equal(t, "claude/feature", current.Name())
 	})
 
 	t.Run("matching casing is left untouched", func(t *testing.T) {
@@ -39,9 +38,9 @@ func TestCurrentBranchResolvesRefCasing(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.CreateBranch("claude/feature").Commit("feature change")
 
-		current := s.Engine.CurrentBranch()
+		current := s.Engine.CurrentBranch(t.Context())
 		require.NotNil(t, current)
-		require.Equal(t, "claude/feature", current.GetName())
+		require.Equal(t, "claude/feature", current.Name())
 	})
 
 	t.Run("track succeeds on a branch HEAD spells differently", func(t *testing.T) {
@@ -52,14 +51,14 @@ func TestCurrentBranchResolvesRefCasing(t *testing.T) {
 		s.RunGit("symbolic-ref", "HEAD", "refs/heads/Claude/feature")
 		s.Rebuild()
 
-		name, err := s.Engine.ValidateOnBranch()
+		name, err := s.Engine.ValidateOnBranch(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, "claude/feature", name)
 
-		require.NoError(t, s.Engine.TrackBranch(context.Background(), name, "main"))
-		parent := s.Engine.GetBranch(name).GetParent()
+		require.NoError(t, s.Engine.TrackBranch(t.Context(), name, "main"))
+		parent := s.Engine.GetBranch(name).Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "main", parent.GetName())
+		require.Equal(t, "main", parent.Name())
 	})
 }
 
@@ -69,7 +68,7 @@ func TestTrackBranchReportsCaseMismatch(t *testing.T) {
 	s.CreateBranch("claude/feature").Commit("feature change")
 	s.Checkout("main")
 
-	err := s.Engine.TrackBranch(context.Background(), "Claude/feature", "main")
+	err := s.Engine.TrackBranch(t.Context(), "Claude/feature", "main")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "claude/feature")
 	require.Contains(t, err.Error(), "differ only in case")

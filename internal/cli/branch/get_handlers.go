@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/git"
@@ -119,7 +121,7 @@ func (h *SimpleGetHandler) ReportLandedAncestors(report actions.LandedAncestorRe
 	// ancestor can have landed, and then they do not share a new parent.
 	confirmed, err := tui.PromptConfirm(
 		fmt.Sprintf("Unfreeze and restack %s now?", strings.Join(unfreezable, ", ")), false)
-	if err != nil && !errors.Is(err, tui.ErrInteractiveDisabled) {
+	if err != nil && !errors.Is(err, term.ErrInteractiveDisabled) {
 		return actions.LeaveFrozen, err
 	}
 	if confirmed {

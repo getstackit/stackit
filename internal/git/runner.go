@@ -2,11 +2,9 @@
 package git
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -16,8 +14,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // DebugLogger is an interface for logging messages from the git layer.
@@ -103,7 +99,7 @@ func (r *runner) UpdateRefs(ctx context.Context, updates []RefUpdate, reflogMess
 	if reflogMessage != "" {
 		args = append(args, "-m", reflogMessage)
 	}
-	_, err := r.runGitInternal(ctx, stdin.String(), nil, true, args...)
+	_, err := r.runStdin(ctx, stdin.String(), args...)
 	if err != nil {
 		return fmt.Errorf("atomic ref update failed: %w", err)
 	}
@@ -128,7 +124,7 @@ func (r *runner) DeleteRefs(ctx context.Context, refNames ...string) error {
 		fmt.Fprintf(&stdin, "delete %s\n", refName)
 	}
 
-	_, err := r.runGitInternal(ctx, stdin.String(), nil, true, "update-ref", "--stdin")
+	_, err := r.runStdin(ctx, stdin.String(), "update-ref", "--stdin")
 	if err != nil {
 		return fmt.Errorf("atomic ref delete failed: %w", err)
 	}
@@ -136,198 +132,6 @@ func (r *runner) DeleteRefs(ctx context.Context, refNames ...string) error {
 		r.markRefChanged(name)
 	}
 	return nil
-}
-
-// parsedOutputConfig overrides user config that injects extra text into output
-// stackit parses. With log.showSignature=true, `git log` prints signature
-// verification lines ahead of each record, so a -z parser reads them into the
-// SHA field. The streaming and interactive paths show output to the user and
-// keep the user's config.
-var parsedOutputConfig = []string{"-c", "log.showSignature=false"}
-
-func (r *runner) RunGitCommandWithEnv(ctx context.Context, env []string, args ...string) (string, error) {
-	return r.runGitInternal(ctx, "", env, true, args...)
-}
-
-func (r *runner) RunGitCommandWithContext(ctx context.Context, args ...string) (string, error) {
-	return r.runGitInternal(ctx, "", nil, true, args...)
-}
-
-func (r *runner) RunGitCommandRawWithContext(ctx context.Context, args ...string) (string, error) {
-	return r.runGitInternal(ctx, "", nil, false, args...)
-}
-
-func (r *runner) runGitInternal(ctx context.Context, input string, env []string, trim bool, args ...string) (string, error) {
-	start := time.Now()
-	op := traceOp("git", args)
-	cmdAttr := slog.String("cmd", traceCmd("git", args))
-
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	if _, ok := ctx.Deadline(); !ok {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, DefaultCommandTimeout)
-		defer cancel()
-	}
-
-	r.debugLog("git %s", strings.Join(args, " "))
-
-	cmd := exec.CommandContext(ctx, "git", slices.Concat(parsedOutputConfig, args)...)
-	cmd.WaitDelay = CommandWaitDelay
-	if root := r.getRepoRoot(); root != "" {
-		cmd.Dir = root
-	}
-
-	if input != "" {
-		cmd.Stdin = strings.NewReader(input)
-	}
-
-	// Prevent git from prompting via TTY (important when TUI has terminal in raw mode)
-	// GIT_TERMINAL_PROMPT=0 prevents git from trying to read credentials or confirmations
-	// from the terminal, which could cause hangs when a TUI is active.
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-	if len(env) > 0 {
-		cmd.Env = append(cmd.Env, env...)
-	}
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		cmdErr := NewCommandError("git", args, stdout.String(), stderr.String(), err)
-		r.traceLog(op, time.Since(start), false, cmdErr, cmdAttr)
-		return "", cmdErr
-	}
-
-	result := stdout.String()
-	if trim {
-		result = strings.TrimSpace(result)
-	}
-	r.traceLog(op, time.Since(start), true, nil, cmdAttr)
-	return result, nil
-}
-
-// runGitStreaming runs a git command and streams output to the terminal (if interactive)
-// while also capturing it for error handling. This is useful for commands like commit
-// where hook output should be visible to the user.
-func (r *runner) runGitStreaming(ctx context.Context, args ...string) (string, error) {
-	start := time.Now()
-	op := traceOp("git", args)
-	cmdAttr := slog.String("cmd", traceCmd("git", args))
-
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	if _, ok := ctx.Deadline(); !ok {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, DefaultCommandTimeout)
-		defer cancel()
-	}
-
-	r.debugLog("git %s (streaming)", strings.Join(args, " "))
-
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.WaitDelay = CommandWaitDelay
-	if root := r.getRepoRoot(); root != "" {
-		cmd.Dir = root
-	}
-
-	var stdoutBuf, stderrBuf bytes.Buffer
-
-	if utils.IsInteractive() {
-		// Stream to terminal AND capture for error handling
-		cmd.Stdout = io.MultiWriter(os.Stdout, &stdoutBuf)
-		cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
-	} else {
-		// Non-interactive: just capture (same as runGitInternal)
-		cmd.Stdout = &stdoutBuf
-		cmd.Stderr = &stderrBuf
-	}
-
-	if err := cmd.Run(); err != nil {
-		cmdErr := NewCommandError("git", args, stdoutBuf.String(), stderrBuf.String(), err)
-		r.traceLog(op, time.Since(start), false, cmdErr, cmdAttr)
-		return "", cmdErr
-	}
-
-	r.traceLog(op, time.Since(start), true, nil, cmdAttr)
-	return strings.TrimSpace(stdoutBuf.String()), nil
-}
-
-func (r *runner) RunGHCommandWithContext(ctx context.Context, args ...string) (string, error) {
-	start := time.Now()
-	op := traceOp("gh", args)
-	cmdAttr := slog.String("cmd", traceCmd("gh", args))
-
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	// If no timeout/deadline is set in the context, add the default one
-	if _, ok := ctx.Deadline(); !ok {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, DefaultCommandTimeout)
-		defer cancel()
-	}
-
-	r.debugLog("gh %s", strings.Join(args, " "))
-
-	cmd := exec.CommandContext(ctx, "gh", args...)
-	cmd.WaitDelay = CommandWaitDelay
-	// Use repoRoot for gh commands to ensure they are scoped to the correct repo
-	// Without a repo root, an empty Dir runs in the current working directory.
-	cmd.Dir = r.getRepoRoot()
-
-	// Prevent gh from prompting via TTY (important when TUI has terminal in raw mode)
-	// GH_PROMPT_DISABLED=1 prevents gh from trying to prompt for authentication
-	// or confirmations, which could cause hangs when a TUI is active.
-	cmd.Env = append(os.Environ(), "GH_PROMPT_DISABLED=1")
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			cmdErr := NewCommandError("gh", args, stdout.String(), stderr.String(), ctx.Err())
-			r.traceLog(op, time.Since(start), false, cmdErr, cmdAttr)
-			return "", cmdErr
-		}
-		cmdErr := NewCommandError("gh", args, stdout.String(), stderr.String(), err)
-		r.traceLog(op, time.Since(start), false, cmdErr, cmdAttr)
-		return "", cmdErr
-	}
-	r.traceLog(op, time.Since(start), true, nil, cmdAttr)
-	return strings.TrimSpace(stdout.String()), nil
-}
-
-func (r *runner) RunGitCommandInteractive(args ...string) error {
-	if !utils.IsInteractive() {
-		return fmt.Errorf("interactive git command '%v' not allowed in non-interactive mode", args)
-	}
-
-	start := time.Now()
-	op := traceOp("git", args)
-	cmdAttr := slog.String("cmd", traceCmd("git", args))
-
-	r.debugLog("git %s (interactive)", strings.Join(args, " "))
-
-	cmd := exec.Command("git", args...)
-	if root := r.getRepoRoot(); root != "" {
-		cmd.Dir = root
-	}
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err := cmd.Run()
-	r.traceLog(op, time.Since(start), err == nil, err, cmdAttr)
-	return err
 }
 
 // StagingOptions defines which changes to stage
@@ -399,11 +203,11 @@ type Runner interface {
 	GitVersion(ctx context.Context) (Version, error)
 
 	// Raw command execution
-	RunGitCommandWithContext(ctx context.Context, args ...string) (string, error)
-	RunGitCommandRawWithContext(ctx context.Context, args ...string) (string, error)
-	RunGitCommandWithEnv(ctx context.Context, env []string, args ...string) (string, error)
-	RunGitCommandInteractive(args ...string) error
-	RunGHCommandWithContext(ctx context.Context, args ...string) (string, error)
+	Run(ctx context.Context, args ...string) (string, error)
+	RunRaw(ctx context.Context, args ...string) (string, error)
+	RunWithEnv(ctx context.Context, env []string, args ...string) (string, error)
+	RunInteractive(ctx context.Context, args ...string) error
+	RunGH(ctx context.Context, args ...string) (string, error)
 
 	// Logging
 	SetLogger(logger DebugLogger)
@@ -556,19 +360,19 @@ func (r *runner) InitDefaultRepo() error {
 	return r.ensureRepo()
 }
 
-func (r *runner) GetRemote() string {
-	return r.getRemote()
+func (r *runner) GetRemote(ctx context.Context) string {
+	return r.getRemote(ctx)
 }
 
 func (r *runner) FetchRemoteShas(ctx context.Context, remote string) (RemoteBranchSHAs, error) {
 	return r.fetchRemoteShas(ctx, remote)
 }
 
-func (r *runner) GetConfig(key string) (string, error) {
+func (r *runner) GetConfig(ctx context.Context, key string) (string, error) {
 	if err := r.ensureRepo(); err != nil {
 		return "", err
 	}
-	return r.runGitCommandInternal("config", "--get", key)
+	return r.Run(ctx, "config", "--get", key)
 }
 
 func (r *runner) SetConfig(key, value string) error {
@@ -607,7 +411,7 @@ func (r *runner) DiscoverRepoRoot() (string, error) {
 	return r.getRepoRoot(), nil
 }
 
-func (r *runner) GetRepoRoot() string {
+func (r *runner) RepoRoot() string {
 	return r.getRepoRoot()
 }
 
@@ -619,7 +423,7 @@ func (r *runner) getRepoRoot() string {
 	return r.repoRoot
 }
 
-func (r *runner) GetGitCommonDir() (string, error) {
+func (r *runner) GitCommonDir() (string, error) {
 	root, err := r.DiscoverRepoRoot()
 	if err != nil {
 		return "", err
@@ -634,10 +438,10 @@ func (r *runner) GetUserName(ctx context.Context) (string, error) {
 	return NewConfigStore(r.getRepoRoot()).Get("user.name")
 }
 
-func (r *runner) EnsureMetadataRefspecConfigured() error {
+func (r *runner) EnsureMetadataRefspecConfigured(ctx context.Context) error {
 	const metadataRefspec = "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*"
 
-	fetchConfigKey := fmt.Sprintf("remote.%s.fetch", r.GetRemote())
+	fetchConfigKey := fmt.Sprintf("remote.%s.fetch", r.GetRemote(ctx))
 	refspecs, err := r.GetConfigAll(fetchConfigKey)
 	if err != nil {
 		return fmt.Errorf("failed to get fetch refspecs: %w", err)
@@ -652,10 +456,10 @@ func (r *runner) EnsureMetadataRefspecConfigured() error {
 	return r.AddConfigValue(fetchConfigKey, metadataRefspec)
 }
 
-func (r *runner) EnsureStackMetaRefspecConfigured() error {
+func (r *runner) EnsureStackMetaRefspecConfigured(ctx context.Context) error {
 	const stackMetaRefspec = "+refs/stackit/stacks/*:refs/stackit/remote-stacks/*"
 
-	fetchConfigKey := fmt.Sprintf("remote.%s.fetch", r.GetRemote())
+	fetchConfigKey := fmt.Sprintf("remote.%s.fetch", r.GetRemote(ctx))
 	refspecs, err := r.GetConfigAll(fetchConfigKey)
 	if err != nil {
 		return fmt.Errorf("failed to get fetch refspecs: %w", err)
@@ -673,7 +477,7 @@ func (r *runner) EnsureStackMetaRefspecConfigured() error {
 func (r *runner) FindRemoteBranch(ctx context.Context, remote string) (string, error) {
 	// `git config --get-regexp 'branch\..*\.remote'` lists each tracked
 	// branch's remote on its own line: "branch.<name>.remote <value>".
-	out, err := r.RunGitCommandWithContext(ctx, "config", "--get-regexp", `branch\..*\.remote`)
+	out, err := r.Run(ctx, "config", "--get-regexp", `branch\..*\.remote`)
 	if err != nil {
 		return "", nil //nolint:nilerr // no branch config is non-fatal here
 	}
@@ -703,28 +507,48 @@ func (r *runner) IsAncestor(ctx context.Context, ancestor, descendant string) (b
 	return r.isAncestor(ctx, ancestor, descendant)
 }
 
-// splitNulTerminated splits a NUL-terminated string (as produced by git -z)
-// into non-empty records. The trailing NUL appended by git is stripped first.
+// splitNulTerminated splits NUL-separated git output (as produced by -z) into
+// its non-empty records.
 func splitNulTerminated(s string) []string {
-	s = strings.TrimRight(s, "\x00")
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, "\x00")
-	result := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if p != "" {
-			result = append(result, p)
+	var records []string
+	for record := range strings.SplitSeq(s, "\x00") {
+		if record != "" {
+			records = append(records, record)
 		}
 	}
-	return result
+	return records
+}
+
+// for-each-ref field atoms shared by the ref listings.
+const (
+	atomRefName    = "refname"
+	atomObjectName = "objectname"
+)
+
+// forEachRef lists the refs matching patterns with one `git for-each-ref` and
+// returns, per ref, the values of the requested atoms (e.g. "refname",
+// "objectname") in order. An empty atom value stays as an empty field.
+func (r *runner) forEachRef(ctx context.Context, atoms []string, patterns ...string) ([][]string, error) {
+	format := "--format=%(" + strings.Join(atoms, ")%00%(") + ")"
+	out, err := r.Run(ctx, slices.Concat([]string{"for-each-ref", format}, patterns)...)
+	if err != nil {
+		return nil, err
+	}
+	var refs [][]string
+	for line := range strings.SplitSeq(out, "\n") {
+		fields := strings.Split(line, "\x00")
+		if len(fields) == len(atoms) {
+			refs = append(refs, fields)
+		}
+	}
+	return refs, nil
 }
 
 func (r *runner) CheckoutPaths(ctx context.Context, branch string, paths []string) error {
 	args := make([]string, 0, 3+len(paths))
 	args = append(args, "checkout", branch, "--")
 	args = append(args, paths...)
-	_, err := r.RunGitCommandWithContext(ctx, args...)
+	_, err := r.Run(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("failed to checkout paths from %s: %w", branch, err)
 	}
@@ -735,7 +559,7 @@ func (r *runner) RemovePaths(ctx context.Context, paths []string) error {
 	args := make([]string, 0, 1+len(paths))
 	args = append(args, "rm")
 	args = append(args, paths...)
-	_, err := r.RunGitCommandWithContext(ctx, args...)
+	_, err := r.Run(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("failed to remove paths: %w", err)
 	}
@@ -747,15 +571,15 @@ func (r *runner) GetReflog(ctx context.Context, count int, format string) (strin
 	if format != "" {
 		args = append(args, fmt.Sprintf("--format=%s", format))
 	}
-	return r.RunGitCommandWithContext(ctx, args...)
+	return r.Run(ctx, args...)
 }
 
 func (r *runner) GetStatusPorcelain(ctx context.Context) (string, error) {
-	return r.RunGitCommandRawWithContext(ctx, "status", "--porcelain")
+	return r.RunRaw(ctx, "status", "--porcelain")
 }
 
 func (r *runner) GetCommitTemplate(ctx context.Context) (string, error) {
-	status, err := r.RunGitCommandWithContext(ctx, "status")
+	status, err := r.Run(ctx, "status")
 	if err != nil {
 		return "", fmt.Errorf("failed to get git status: %w", err)
 	}
@@ -775,10 +599,6 @@ func (r *runner) GetCommitTemplate(ctx context.Context) (string, error) {
 	return sb.String(), nil
 }
 
-func (r *runner) runGitCommandInternal(args ...string) (string, error) {
-	return r.RunGitCommandWithContext(context.Background(), args...)
-}
-
 // CreateBlobs writes N blobs to the object store in a single
 // `git hash-object -w --stdin-paths` invocation. Each content is staged to a
 // temp file (so git's path-based hashing can read it) and the SHAs come back
@@ -791,7 +611,7 @@ func (r *runner) CreateBlobs(ctx context.Context, contents ...string) ([]string,
 		return nil, nil
 	}
 	if len(contents) == 1 {
-		sha, err := r.runGitInternal(ctx, contents[0], nil, true, "hash-object", "-w", "--stdin")
+		sha, err := r.runStdin(ctx, contents[0], "hash-object", "-w", "--stdin")
 		if err != nil {
 			return nil, err
 		}
@@ -816,7 +636,7 @@ func (r *runner) CreateBlobs(ctx context.Context, contents ...string) ([]string,
 	}
 
 	stdin := strings.Join(paths, "\n") + "\n"
-	out, err := r.runGitInternal(ctx, stdin, nil, true, "hash-object", "-w", "--stdin-paths")
+	out, err := r.runStdin(ctx, stdin, "hash-object", "-w", "--stdin-paths")
 	if err != nil {
 		return nil, fmt.Errorf("failed to batch-create blobs: %w", err)
 	}
@@ -836,28 +656,20 @@ func (r *runner) CreateBlobs(ctx context.Context, contents ...string) ([]string,
 	return shas, nil
 }
 
-func (r *runner) ListRefs(prefix string) (map[string]string, error) {
-	// `git for-each-ref` lists refs with optional prefix filtering. When the
-	// prefix doesn't match any refs the command still exits 0 with empty
-	// output, so we don't need exit-code handling.
-	args := []string{"for-each-ref", "--format=%(refname)%00%(objectname)"}
+func (r *runner) ListRefs(ctx context.Context, prefix string) (map[string]string, error) {
+	var patterns []string
 	if prefix != "" {
-		args = append(args, prefix)
+		patterns = append(patterns, prefix)
 	}
-	out, err := r.RunGitCommandWithContext(context.Background(), args...)
+	refs, err := r.forEachRef(ctx, []string{atomRefName, atomObjectName}, patterns...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read refs: %w", err)
 	}
-	result := make(map[string]string)
-	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
-		if line == "" {
-			continue
+	result := make(map[string]string, len(refs))
+	for _, ref := range refs {
+		if ref[1] != "" {
+			result[ref[0]] = ref[1]
 		}
-		name, sha, ok := strings.Cut(line, "\x00")
-		if !ok || sha == "" {
-			continue
-		}
-		result[name] = sha
 	}
 	return result, nil
 }
@@ -878,7 +690,7 @@ func (r *runner) PushMetadataRefs(ctx context.Context, branches []string) error 
 }
 
 func (r *runner) FetchMetadataRefs(ctx context.Context) error {
-	return r.fetchRemoteRefSpecs(ctx, r.GetRemote(), []string{
+	return r.fetchRemoteRefSpecs(ctx, r.GetRemote(ctx), []string{
 		"+refs/stackit/metadata/*:refs/stackit/remote-metadata/*",
 	})
 }
@@ -895,7 +707,7 @@ func (r *runner) PushStackMetaRefs(ctx context.Context, stackIDs []string) error
 }
 
 func (r *runner) FetchStackMetaRefs(ctx context.Context) error {
-	return r.fetchRemoteRefSpecs(ctx, r.GetRemote(), []string{
+	return r.fetchRemoteRefSpecs(ctx, r.GetRemote(ctx), []string{
 		"+refs/stackit/stacks/*:refs/stackit/remote-stacks/*",
 	})
 }
@@ -946,20 +758,12 @@ func (r *runner) TestRemoteRefCompatibility(ctx context.Context) error {
 	return nil
 }
 
-func ctxOrBackground(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
-}
-
 func (r *runner) fetchRemoteRefSpecs(ctx context.Context, remote string, refspecs []string) error {
 	if len(refspecs) == 0 {
 		return nil
 	}
-	ctx = ctxOrBackground(ctx)
 	args := append([]string{"fetch", remote}, refspecs...)
-	if _, err := r.RunGitCommandWithContext(ctx, args...); err != nil {
+	if _, err := r.Run(ctx, args...); err != nil {
 		return fmt.Errorf("git fetch failed: %w", err)
 	}
 	return nil
@@ -969,16 +773,15 @@ func (r *runner) pushOriginRefSpecs(ctx context.Context, refspecs []string) erro
 	if len(refspecs) == 0 {
 		return nil
 	}
-	ctx = ctxOrBackground(ctx)
 	args := append([]string{gitCmdPush, "origin"}, refspecs...)
-	if _, err := r.RunGitCommandWithContext(ctx, args...); err != nil {
+	if _, err := r.Run(ctx, args...); err != nil {
 		return fmt.Errorf("git push failed: %w", err)
 	}
 	return nil
 }
 
-func (r *runner) CheckCommutation(hunk Hunk, commitSHA, parentSHA string) (bool, error) {
-	commitDiff, err := r.runGitCommandInternal(gitCmdDiff, parentSHA, commitSHA)
+func (r *runner) CheckCommutation(ctx context.Context, hunk Hunk, commitSHA, parentSHA string) (bool, error) {
+	commitDiff, err := r.Run(ctx, gitCmdDiff, parentSHA, commitSHA)
 	if err != nil {
 		return false, fmt.Errorf("failed to get commit diff: %w", err)
 	}
@@ -1035,12 +838,12 @@ func (r *runner) ApplyPatch(ctx context.Context, patchFile string, mode PatchApp
 		args = append(args, "--3way")
 	}
 	args = append(args, patchFile)
-	_, err := r.RunGitCommandWithContext(ctx, args...)
+	_, err := r.Run(ctx, args...)
 	return err
 }
 
 func (r *runner) HasUncommittedChanges(ctx context.Context) bool {
-	output, err := r.RunGitCommandWithContext(ctx, "status", "--porcelain")
+	output, err := r.Run(ctx, "status", "--porcelain")
 	if err != nil {
 		return false
 	}

@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	handlerBase "github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 func promptBranchName(prompter handlerBase.TextInputPrompter, existingNames []string, originalBranchName string, branchNum int, eng engine.BranchReader) (string, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return "", errors.New("branch name must be specified in non-interactive mode")
 	}
 	defaultName := originalBranchName
@@ -44,7 +45,7 @@ func promptBranchName(prompter handlerBase.TextInputPrompter, existingNames []st
 	// but don't allow other existing branch names
 	if branchName != originalBranchName {
 		for _, b := range eng.AllBranches() {
-			if b.GetName() == branchName {
+			if b.Name() == branchName {
 				return "", fmt.Errorf("branch name %s is already in use", branchName)
 			}
 		}

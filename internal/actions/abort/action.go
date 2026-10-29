@@ -129,7 +129,7 @@ func continuationOwnsAbort(ctx context.Context, eng abortEngine, continuation *c
 	if continuation.CurrentBranchOverride == "" || continuation.ExpectedBranchRevision == "" {
 		return false
 	}
-	revision, err := eng.GetBranch(continuation.CurrentBranchOverride).GetRevision()
+	revision, err := eng.GetBranch(continuation.CurrentBranchOverride).Revision(ctx)
 	return err == nil && revision == continuation.ExpectedBranchRevision
 }
 

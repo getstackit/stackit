@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,16 +26,16 @@ func TestStageAll(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify no staged changes initially
-		hasStaged, err := runner.HasStagedChanges(context.Background())
+		hasStaged, err := runner.HasStagedChanges(t.Context())
 		require.NoError(t, err)
 		require.False(t, hasStaged)
 
 		// Stage all
-		err = runner.StageAll(context.Background())
+		err = runner.StageAll(t.Context())
 		require.NoError(t, err)
 
 		// Verify changes are staged
-		hasStaged, err = runner.HasStagedChanges(context.Background())
+		hasStaged, err = runner.HasStagedChanges(t.Context())
 		require.NoError(t, err)
 		require.True(t, hasStaged)
 	})
@@ -62,11 +61,11 @@ func TestStageTracked(t *testing.T) {
 		require.NoError(t, err)
 
 		// Stage tracked only
-		err = runner.StageTracked(context.Background())
+		err = runner.StageTracked(t.Context())
 		require.NoError(t, err)
 
 		// Verify tracked file is staged
-		hasStaged, err := runner.HasStagedChanges(context.Background())
+		hasStaged, err := runner.HasStagedChanges(t.Context())
 		require.NoError(t, err)
 		require.True(t, hasStaged)
 	})
@@ -80,7 +79,7 @@ func TestHasStagedChanges(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
-		hasStaged, err := runner.HasStagedChanges(context.Background())
+		hasStaged, err := runner.HasStagedChanges(t.Context())
 		require.NoError(t, err)
 		require.False(t, hasStaged)
 	})
@@ -94,7 +93,7 @@ func TestHasStagedChanges(t *testing.T) {
 		err := scene.Repo.CreateChange("new content", "test", false)
 		require.NoError(t, err)
 
-		hasStaged, err := runner.HasStagedChanges(context.Background())
+		hasStaged, err := runner.HasStagedChanges(t.Context())
 		require.NoError(t, err)
 		require.True(t, hasStaged)
 	})
@@ -108,7 +107,7 @@ func TestHasUnstagedChanges(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
-		hasUnstaged, err := runner.HasUnstagedChanges(context.Background())
+		hasUnstaged, err := runner.HasUnstagedChanges(t.Context())
 		require.NoError(t, err)
 		require.False(t, hasUnstaged)
 	})
@@ -124,7 +123,7 @@ func TestHasUnstagedChanges(t *testing.T) {
 		err := scene.Repo.CreateChange("modified", "test", true)
 		require.NoError(t, err)
 
-		hasUnstaged, err := runner.HasUnstagedChanges(context.Background())
+		hasUnstaged, err := runner.HasUnstagedChanges(t.Context())
 		require.NoError(t, err)
 		require.True(t, hasUnstaged)
 	})
@@ -138,7 +137,7 @@ func TestHasUntrackedFiles(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
-		hasUntracked, err := runner.HasUntrackedFiles(context.Background())
+		hasUntracked, err := runner.HasUntrackedFiles(t.Context())
 		require.NoError(t, err)
 		require.False(t, hasUntracked)
 	})
@@ -152,7 +151,7 @@ func TestHasUntrackedFiles(t *testing.T) {
 		err := scene.Repo.CreateChange("content", "newfile", true)
 		require.NoError(t, err)
 
-		hasUntracked, err := runner.HasUntrackedFiles(context.Background())
+		hasUntracked, err := runner.HasUntrackedFiles(t.Context())
 		require.NoError(t, err)
 		require.True(t, hasUntracked)
 	})
@@ -171,11 +170,11 @@ func TestAddAll(t *testing.T) {
 		require.NoError(t, err)
 
 		// Use AddAll
-		err = runner.StageAll(context.Background())
+		err = runner.StageAll(t.Context())
 		require.NoError(t, err)
 
 		// Verify changes are staged
-		hasStaged, err := runner.HasStagedChanges(context.Background())
+		hasStaged, err := runner.HasStagedChanges(t.Context())
 		require.NoError(t, err)
 		require.True(t, hasStaged)
 	})

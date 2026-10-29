@@ -1,7 +1,6 @@
 package worktree
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 
@@ -24,7 +23,7 @@ func TestRemovePath_MissingPathDoesNotFail(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit()
 
-	removed, err := RemovePath(context.Background(), s.Engine, engine.WorktreePath(filepath.Join(t.TempDir(), "missing")), RemovalRespectChanges)
+	removed, err := RemovePath(t.Context(), s.Engine, engine.WorktreePath(filepath.Join(t.TempDir(), "missing")), RemovalRespectChanges)
 	require.NoError(t, err)
 	require.False(t, removed)
 }

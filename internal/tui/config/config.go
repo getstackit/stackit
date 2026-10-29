@@ -2,11 +2,14 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"strings"
+
+	"github.com/getstackit/stackit/internal/term"
 
 	"github.com/getstackit/stackit/internal/config"
+	sterrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
@@ -14,7 +17,7 @@ import (
 
 // TUIAction provides an interactive TUI for editing configuration
 func TUIAction(repoRoot string) error {
-	if err := tui.CheckInteractiveAllowed(); err != nil {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return err
 	}
 	out := output.NewDefaultOutput()
@@ -91,7 +94,7 @@ func TUIAction(repoRoot string) error {
 		case "branch.pattern":
 			newPattern, err := tui.PromptTextInput(fmt.Sprintf("Enter branch name pattern (current: %s):", branchPattern), branchPattern)
 			if err != nil {
-				if errors.Is(err, tui.ErrInteractiveDisabled) || strings.Contains(err.Error(), "canceled") {
+				if promptSkipped(err) {
 					continue
 				}
 				return err
@@ -111,7 +114,7 @@ func TUIAction(repoRoot string) error {
 		case "submit.footer":
 			newValue, err := tui.PromptConfirm(fmt.Sprintf("Include PR footer in descriptions? (current: %v):", submitFooter), submitFooter)
 			if err != nil {
-				if errors.Is(err, tui.ErrInteractiveDisabled) || strings.Contains(err.Error(), "canceled") {
+				if promptSkipped(err) {
 					continue
 				}
 				return err
@@ -127,7 +130,7 @@ func TUIAction(repoRoot string) error {
 		case "github.stack":
 			newValue, err := tui.PromptConfirm(fmt.Sprintf("Sync native GitHub Stack metadata for eligible linear submits? (current: %v):", githubStack), githubStack)
 			if err != nil {
-				if errors.Is(err, tui.ErrInteractiveDisabled) || strings.Contains(err.Error(), "canceled") {
+				if promptSkipped(err) {
 					continue
 				}
 				return err
@@ -148,7 +151,7 @@ func TUIAction(repoRoot string) error {
 			}
 			newValue, err := tui.PromptSelect("Select merge method:", methodOptions, 0)
 			if err != nil {
-				if errors.Is(err, tui.ErrInteractiveDisabled) || strings.Contains(err.Error(), "canceled") {
+				if promptSkipped(err) {
 					continue
 				}
 				return err
@@ -166,7 +169,7 @@ func TUIAction(repoRoot string) error {
 			currentPath := cfg.WorktreeBasePath()
 			newPath, err := tui.PromptTextInput(fmt.Sprintf("Enter worktree base path (current: %s):", worktreeBasePath), currentPath)
 			if err != nil {
-				if errors.Is(err, tui.ErrInteractiveDisabled) || strings.Contains(err.Error(), "canceled") {
+				if promptSkipped(err) {
 					continue
 				}
 				return err
@@ -182,7 +185,7 @@ func TUIAction(repoRoot string) error {
 		case "worktree.autoClean":
 			newValue, err := tui.PromptConfirm(fmt.Sprintf("Auto-clean worktrees during sync? (current: %v):", worktreeAutoClean), worktreeAutoClean)
 			if err != nil {
-				if errors.Is(err, tui.ErrInteractiveDisabled) || strings.Contains(err.Error(), "canceled") {
+				if promptSkipped(err) {
 					continue
 				}
 				return err
@@ -202,7 +205,7 @@ func TUIAction(repoRoot string) error {
 			}
 			newValue, err := tui.PromptSelect("Select hunk selector for split --by-hunk:", selectorOptions, 0)
 			if err != nil {
-				if errors.Is(err, tui.ErrInteractiveDisabled) || strings.Contains(err.Error(), "canceled") {
+				if promptSkipped(err) {
 					continue
 				}
 				return err
@@ -223,4 +226,13 @@ func TUIAction(repoRoot string) error {
 	}
 
 	return nil
+}
+
+// promptSkipped reports whether a prompt ended without an answer (the user
+// canceled, or prompts are disabled), which returns to the menu rather than
+// failing the whole config session.
+func promptSkipped(err error) bool {
+	return errors.Is(err, term.ErrInteractiveDisabled) ||
+		errors.Is(err, sterrors.ErrCanceled) ||
+		errors.Is(err, context.Canceled)
 }

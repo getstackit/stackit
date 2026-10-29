@@ -1,7 +1,6 @@
 package actions
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,7 +26,7 @@ func TestQueryStackInfo(t *testing.T) {
 		s.Checkout("branch2")
 		s.Scene.Repo.CreateChangeAndCommit("c2", "f2.txt")
 
-		result, err := QueryStackInfo(context.Background(), s.Engine)
+		result, err := QueryStackInfo(t.Context(), s.Engine)
 		require.NoError(t, err)
 		require.Len(t, result.Branches, 2)
 
@@ -61,7 +60,7 @@ func TestQueryStackInfo(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.RunGit("checkout", "--detach", "main")
 
-		_, err := QueryStackInfo(context.Background(), s.Engine)
+		_, err := QueryStackInfo(t.Context(), s.Engine)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not on a branch")
 	})
@@ -75,12 +74,12 @@ func TestQueryStackInfo(t *testing.T) {
 		s.Checkout("branch1")
 
 		branch1 := s.Engine.GetBranch("branch1")
-		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch1), engine.LockReasonUser)
+		_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch1), engine.LockReasonUser)
 		require.NoError(t, err)
-		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch1), engine.BranchFrozen)
+		_, err = s.Engine.SetFrozen(t.Context(), engine.BranchesOf(branch1), engine.BranchFrozen)
 		require.NoError(t, err)
 
-		result, err := QueryStackInfo(context.Background(), s.Engine)
+		result, err := QueryStackInfo(t.Context(), s.Engine)
 		require.NoError(t, err)
 		require.Len(t, result.Branches, 1)
 		require.True(t, result.Branches[0].IsLocked)

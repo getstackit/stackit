@@ -34,16 +34,16 @@ func TestRestackFailsLoudlyWhenWorktreesCannotBeInspected(t *testing.T) {
 	t.Parallel()
 
 	dir, realGit := newOptimisticLockTestRepo(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
-	trackingEngine, err := NewEngine(Options{RepoRoot: dir, Trunk: "main", Git: realGit})
+	trackingEngine, err := NewEngine(t.Context(), Options{RepoRoot: dir, Trunk: "main", Git: realGit})
 	require.NoError(t, err)
 	trackingImpl, ok := trackingEngine.(*engineImpl)
 	require.True(t, ok)
 	require.NoError(t, trackingImpl.TrackBranch(ctx, "feature", "main"))
 
 	blindGit := &blindWorktreeRunner{Runner: realGit}
-	eng, err := NewEngine(Options{RepoRoot: dir, Trunk: "main", Git: blindGit})
+	eng, err := NewEngine(t.Context(), Options{RepoRoot: dir, Trunk: "main", Git: blindGit})
 	require.NoError(t, err)
 
 	_, err = eng.RestackBranches(ctx, BranchesFromNames(eng, []string{"feature"}), RestackOpts{})

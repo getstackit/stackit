@@ -5,6 +5,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/term"
 	"github.com/getstackit/stackit/internal/tui"
 )
 
@@ -13,7 +14,7 @@ import (
 // Caller must defer runner.Cleanup() to restore terminal on exit.
 // Currently returns nil runner as interactive selection is handled inline.
 func NewCheckoutUI(_ output.Output, _ output.Logger) (*tui.Runner, actions.CheckoutHandler) {
-	if tui.IsTTY() {
+	if term.IsInteractive() {
 		return nil, &InteractiveCheckoutHandler{}
 	}
 	return nil, &SimpleCheckoutHandler{}

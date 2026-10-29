@@ -235,7 +235,7 @@ func TestWorktreeDetach(t *testing.T) {
 		}
 
 		// The anchor branch should be deleted (it was a worktree-anchor type)
-		branches, _ := sh.Scene().Repo.GetLocalBranches()
+		branches, _ := sh.Scene().Repo.LocalBranches()
 		for _, b := range branches {
 			if strings.Contains(b, "my-wt") && strings.Contains(b, "-wt") {
 				t.Errorf("Anchor branch should be deleted, but found: %s", b)

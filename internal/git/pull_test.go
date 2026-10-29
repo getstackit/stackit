@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"os/exec"
 	"testing"
 
@@ -37,7 +36,7 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	require.NoError(t, err)
 
 	// Warm up the runner's revision cache
-	initialLocalSha, err := runner.RunGitCommandWithContext(context.Background(), "rev-parse", "HEAD")
+	initialLocalSha, err := runner.Run(t.Context(), "rev-parse", "HEAD")
 	require.NoError(t, err)
 	_, err = runner.ReadCommitInfo(t.Context(), initialLocalSha).One()
 	require.NoError(t, err)
@@ -48,7 +47,7 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	require.NoError(t, err)
 	err = remoteScene.Repo.CreateChangeAndCommit("feature change", "feature")
 	require.NoError(t, err)
-	featureSha, err := remoteScene.Repo.GetCurrentSHA()
+	featureSha, err := remoteScene.Repo.CurrentSHA()
 	require.NoError(t, err)
 
 	err = remoteScene.Repo.CheckoutBranch("main")
@@ -57,7 +56,7 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	err = remoteScene.Repo.RunGitCommand("merge", "--no-ff", "feature", "-m", "Merge PR #1")
 	require.NoError(t, err)
 
-	newRemoteSha, err := remoteScene.Repo.GetCurrentSHA()
+	newRemoteSha, err := remoteScene.Repo.CurrentSHA()
 	require.NoError(t, err)
 	t.Logf("New remote SHA: %s (Feature was %s)", newRemoteSha, featureSha)
 
@@ -67,7 +66,7 @@ func TestPullBranch_Reproduction(t *testing.T) {
 
 	// 4. Run PullBranch using the long-lived runner
 	// With the fix, this should result in PullDone for a valid fast-forward.
-	ctx := context.Background()
+	ctx := t.Context()
 	result, err := runner.PullBranch(ctx, "origin", "main")
 	require.NoError(t, err)
 
@@ -79,7 +78,7 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	require.NoError(t, err, "runner should resolve the newly fetched commit after reload")
 
 	// Verify that the local branch was actually updated
-	localSha, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "main")
+	localSha, err := runner.Run(ctx, "rev-parse", "main")
 	require.NoError(t, err)
 	require.Equal(t, newRemoteSha, localSha, "Local branch should match remote after pull")
 }
@@ -100,7 +99,7 @@ func TestPullBranch_FetchFailureReturnsError(t *testing.T) {
 	err = scene.Repo.RunGitCommand("remote", "add", "origin", "https://127.0.0.1:1/nonexistent/repo.git")
 	require.NoError(t, err)
 
-	result, err := runner.PullBranch(context.Background(), "origin", "main")
+	result, err := runner.PullBranch(t.Context(), "origin", "main")
 	require.Error(t, err)
 	require.Equal(t, git.PullConflict, result)
 }
@@ -116,7 +115,7 @@ func TestPullBranch_NoRemoteConfiguredReturnsUnneeded(t *testing.T) {
 	err := runner.InitDefaultRepo()
 	require.NoError(t, err)
 
-	result, err := runner.PullBranch(context.Background(), "nonexistent-remote", "main")
+	result, err := runner.PullBranch(t.Context(), "nonexistent-remote", "main")
 	require.NoError(t, err)
 	require.Equal(t, git.PullUnneeded, result)
 }
@@ -170,10 +169,10 @@ func TestFetch_ForceUpdatedRemoteBranch(t *testing.T) {
 	err = runner.InitDefaultRepo()
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	err = runner.FetchRefs(ctx, "origin", git.BranchFetchRefspec("origin", "feature"))
 	require.NoError(t, err)
-	trackedA, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "refs/remotes/origin/feature")
+	trackedA, err := runner.Run(ctx, "rev-parse", "refs/remotes/origin/feature")
 	require.NoError(t, err)
 	require.Equal(t, shaA, trackedA, "remote-tracking ref should point at commit A after first fetch")
 
@@ -194,7 +193,7 @@ func TestFetch_ForceUpdatedRemoteBranch(t *testing.T) {
 	// remote-tracking ref to B instead of failing as non-fast-forward.
 	err = runner.FetchRefs(ctx, "origin", git.BranchFetchRefspec("origin", "feature"))
 	require.NoError(t, err, "fetch should tolerate force-updated remote branch")
-	trackedB, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "refs/remotes/origin/feature")
+	trackedB, err := runner.Run(ctx, "rev-parse", "refs/remotes/origin/feature")
 	require.NoError(t, err)
 	require.Equal(t, shaB, trackedB, "remote-tracking ref should update to force-pushed commit B")
 }
@@ -214,7 +213,7 @@ func TestResolveExternallyCreatedCommits(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get initial commit SHA
-	initialSha, err := runner.RunGitCommandWithContext(context.Background(), "rev-parse", "HEAD")
+	initialSha, err := runner.Run(t.Context(), "rev-parse", "HEAD")
 	require.NoError(t, err)
 
 	// Verify we can resolve the initial commit
@@ -224,7 +223,7 @@ func TestResolveExternallyCreatedCommits(t *testing.T) {
 	// Create a new commit directly via git command (outside the runner's cache)
 	err = scene.Repo.CreateChangeAndCommit("new change", "new")
 	require.NoError(t, err)
-	newSha, err := scene.Repo.GetCurrentSHA()
+	newSha, err := scene.Repo.CurrentSHA()
 	require.NoError(t, err)
 
 	// SHAs created outside the runner resolve by falling through to git. The
@@ -265,25 +264,25 @@ func TestPullBranch_FetchResolvesNewCommits(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get initial SHA
-	initialSha, err := runner.RunGitCommandWithContext(context.Background(), "rev-parse", "HEAD")
+	initialSha, err := runner.Run(t.Context(), "rev-parse", "HEAD")
 	require.NoError(t, err)
 
 	// 3. Add a commit to remote
 	err = remoteScene.Repo.CreateChangeAndCommit("remote change", "remote")
 	require.NoError(t, err)
-	remoteSha, err := remoteScene.Repo.GetCurrentSHA()
+	remoteSha, err := remoteScene.Repo.CurrentSHA()
 	require.NoError(t, err)
 	err = remoteScene.Repo.PushBranch("upstream", "main")
 	require.NoError(t, err)
 
 	// 4. Verify remote-tracking branch is updated by the refspec fetch
-	ctx := context.Background()
+	ctx := t.Context()
 	result, err := runner.PullBranch(ctx, "origin", "main")
 	require.NoError(t, err)
 	require.Equal(t, git.PullDone, result, "PullBranch should succeed with explicit refspec")
 
 	// 5. Verify the local branch was updated
-	localSha, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "main")
+	localSha, err := runner.Run(ctx, "rev-parse", "main")
 	require.NoError(t, err)
 	require.Equal(t, remoteSha, localSha, "Local branch should match remote")
 
@@ -351,7 +350,7 @@ func TestPullBranch_WorktreeCorruptsMainWorkspace(t *testing.T) {
 	err = remoteScene.Repo.PushBranch("upstream", "main")
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// 4. Main workspace is CLEAN - no local changes (this is the key difference!)
 	// The user was on main with no uncommitted changes when they ran the merge
@@ -360,16 +359,16 @@ func TestPullBranch_WorktreeCorruptsMainWorkspace(t *testing.T) {
 	require.Empty(t, statusBefore, "Main workspace should be clean before worktree pull")
 
 	// Record the current HEAD before pull
-	headBefore, err := mainRunner.RunGitCommandWithContext(ctx, "rev-parse", "HEAD")
+	headBefore, err := mainRunner.Run(ctx, "rev-parse", "HEAD")
 	require.NoError(t, err)
 
 	// 5. Create a temporary worktree at detached HEAD (simulating merge worktree)
 	worktreeDir := t.TempDir()
 
-	_, err = mainRunner.RunGitCommandWithContext(ctx, "worktree", "add", "--detach", worktreeDir, "HEAD")
+	_, err = mainRunner.Run(ctx, "worktree", "add", "--detach", worktreeDir, "HEAD")
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_, _ = mainRunner.RunGitCommandWithContext(ctx, "worktree", "remove", "--force", worktreeDir)
+		_, _ = mainRunner.Run(ctx, "worktree", "remove", "--force", worktreeDir)
 	})
 
 	// Create runner for worktree
@@ -378,7 +377,7 @@ func TestPullBranch_WorktreeCorruptsMainWorkspace(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify worktree is on detached HEAD
-	worktreeBranch, err := worktreeRunner.RunGitCommandWithContext(ctx, "rev-parse", "--abbrev-ref", "HEAD")
+	worktreeBranch, err := worktreeRunner.Run(ctx, "rev-parse", "--abbrev-ref", "HEAD")
 	require.NoError(t, err)
 	require.Equal(t, "HEAD", worktreeBranch, "Worktree should be on detached HEAD")
 
@@ -388,7 +387,7 @@ func TestPullBranch_WorktreeCorruptsMainWorkspace(t *testing.T) {
 	require.Equal(t, git.PullDone, result, "PullBranch should succeed")
 
 	// Record HEAD after pull
-	headAfter, err := mainRunner.RunGitCommandWithContext(ctx, "rev-parse", "HEAD")
+	headAfter, err := mainRunner.Run(ctx, "rev-parse", "HEAD")
 	require.NoError(t, err)
 	require.NotEqual(t, headBefore, headAfter, "HEAD should have changed after pull (update-ref worked)")
 
@@ -458,8 +457,8 @@ func TestPullBranch_WorkingDirSyncWhenOnBranch(t *testing.T) {
 	require.NoError(t, err)
 
 	// 4. Local is on main - pull the changes
-	ctx := context.Background()
-	currentBranch, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "--abbrev-ref", "HEAD")
+	ctx := t.Context()
+	currentBranch, err := runner.Run(ctx, "rev-parse", "--abbrev-ref", "HEAD")
 	require.NoError(t, err)
 	require.Equal(t, "main", currentBranch, "Should be on main before pulling")
 

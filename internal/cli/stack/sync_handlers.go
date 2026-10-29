@@ -7,6 +7,8 @@ import (
 	"strings"
 	stdsync "sync"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/actions"
 	syncAction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -16,14 +18,13 @@ import (
 	"github.com/getstackit/stackit/internal/tui"
 	syncComponent "github.com/getstackit/stackit/internal/tui/components/sync"
 	"github.com/getstackit/stackit/internal/tui/style"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewSyncUI creates a runner and handler pair for sync operations.
 // The runner manages terminal state; the handler processes events.
 // Caller must defer runner.Cleanup() to restore terminal on exit.
 func NewSyncUI(out output.Output, logger output.Logger) (*tui.Runner, syncAction.Handler) {
-	if tui.IsTTY() {
+	if term.IsInteractive() {
 		model := syncComponent.NewModel(0) // Start with 0, will be updated in Start()
 		runner := tui.NewRunner(model, out, logger)
 		runner.Start()
@@ -43,7 +44,7 @@ type SimpleSyncHandler struct {
 	common.BaseHandler
 	totalOps  int
 	currentOp int
-	headers   *utils.LazyHeaders[syncAction.Phase]
+	headers   *syncComponent.LazyHeaders[syncAction.Phase]
 
 	// restack-only state: standalone restack suppresses already-current rows
 	// and reports them as a count in the summary instead.
@@ -59,7 +60,7 @@ type SimpleSyncHandler struct {
 func NewSimpleSyncHandler(out output.Output) *SimpleSyncHandler {
 	return &SimpleSyncHandler{
 		BaseHandler: common.NewBaseHandler(out),
-		headers:     utils.NewLazyHeaders[syncAction.Phase](),
+		headers:     syncComponent.NewLazyHeaders[syncAction.Phase](),
 	}
 }
 

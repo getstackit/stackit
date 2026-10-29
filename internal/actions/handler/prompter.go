@@ -1,6 +1,6 @@
 package handler
 
-import "github.com/getstackit/stackit/internal/utils"
+import "github.com/getstackit/stackit/internal/term"
 
 // SelectOption is one choice in a single-select prompt. Label is what the
 // user sees; Value is what the prompt returns when the option is chosen.
@@ -39,7 +39,7 @@ type MultiSelector interface {
 // should depend on the narrowest of the embedded interfaces that covers
 // their interaction; adapters (CLI/TUI) provide the implementation.
 //
-// Implementations must return utils.ErrInteractiveDisabled (possibly
+// Implementations must return term.ErrInteractiveDisabled (possibly
 // wrapped) when interactive prompts are not available.
 type Prompter interface {
 	Confirmer
@@ -49,28 +49,28 @@ type Prompter interface {
 }
 
 // NonInteractivePrompter is the Prompter used when no adapter supplied one.
-// Every prompt fails with utils.ErrInteractiveDisabled, matching what an
+// Every prompt fails with term.ErrInteractiveDisabled, matching what an
 // interactive prompt does under --no-interactive or without a TTY.
 type NonInteractivePrompter struct{}
 
 // Confirm implements Confirmer.
 func (NonInteractivePrompter) Confirm(string, bool) (bool, error) {
-	return false, utils.ErrInteractiveDisabled
+	return false, term.ErrInteractiveDisabled
 }
 
 // Select implements Selector.
 func (NonInteractivePrompter) Select(string, []SelectOption, int) (string, error) {
-	return "", utils.ErrInteractiveDisabled
+	return "", term.ErrInteractiveDisabled
 }
 
 // TextInput implements TextInputPrompter.
 func (NonInteractivePrompter) TextInput(string, string) (string, error) {
-	return "", utils.ErrInteractiveDisabled
+	return "", term.ErrInteractiveDisabled
 }
 
 // MultiSelect implements MultiSelector.
 func (NonInteractivePrompter) MultiSelect(string, []string) ([]string, error) {
-	return nil, utils.ErrInteractiveDisabled
+	return nil, term.ErrInteractiveDisabled
 }
 
 var _ Prompter = NonInteractivePrompter{}

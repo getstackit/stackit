@@ -61,7 +61,7 @@ func TestGitHubLazyErrorIsSharedAcrossContextCopies(t *testing.T) {
 func TestRemoteOperationContextAddsDefaultDeadline(t *testing.T) {
 	t.Parallel()
 
-	ctx := &Context{Context: context.Background()}
+	ctx := &Context{Context: t.Context()}
 	remoteCtx, cancel := ctx.RemoteOperationContext()
 	defer cancel()
 
@@ -74,7 +74,7 @@ func TestRemoteOperationContextPreservesExistingDeadline(t *testing.T) {
 	t.Parallel()
 
 	parentDeadline := time.Now().Add(30 * time.Second)
-	parent, parentCancel := context.WithDeadline(context.Background(), parentDeadline)
+	parent, parentCancel := context.WithDeadline(t.Context(), parentDeadline)
 	defer parentCancel()
 
 	remoteCtx, cancel := WithRemoteOperationTimeout(parent)

@@ -47,7 +47,7 @@ func TestRemoveWorktreeForBranch(t *testing.T) {
 		t.Parallel()
 		eng := &recordingRemoveEngine{}
 
-		err := removeWorktreeForBranch(context.Background(), "landed", worktrees, eng, out)
+		err := removeWorktreeForBranch(t.Context(), "landed", worktrees, eng, out)
 
 		require.ErrorIs(t, err, errBranchInMainWorktree,
 			"caller relies on this sentinel to defer the branch to post-merge cleanup")
@@ -58,7 +58,7 @@ func TestRemoveWorktreeForBranch(t *testing.T) {
 		t.Parallel()
 		eng := &recordingRemoveEngine{}
 
-		require.NoError(t, removeWorktreeForBranch(context.Background(), "feature", worktrees, eng, out))
+		require.NoError(t, removeWorktreeForBranch(t.Context(), "feature", worktrees, eng, out))
 		require.Equal(t, []git.WorktreePath{linked}, eng.removed)
 	})
 
@@ -66,7 +66,7 @@ func TestRemoveWorktreeForBranch(t *testing.T) {
 		t.Parallel()
 		eng := &recordingRemoveEngine{}
 
-		require.NoError(t, removeWorktreeForBranch(context.Background(), "untouched", worktrees, eng, out))
+		require.NoError(t, removeWorktreeForBranch(t.Context(), "untouched", worktrees, eng, out))
 		require.Empty(t, eng.removed)
 	})
 

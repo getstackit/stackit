@@ -38,7 +38,7 @@ type BranchStateMap map[string]*BranchState
 
 // Get returns the state for a branch, or nil if not found.
 func (m BranchStateMap) Get(branch Branch) *BranchState {
-	return m[branch.GetName()]
+	return m[branch.Name()]
 }
 
 // GetByName returns the state for a branch name, or nil if not found.
@@ -48,7 +48,7 @@ func (m BranchStateMap) GetByName(name string) *BranchState {
 
 // Has returns true if the branch exists in the map.
 func (m BranchStateMap) Has(branch Branch) bool {
-	_, ok := m[branch.GetName()]
+	_, ok := m[branch.Name()]
 	return ok
 }
 

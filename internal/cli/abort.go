@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions/abort"
@@ -9,7 +10,6 @@ import (
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/cli/stack"
 	"github.com/getstackit/stackit/internal/config"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // newAbortCmd creates the abort command
@@ -50,7 +50,7 @@ Examples:
 				}
 
 				// Otherwise use the standard abort action
-				handler := stack.NewAbortUI(ctx.Output, utils.IsInteractive())
+				handler := stack.NewAbortUI(ctx.Output, term.IsInteractive())
 				return abort.Action(ctx, abort.Options{
 					Force: force,
 				}, handler)

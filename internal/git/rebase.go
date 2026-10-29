@@ -47,7 +47,7 @@ func (r *runner) Rebase(ctx context.Context, spec RebaseSpec) (RebaseOutcome, er
 
 	// Use detached HEAD to avoid "already used by worktree" errors
 	// We use branchName~0 to force a detached checkout of the branch tip
-	_, err = r.RunGitCommandWithContext(ctx, "rebase", "--onto", spec.Onto, spec.OldBase, branchName+"~0")
+	_, err = r.Run(ctx, "rebase", "--onto", spec.Onto, spec.OldBase, branchName+"~0")
 	if err != nil {
 		if r.IsRebaseInProgress(ctx) {
 			autoOutcome, autoErr := r.continueRerereResolvedRebase(ctx, err)
@@ -57,7 +57,7 @@ func (r *runner) Rebase(ctx context.Context, spec RebaseSpec) (RebaseOutcome, er
 			outcome = autoOutcome
 		} else {
 			// Abort rebase if it failed for other reasons
-			_, _ = r.RunGitCommandWithContext(ctx, "rebase", "--abort")
+			_, _ = r.Run(ctx, "rebase", "--abort")
 
 			return RebaseOutcome{Result: RebaseConflict}, err
 		}
@@ -77,7 +77,7 @@ func (r *runner) Rebase(ctx context.Context, spec RebaseSpec) (RebaseOutcome, er
 }
 
 func (r *runner) rebaseContinueOnce(ctx context.Context) error {
-	_, err := r.RunGitCommandWithEnv(ctx, []string{gitEditorTrue}, "rebase", "--continue")
+	_, err := r.RunWithEnv(ctx, []string{gitEditorTrue}, "rebase", "--continue")
 	return err
 }
 
@@ -112,11 +112,11 @@ func AutoContinueRerereRebase(ctx context.Context, r Runner, originalErr error) 
 			return outcome, unmergedFiles, nil
 		}
 
-		if _, err := r.RunGitCommandWithEnv(ctx, []string{gitEditorTrue}, "rebase", "--continue"); err != nil {
+		if _, err := r.RunWithEnv(ctx, []string{gitEditorTrue}, "rebase", "--continue"); err != nil {
 			if isRebaseContinueStagedChangesError(err) && r.IsRebaseInProgress(ctx) {
 				unmergedFiles, filesErr := r.GetUnmergedFiles(ctx)
 				if filesErr == nil && len(unmergedFiles) == 0 {
-					if _, commitErr := r.RunGitCommandWithEnv(ctx, []string{gitEditorTrue}, "commit"); commitErr != nil {
+					if _, commitErr := r.RunWithEnv(ctx, []string{gitEditorTrue}, "commit"); commitErr != nil {
 						return outcome, nil, fmt.Errorf("commit after rerere replay failed: %w", commitErr)
 					}
 					outcome.RerereResolvedCount++
@@ -167,7 +167,7 @@ func applyRerereToUnmerged(ctx context.Context, r Runner) ([]string, error) {
 	}
 	// A failed `git rerere` simply means no resolution was applied; keep the
 	// current unmerged set so the caller treats it as a genuine conflict.
-	if _, rerereErr := r.RunGitCommandWithContext(ctx, "rerere"); rerereErr == nil {
+	if _, rerereErr := r.Run(ctx, "rerere"); rerereErr == nil {
 		refreshed, refreshErr := r.GetUnmergedFiles(ctx)
 		if refreshErr != nil {
 			return nil, refreshErr
@@ -219,18 +219,18 @@ func (r *runner) RebaseContinue(ctx context.Context) (RebaseOutcome, error) {
 }
 
 func (r *runner) RebaseAbort(ctx context.Context) error {
-	_, err := r.RunGitCommandWithContext(ctx, "rebase", "--abort")
+	_, err := r.Run(ctx, "rebase", "--abort")
 	if err != nil {
 		return fmt.Errorf("rebase abort failed: %w", err)
 	}
 	return nil
 }
 
-func (r *runner) InteractiveRebase(_ context.Context, onto string) error {
-	return r.RunGitCommandInteractive("rebase", "-i", onto)
+func (r *runner) InteractiveRebase(ctx context.Context, onto string) error {
+	return r.RunInteractive(ctx, "rebase", "-i", onto)
 }
 
-func (r *runner) GetRebaseHead() (string, error) {
+func (r *runner) GetRebaseHead(ctx context.Context) (string, error) {
 	// Try standard rebase head refs in order:
 	// 1. REBASE_HEAD (standard)
 	// 2. refs/rebase-merge/head (interactive)
@@ -242,7 +242,7 @@ func (r *runner) GetRebaseHead() (string, error) {
 	}
 
 	for _, refName := range refs {
-		output, err := r.ReadRevisions(context.Background(), refName).One()
+		output, err := r.ReadRevisions(ctx, refName).One()
 		if err == nil && output != "" {
 			return strings.TrimSpace(output), nil
 		}

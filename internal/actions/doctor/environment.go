@@ -23,7 +23,7 @@ type gitVersioner interface {
 
 // checkEnvironment performs environment-related checks. versioner supplies the
 // installed Git version; ghRunner runs the gh CLI probes.
-func checkEnvironment(versioner gitVersioner, ghRunner github.GitCommandRunner, handler Handler, warnings int, errors int) (int, int) {
+func checkEnvironment(ctx context.Context, versioner gitVersioner, ghRunner github.GitCommandRunner, handler Handler, warnings int, errors int) (int, int) {
 	// Check git version. The floor is not cosmetic: below it ListWorktrees
 	// fails, and every ref-moving command inspects worktrees first — so a git
 	// that is merely present but too old leaves the user with a tool that
@@ -36,7 +36,7 @@ func checkEnvironment(versioner gitVersioner, ghRunner github.GitCommandRunner, 
 		handler.OnCheck("git", CheckError, "git is not installed or not in PATH")
 	default:
 		version := strings.TrimSpace(string(gitVersion))
-		installed, versionErr := versioner.GitVersion(context.Background())
+		installed, versionErr := versioner.GitVersion(ctx)
 		switch {
 		case versionErr != nil:
 			warnings++
@@ -70,7 +70,7 @@ func checkEnvironment(versioner gitVersioner, ghRunner github.GitCommandRunner, 
 	// Check GitHub authentication. Bound both the token probe and the
 	// connectivity check with one short deadline so an unreachable remote is
 	// reported quickly rather than hanging this diagnostic.
-	ghCtx, cancel := context.WithTimeout(context.Background(), remoteCheckTimeout)
+	ghCtx, cancel := context.WithTimeout(ctx, remoteCheckTimeout)
 	defer cancel()
 	token, err := github.Token(ghCtx, ghRunner)
 	if err != nil {

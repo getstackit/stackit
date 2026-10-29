@@ -79,7 +79,7 @@ func dryRunRebase(ctx context.Context, g git.Runner, branchName, upstream, oldUp
 	// the commit directly (detached HEAD) rather than the branch ref. This means the rebase
 	// results stay on the detached HEAD and the actual branch ref remains unchanged,
 	// keeping the main repository unmodified during validation.
-	_, err := g.RunGitCommandWithContext(ctx, "rebase", "--onto", upstream, oldUpstream, branchName+"~0")
+	_, err := g.Run(ctx, "rebase", "--onto", upstream, oldUpstream, branchName+"~0")
 	if err != nil {
 		if g.IsRebaseInProgress(ctx) {
 			autoOutcome, conflictFiles, autoErr := git.AutoContinueRerereRebase(ctx, g, err)
@@ -89,7 +89,7 @@ func dryRunRebase(ctx context.Context, g git.Runner, branchName, upstream, oldUp
 			outcome = autoOutcome
 		} else {
 			// Abort rebase if it failed for other reasons
-			_, _ = g.RunGitCommandWithContext(ctx, "rebase", "--abort")
+			_, _ = g.Run(ctx, "rebase", "--abort")
 			return git.RebaseOutcome{Result: git.RebaseConflict}, "", nil, err
 		}
 	}
@@ -208,7 +208,7 @@ func (e *engineImpl) ValidateRebases(ctx context.Context, specs []RebaseSpec) (*
 	}
 
 	// Group specs by dependency depth
-	graph := e.Graph(SortStrategySmart)
+	graph := e.Graph(ctx, SortStrategySmart)
 	levels := groupSpecsByDepth(graph, specs)
 
 	result := &RebaseValidation{
@@ -667,7 +667,7 @@ func (e *engineImpl) replayCommitConflictFree(
 	// git merge-tree --write-tree --merge-base <base> <ours> <theirs>
 	// OURS  = newBase  (the rebased parent so far)
 	// THEIRS = commitSHA (this commit's snapshot on top of its original parent)
-	treeSHARaw, err := e.git.RunGitCommandWithContext(ctx,
+	treeSHARaw, err := e.git.Run(ctx,
 		"merge-tree", "--write-tree", "--merge-base", mergeBase, newBase, commit.SHA)
 	if err != nil {
 		return "", false
@@ -687,7 +687,7 @@ func (e *engineImpl) replayCommitConflictFree(
 		"GIT_AUTHOR_DATE=" + strings.TrimSpace(commit.AuthorDate),
 	}
 
-	newSHARaw, err := e.git.RunGitCommandWithEnv(ctx, env,
+	newSHARaw, err := e.git.RunWithEnv(ctx, env,
 		"commit-tree", treeSHA, "-p", newBase, "-m", strings.TrimSpace(commit.Message))
 	if err != nil {
 		return "", false

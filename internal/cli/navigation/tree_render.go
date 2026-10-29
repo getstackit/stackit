@@ -1,9 +1,14 @@
 package navigation
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/term"
+	"github.com/getstackit/stackit/internal/workpool"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -15,7 +20,6 @@ import (
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/tui/components/tree"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // RunTree displays the branch tree: JSON, the interactive TUI, or the static
@@ -26,7 +30,7 @@ func RunTree(ctx *app.Context, opts actions.TreeOptions) error {
 		return printTreeJSON(ctx, opts)
 	}
 
-	if opts.Interactive || (utils.IsInteractive() && opts.Steps == nil) {
+	if opts.Interactive || (term.IsInteractive() && opts.Steps == nil) {
 		m := tui.NewTreeModel(ctx.Context, ctx.Engine, ctx.GitHub(), tui.TreeOptions{
 			Style:         string(opts.Style),
 			ShowUntracked: opts.ShowUntracked,
@@ -43,10 +47,10 @@ func RunTree(ctx *app.Context, opts actions.TreeOptions) error {
 
 func printTreeJSON(ctx *app.Context, opts actions.TreeOptions) error {
 	req := actions.TreeJSONRequest{Style: opts.Style}
-	if opts.BranchName != ctx.Engine.Trunk().GetName() || opts.Steps != nil {
+	if opts.BranchName != ctx.Engine.Trunk().Name() || opts.Steps != nil {
 		// Scope the JSON to exactly what the text view would draw, before any
 		// expensive enrichment runs.
-		_, _, req.Branches = resolveVisibleTree(ctx.Engine, opts)
+		_, _, req.Branches = resolveVisibleTree(ctx.Context, ctx.Engine, opts)
 	}
 	// Short views are local and structural: never initialize the GitHub client.
 	var gh github.Client
@@ -65,7 +69,7 @@ func printTreeJSON(ctx *app.Context, opts actions.TreeOptions) error {
 
 func printTree(ctx *app.Context, opts actions.TreeOptions) error {
 	eng := ctx.Engine
-	renderer, worktrees, visibleBranches := resolveVisibleTree(eng, opts)
+	renderer, worktrees, visibleBranches := resolveVisibleTree(ctx.Context, eng, opts)
 	renderOpts := tree.RenderOptions{
 		Mode:        tree.RenderModeFull, // We want the full tree characters with stats
 		Steps:       opts.Steps,
@@ -98,9 +102,9 @@ func printTree(ctx *app.Context, opts actions.TreeOptions) error {
 // opts. Text and JSON views both resolve through it, so --stack and --steps
 // select the same branches in each. One managed-worktree listing backs both the
 // renderer (which empty anchors stay visible) and later worktree annotations.
-func resolveVisibleTree(eng engine.Engine, opts actions.TreeOptions) (*tree.StackTreeRenderer, *stackview.WorktreeIndex, engine.Branches) {
-	worktrees := stackview.BuildWorktreeIndex(eng)
-	renderer := newTreeRenderer(eng, worktrees)
+func resolveVisibleTree(ctx context.Context, eng engine.Engine, opts actions.TreeOptions) (*tree.StackTreeRenderer, *stackview.WorktreeIndex, engine.Branches) {
+	worktrees := stackview.BuildWorktreeIndex(ctx, eng)
+	renderer := newTreeRenderer(ctx, eng, worktrees)
 	visible := visibleTreeBranches(renderer, opts.BranchName, tree.RenderOptions{
 		Mode:  tree.RenderModeFull,
 		Steps: opts.Steps,
@@ -109,11 +113,11 @@ func resolveVisibleTree(eng engine.Engine, opts actions.TreeOptions) (*tree.Stac
 }
 
 // newTreeRenderer picks the renderer variant for the current worktrees.
-func newTreeRenderer(eng engine.StackView, worktrees *stackview.WorktreeIndex) *tree.StackTreeRenderer {
+func newTreeRenderer(ctx context.Context, eng engine.StackView, worktrees *stackview.WorktreeIndex) *tree.StackTreeRenderer {
 	if emptyAnchors := worktrees.EmptyAnchorNames(); emptyAnchors != nil {
-		return tui.NewStackTreeRendererWithEmptyWorktrees(eng, emptyAnchors)
+		return tui.NewStackTreeRendererWithEmptyWorktrees(ctx, eng, emptyAnchors)
 	}
-	return tui.NewStackTreeRenderer(eng)
+	return tui.NewStackTreeRenderer(ctx, eng)
 }
 
 // buildTreeAnnotations resolves annotations for just the branches that will
@@ -125,14 +129,14 @@ func buildTreeAnnotations(ctx *app.Context, opts actions.TreeOptions, visibleBra
 	// one batched read; the short style needs none.
 	var stats map[string]engine.BranchStat
 	if opts.Style != actions.TreeStyleShort {
-		stats = eng.BatchBranchStats(visibleBranches)
+		stats = eng.BatchBranchStats(ctx.Context, visibleBranches)
 	}
 
 	// The short style skips BatchBranchStats above, so with --shas it needs its
 	// own batched revision lookup instead of resolving each SHA individually.
 	var revisions engine.RevisionMap
 	if opts.Style == actions.TreeStyleShort && opts.ShowSHAs {
-		revisions = eng.BatchRevisions(visibleBranches)
+		revisions = eng.BatchRevisions(ctx.Context, visibleBranches)
 	}
 
 	// Forge status is fetched separately (FULL style only) and joined below.
@@ -160,10 +164,10 @@ func buildTreeAnnotations(ctx *app.Context, opts actions.TreeOptions, visibleBra
 		items[i] = indexedBranch{index: i, branch: b}
 	}
 	built := make([]tree.BranchAnnotation, len(visibleBranches))
-	utils.Run(items, func(item indexedBranch) {
-		name := item.branch.GetName()
+	workpool.Run(items, func(item indexedBranch) {
+		name := item.branch.Name()
 		if opts.Style != actions.TreeStyleShort {
-			built[item.index] = tui.TreeAnnotation(stackview.FullAnnotation(eng, item.branch, stats[name], enrichment, stackview.AnnotationOptions{
+			built[item.index] = tui.TreeAnnotation(stackview.FullAnnotation(ctx.Context, eng, item.branch, stats[name], enrichment, stackview.AnnotationOptions{
 				SkipCommitMessages: true,
 			}))
 			return
@@ -171,14 +175,14 @@ func buildTreeAnnotations(ctx *app.Context, opts actions.TreeOptions, visibleBra
 		// The short style has no stats; its SHA comes from the batched revisions.
 		annotation := tui.TreeAnnotation(stackview.MinimalAnnotation(eng, item.branch, worktrees))
 		if opts.ShowSHAs && revisions[name] != "" {
-			annotation.LocalSHA = utils.ShortRevision(revisions[name], 0)
+			annotation.LocalSHA = git.ShortRevision(revisions[name], 0)
 		}
 		built[item.index] = annotation
 	})
 
 	annotations := make(map[string]tree.BranchAnnotation, len(visibleBranches))
 	for i, b := range visibleBranches {
-		annotations[b.GetName()] = built[i]
+		annotations[b.Name()] = built[i]
 	}
 	return annotations
 }
@@ -220,7 +224,7 @@ func treeSummaryLines(eng engine.BranchReader, annotations map[string]tree.Branc
 func visibleTreeBranches(renderer *tree.StackTreeRenderer, branchName string, opts tree.RenderOptions, branches engine.Branches) engine.Branches {
 	branchByName := make(map[string]engine.Branch, len(branches))
 	for _, b := range branches {
-		branchByName[b.GetName()] = b
+		branchByName[b.Name()] = b
 	}
 
 	rendered := renderer.RenderStackDetailed(branchName, opts)

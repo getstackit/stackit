@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/git"
@@ -30,7 +29,7 @@ func TestGeneratePlanJSON(t *testing.T) {
 		s.Scene.Repo.CreateChangeAndCommit("branch-b commit", "file-b")
 
 		// Get commit SHA for branch-a
-		commits, err := s.Engine.GetBranch("branch-a").GetCommitIDs()
+		commits, err := s.Engine.GetBranch("branch-a").CommitIDs(t.Context())
 		require.NoError(t, err)
 		require.NotEmpty(t, commits)
 		commitSHA := commits[0]
@@ -63,7 +62,7 @@ func TestGeneratePlanJSON(t *testing.T) {
 		newFiles := []string{"new_file.go"}
 
 		// Generate plan JSON
-		planJSON, err := GeneratePlanJSON(
+		planJSON, err := GeneratePlanJSON(t.Context(),
 			"branch-b",
 			hunkTargets,
 			unabsorbedHunks,
@@ -79,27 +78,27 @@ func TestGeneratePlanJSON(t *testing.T) {
 		require.NoError(t, err)
 
 		// Validate structure
-		assert.Equal(t, "branch-b", plan.CurrentBranch)
-		assert.Len(t, plan.Absorbed, 1)
-		assert.Len(t, plan.Unabsorbable, 1)
-		assert.Equal(t, []string{"new_file.go"}, plan.NewFiles)
+		require.Equal(t, "branch-b", plan.CurrentBranch)
+		require.Len(t, plan.Absorbed, 1)
+		require.Len(t, plan.Unabsorbable, 1)
+		require.Equal(t, []string{"new_file.go"}, plan.NewFiles)
 
 		// Validate absorbed hunk
 		absorbed := plan.Absorbed[0]
-		assert.Equal(t, "file-a", absorbed.File)
-		assert.Equal(t, "1-10", absorbed.Lines)
-		assert.Equal(t, "branch-a", absorbed.TargetBranch)
-		assert.Contains(t, absorbed.Content, "+func hello()")
+		require.Equal(t, "file-a", absorbed.File)
+		require.Equal(t, "1-10", absorbed.Lines)
+		require.Equal(t, "branch-a", absorbed.TargetBranch)
+		require.Contains(t, absorbed.Content, "+func hello()")
 
 		// Validate unabsorbable hunk
 		unabsorbable := plan.Unabsorbable[0]
-		assert.Equal(t, "utils.go", unabsorbable.File)
-		assert.Equal(t, "1-5", unabsorbable.Lines)
-		assert.Equal(t, "commutes_with_all", unabsorbable.Reason)
-		assert.Contains(t, unabsorbable.Content, "+func helper()")
+		require.Equal(t, "utils.go", unabsorbable.File)
+		require.Equal(t, "1-5", unabsorbable.Lines)
+		require.Equal(t, "commutes_with_all", unabsorbable.Reason)
+		require.Contains(t, unabsorbable.Content, "+func helper()")
 
 		// Validate stack structure
-		assert.NotEmpty(t, plan.Stack)
+		require.NotEmpty(t, plan.Stack)
 		// Should include trunk and branches
 		var foundTrunk, foundCurrent bool
 		for _, node := range plan.Stack {
@@ -108,11 +107,11 @@ func TestGeneratePlanJSON(t *testing.T) {
 			}
 			if node.IsCurrent {
 				foundCurrent = true
-				assert.Equal(t, "branch-b", node.Name)
+				require.Equal(t, "branch-b", node.Name)
 			}
 		}
-		assert.True(t, foundTrunk, "should include trunk in stack")
-		assert.True(t, foundCurrent, "should mark current branch")
+		require.True(t, foundTrunk, "should include trunk in stack")
+		require.True(t, foundCurrent, "should mark current branch")
 	})
 
 	t.Run("handles empty inputs", func(t *testing.T) {
@@ -125,7 +124,7 @@ func TestGeneratePlanJSON(t *testing.T) {
 		s.Checkout("branch-a")
 
 		// Generate plan with empty inputs
-		planJSON, err := GeneratePlanJSON(
+		planJSON, err := GeneratePlanJSON(t.Context(),
 			"branch-a",
 			[]git.HunkTarget{},
 			[]Unabsorbable{},
@@ -138,10 +137,10 @@ func TestGeneratePlanJSON(t *testing.T) {
 		err = json.Unmarshal(planJSON, &plan)
 		require.NoError(t, err)
 
-		assert.Equal(t, "branch-a", plan.CurrentBranch)
-		assert.Empty(t, plan.Absorbed)
-		assert.Empty(t, plan.Unabsorbable)
-		assert.Nil(t, plan.NewFiles)
+		require.Equal(t, "branch-a", plan.CurrentBranch)
+		require.Empty(t, plan.Absorbed)
+		require.Empty(t, plan.Unabsorbable)
+		require.Nil(t, plan.NewFiles)
 	})
 }
 
@@ -160,6 +159,6 @@ func TestFormatLines(t *testing.T) {
 
 	for _, tc := range tests {
 		result := formatLines(tc.start, tc.count)
-		assert.Equal(t, tc.expected, result, "formatLines(%d, %d)", tc.start, tc.count)
+		require.Equal(t, tc.expected, result, "formatLines(%d, %d)", tc.start, tc.count)
 	}
 }

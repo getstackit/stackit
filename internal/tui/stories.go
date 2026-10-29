@@ -21,24 +21,30 @@ type Story struct {
 	CreateModel func() tea.Model
 }
 
-// Stories is a registry of all component stories
-var Stories = []Story{}
-
-// RegisterStory registers a new component story
-func RegisterStory(story Story) {
-	Stories = append(Stories, story)
+// storyRegistry collects stories as the register* functions build them.
+type storyRegistry struct {
+	stories []Story
 }
 
-func init() {
-	registerTreeStories()
-	registerLargeTreeStories()
-	registerSubmitStories()
-	registerMergeStories()
-	registerPromptStories()
+func (r *storyRegistry) add(story Story) {
+	r.stories = append(r.stories, story)
 }
 
-func registerTreeStories() {
-	RegisterStory(Story{
+// AllStories returns every component story. They are built on each call
+// rather than at package init, so importing tui costs nothing.
+func AllStories() []Story {
+	var r storyRegistry
+	r.registerTreeStories()
+	r.registerLargeTreeStories()
+	r.registerSubmitStories()
+	r.registerMergeStories()
+	r.registerPromptStories()
+	r.registerShippableStories()
+	return r.stories
+}
+
+func (r *storyRegistry) registerTreeStories() {
+	r.add(Story{
 		Name:        "Linear Stack",
 		Category:    "Tree",
 		Description: "A simple 3-branch linear stack with PR states",
@@ -90,7 +96,7 @@ func registerTreeStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "PR States",
 		Category:    "Tree",
 		Description: "Shows different PR states: draft, merged, failing CI, changes requested",
@@ -171,7 +177,7 @@ func registerTreeStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "Complex Branching",
 		Category:    "Tree",
 		Description: "A tree with multiple branches at the same level and different scopes",
@@ -253,7 +259,7 @@ func registerTreeStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "No PRs",
 		Category:    "Tree",
 		Description: "A stack where no PRs have been submitted yet - shows stats only",
@@ -310,7 +316,7 @@ func registerTreeStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "Stack Submission",
 		Category:    "Tree",
 		Description: "The configuration view before submitting a stack, showing planned actions",
@@ -384,8 +390,8 @@ func newSimulationSubmitModel() *submit.Model {
 	})
 }
 
-func registerSubmitStories() {
-	RegisterStory(Story{
+func (r *storyRegistry) registerSubmitStories() {
+	r.add(Story{
 		Name:        "Full Submission",
 		Category:    "Submit",
 		Description: "A simulated full submission process with state transitions",
@@ -397,7 +403,7 @@ func registerSubmitStories() {
 		},
 	})
 
-	RegisterStory(Story{
+	r.add(Story{
 		Name:        "Submission Error",
 		Category:    "Submit",
 		Description: "A submission with an error on one of the branches",

@@ -122,6 +122,8 @@ type remoteTemplateDirs struct {
 }
 
 func getMinimalTemplate(t *testing.T) string {
+	t.Helper()
+
 	dir, err := minimalTemplate()
 	if err != nil {
 		t.Fatalf("Minimal template initialization failed: %v", err)
@@ -130,6 +132,8 @@ func getMinimalTemplate(t *testing.T) string {
 }
 
 func getBasicTemplate(t *testing.T) string {
+	t.Helper()
+
 	dir, err := basicTemplate()
 	if err != nil {
 		t.Fatalf("Basic template initialization failed: %v", err)
@@ -138,6 +142,8 @@ func getBasicTemplate(t *testing.T) string {
 }
 
 func getInitialCommitTemplate(t *testing.T) string {
+	t.Helper()
+
 	dir, err := initialCommitTemplate()
 	if err != nil {
 		t.Fatalf("Initial commit template initialization failed: %v", err)
@@ -146,6 +152,8 @@ func getInitialCommitTemplate(t *testing.T) string {
 }
 
 func getRemoteTemplates(t *testing.T) (string, string) {
+	t.Helper()
+
 	dirs, err := remoteTemplates()
 	if err != nil {
 		t.Fatalf("Remote template initialization failed: %v", err)
@@ -161,6 +169,8 @@ func setupMatches(setup SceneSetup, target SceneSetup) bool {
 }
 
 func templateForSetup(t *testing.T, setup SceneSetup) (string, bool) {
+	t.Helper()
+
 	switch {
 	case setupMatches(setup, BasicSceneSetup):
 		return getBasicTemplate(t), true
@@ -174,68 +184,22 @@ func templateForSetup(t *testing.T, setup SceneSetup) (string, bool) {
 // Scene represents a test scene with a temporary directory and Git repository.
 // This is the Go equivalent of the TypeScript AbstractScene.
 type Scene struct {
-	Dir    string
-	Repo   *GitRepo
-	oldDir string
+	Dir  string
+	Repo *GitRepo
 }
 
 // SceneSetup is a function type for setting up a scene.
 type SceneSetup func(*Scene) error
 
-// NewScene creates a new test scene with a temporary directory and Git repository.
-// It automatically handles cleanup using t.Cleanup().
-// NOTE: This function uses os.Chdir() and is NOT safe for parallel tests.
-// Use NewSceneParallel for tests that can run in parallel.
+// NewScene creates a new test scene with a temporary directory and Git repository,
+// and changes the working directory into it for the rest of the test.
+// It uses t.Chdir, so it cannot be combined with t.Parallel; use
+// NewSceneParallel for tests that can run in parallel.
 func NewScene(t *testing.T, setup SceneSetup) *Scene {
-	// Create temporary directory
-	tmpDir, err := os.MkdirTemp("", "stackit-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
+	t.Helper()
 
-	// Save current directory
-	oldDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
-	}
-
-	templateDir, skipSetup := templateForSetup(t, setup)
-	repo, err := NewGitRepoFromTemplate(tmpDir, templateDir)
-
-	if err != nil {
-		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("Failed to create Git repo (template: %s, target: %s): %v", templateDir, tmpDir, err)
-	}
-
-	scene := &Scene{
-		Dir:    tmpDir,
-		Repo:   repo,
-		oldDir: oldDir,
-	}
-
-	// Change to temp directory
-	if err := os.Chdir(tmpDir); err != nil {
-		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("Failed to change directory: %v", err)
-	}
-
-	// Run custom setup if provided and not already covered by a cached template.
-	if setup != nil && !skipSetup {
-		if err := setup(scene); err != nil {
-			_ = os.Chdir(oldDir)
-			_ = os.RemoveAll(tmpDir)
-			t.Fatalf("Setup failed: %v", err)
-		}
-	}
-
-	// Register cleanup
-	t.Cleanup(func() {
-		_ = os.Chdir(oldDir)
-		if os.Getenv("DEBUG") == "" {
-			_ = os.RemoveAll(tmpDir)
-		}
-	})
-
+	scene := NewSceneParallel(t, setup)
+	t.Chdir(scene.Dir)
 	return scene
 }
 
@@ -246,8 +210,8 @@ func NewScene(t *testing.T, setup SceneSetup) *Scene {
 func NewSceneParallel(t *testing.T, setup SceneSetup) *Scene {
 	t.Helper()
 
-	// Create temporary directory
-	tmpDir, err := os.MkdirTemp("", "stackit-test-*")
+	// Not t.TempDir: the cleanup below keeps the directory when DEBUG is set.
+	tmpDir, err := os.MkdirTemp("", "stackit-test-*") //nolint:usetesting // see above
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -290,7 +254,7 @@ func NewRemoteSceneParallel(t *testing.T) *Scene {
 
 	repoTemplateDir, bareTemplateDir := getRemoteTemplates(t)
 
-	tmpDir, err := os.MkdirTemp("", "stackit-test-*")
+	tmpDir, err := os.MkdirTemp("", "stackit-test-*") //nolint:usetesting // kept when DEBUG is set; see NewSceneParallel
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}

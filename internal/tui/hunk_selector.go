@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/viewport"
@@ -657,7 +659,7 @@ func (m *HunkSelectorModel) Err() error {
 
 // PromptSelectHunks shows an interactive hunk selector and returns the selected hunks
 func PromptSelectHunks(hunks []git.Hunk) ([]git.Hunk, error) {
-	if err := CheckInteractiveAllowed(); err != nil {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return nil, err
 	}
 

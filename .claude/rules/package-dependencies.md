@@ -94,7 +94,7 @@ If an action needs config values, resolve them in bootstrap or the adapter layer
 
 1. **TUI importing action data types directly**: If `internal/tui` needs a preview/result shape from `internal/actions/X`, define a local struct in `tui` with the same fields and have the caller convert.
 
-2. **Action taking `*app.Context`**: This couples orchestration to bootstrap concerns. Prefer explicit dependency structs and request structs.
+2. **Action taking `*app.Context`**: This couples orchestration to bootstrap concerns. Take `(ctx context.Context, deps Deps, opts Options)` instead, with an exported consumer-side `Engine` interface in `Deps` (see `internal/actions/scope`). Converted packages are listed in the `actions-no-app-context` depguard rule; add yours when you convert it.
 
 3. **Action rendering output**: Return structured results or emit events. Let CLI/TUI/API adapters decide how to present them.
 

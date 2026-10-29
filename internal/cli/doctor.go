@@ -37,7 +37,7 @@ The doctor command checks:
 				}
 
 				// Run doctor action
-				return doctor.Action(ctx, doctor.Options{
+				return doctor.Action(ctx.Context, doctor.Deps{Engine: ctx.Engine, GHRunner: ctx.GHRunner, RepoRoot: ctx.RepoRoot}, doctor.Options{
 					Fix:   fix,
 					Trunk: trunk,
 				}, handler)

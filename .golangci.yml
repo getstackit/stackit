@@ -56,6 +56,23 @@ linters:
                 actions must not import the TUI adapter; define a prompt or
                 handler interface next to the action and implement it in
                 internal/cli (see docs/architecture.md).
+        # Actions migrated off *app.Context take context.Context plus a Deps
+        # struct of narrow interfaces. Add each package here as it converts so
+        # it cannot drift back to the bootstrap bundle.
+        actions-no-app-context:
+          files:
+            - "**/internal/actions/describe/**"
+            - "**/internal/actions/doctor/**"
+            - "**/internal/actions/freeze/**"
+            - "**/internal/actions/pop/**"
+            - "**/internal/actions/scope/**"
+            - "**/internal/actions/untrack/**"
+          deny:
+            - pkg: github.com/getstackit/stackit/internal/app
+              desc: >-
+                this action takes (ctx context.Context, deps Deps, ...); add what
+                it needs to Deps instead of reaching for app.Context (see
+                .claude/rules/package-dependencies.md).
     forbidigo:
       forbid:
         - pattern: '\.Git\(\)'

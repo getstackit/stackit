@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
@@ -15,21 +14,28 @@ type Options struct {
 	Force      bool
 }
 
-// untrackEngine lists exactly the engine methods untrack calls.
-type untrackEngine interface {
+// Engine lists exactly the engine methods untrack calls.
+type Engine interface {
 	engine.BranchLookup
 	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
 	UntrackBranches(ctx context.Context, branchNames []string) error
 }
 
+// Deps are the collaborators untrack needs. Adapters build them from their
+// own runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	Out    output.Output
+}
+
 // Action performs the untrack operation
-func Action(ctx *app.Context, opts Options, handler Handler) error {
+func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error {
 	if handler == nil {
 		handler = &NullHandler{}
 	}
 	defer handler.Cleanup()
 
-	var eng untrackEngine = ctx.Engine
+	eng, out := deps.Engine, deps.Out
 	branchName := opts.BranchName
 
 	// Check if branch is tracked
@@ -39,7 +45,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Find descendants
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	descendants := graph.Range(branch, engine.StackRange{RecursiveChildren: true})
 
 	// If there are descendants and not forced, prompt for confirmation
@@ -50,7 +56,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 
 		if !confirmed {
-			ctx.Output.Info("Untrack canceled.")
+			out.Info("Untrack canceled.")
 			return nil
 		}
 	}
@@ -63,12 +69,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	allNames = append(allNames, branchName)
 
 	// Delete all metadata refs in one batch and rebuild the engine once.
-	if err := eng.UntrackBranches(ctx.Context, allNames); err != nil {
+	if err := eng.UntrackBranches(ctx, allNames); err != nil {
 		return fmt.Errorf("failed to untrack branches: %w", err)
 	}
 
 	for _, name := range allNames {
-		ctx.Output.Info("Stopped tracking %s.", output.BranchName(name))
+		out.Info("Stopped tracking %s.", output.BranchName(name))
 	}
 
 	return nil

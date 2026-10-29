@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/output"
@@ -19,8 +18,8 @@ type Options struct {
 	Show  bool
 }
 
-// scopeEngine lists exactly the engine methods scope calls.
-type scopeEngine interface {
+// Engine lists exactly the engine methods scope calls.
+type Engine interface {
 	actions.MetadataPushEngine
 	engine.BranchLookup
 	CurrentBranch(ctx context.Context) *engine.Branch
@@ -30,19 +29,25 @@ type scopeEngine interface {
 	RenameBranch(ctx context.Context, oldBranch, newBranch engine.Branch) error
 }
 
+// Deps are the collaborators scope needs. Adapters build them from their own
+// runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	Out    output.Output
+}
+
 // Action implements the stackit scope command
-func Action(ctx *app.Context, opts Options, handler Handler) error {
+func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error {
 	if handler == nil {
 		handler = &NullHandler{}
 	}
 	defer handler.Cleanup()
 
-	var eng scopeEngine = ctx.Engine
-	out := ctx.Output
+	eng, out := deps.Engine, deps.Out
 
 	// Get current branch
 	currentBranch := ""
-	if cb := eng.CurrentBranch(ctx.Context); cb != nil {
+	if cb := eng.CurrentBranch(ctx); cb != nil {
 		currentBranch = cb.GetName()
 	}
 	isOnTrunk := currentBranch == eng.Trunk().GetName() || currentBranch == ""
@@ -76,12 +81,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if isOnTrunk {
 			return errors.New("cannot unset scope on trunk")
 		}
-		if err := eng.SetScopeAndMarkForUpdate(ctx.Context, eng.GetBranch(currentBranch), engine.Empty()); err != nil {
+		if err := eng.SetScopeAndMarkForUpdate(ctx, eng.GetBranch(currentBranch), engine.Empty()); err != nil {
 			return fmt.Errorf("failed to unset scope: %w", err)
 		}
 		out.Info("Unset explicit scope for branch %s. It will now inherit from its parent.", output.BranchName(currentBranch))
 		// PR body update flag already set atomically inside SetScopeAndMarkForUpdate.
-		if err := actions.PushMetadataOnly(ctx, eng, []string{currentBranch}); err != nil {
+		if err := actions.PushMetadataOnly(ctx, out, eng, []string{currentBranch}); err != nil {
 			out.Debug("Failed to push metadata changes: %v", err)
 		}
 		return nil
@@ -101,7 +106,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	currentBranchObj := eng.GetBranch(currentBranch)
 	oldScope := eng.GetScope(currentBranchObj)
 	newScope := engine.NewScope(opts.Scope)
-	if err := eng.SetScopeAndMarkForUpdate(ctx.Context, eng.GetBranch(currentBranch), newScope); err != nil {
+	if err := eng.SetScopeAndMarkForUpdate(ctx, eng.GetBranch(currentBranch), newScope); err != nil {
 		return fmt.Errorf("failed to set scope: %w", err)
 	}
 
@@ -115,7 +120,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			confirmed, err := handler.PromptConfirmRename(currentBranch, oldScope.String(), opts.Scope)
 			if err == nil && confirmed {
 				newName := strings.Replace(currentBranch, oldScope.String(), opts.Scope, 1)
-				if err := eng.RenameBranch(ctx.Context, eng.GetBranch(currentBranch), eng.GetBranch(newName)); err != nil {
+				if err := eng.RenameBranch(ctx, eng.GetBranch(currentBranch), eng.GetBranch(newName)); err != nil {
 					out.Info("Warning: failed to rename branch: %v", err)
 				} else {
 					out.Info("Renamed branch %s to %s.", output.BranchName(currentBranch), output.CurrentBranch(newName))
@@ -126,7 +131,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// PR body update flag already set atomically inside SetScopeAndMarkForUpdate.
 	// Push metadata refs (fast git operation).
-	if err := actions.PushMetadataOnly(ctx, eng, []string{currentBranch}); err != nil {
+	if err := actions.PushMetadataOnly(ctx, out, eng, []string{currentBranch}); err != nil {
 		out.Debug("Failed to push metadata changes: %v", err)
 	}
 

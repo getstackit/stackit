@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/actions/freeze"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -239,7 +241,7 @@ func TestGetPastLandedParentReport(t *testing.T) {
 			"a frozen branch still mirrors the remote, landed commits and all")
 
 		// The remedy get points at has to work.
-		require.NoError(t, actions.UnfreezeAction(sh.Context, "b"))
+		require.NoError(t, freeze.Unfreeze(t.Context(), freeze.Deps{Engine: sh.Context.Engine, Out: sh.Context.Output}, "b"))
 		sh.Rebuild()
 		restackBranchOntoStack(t, sh, "b")
 		require.Equal(t, 1, commitsInB(t, sh))

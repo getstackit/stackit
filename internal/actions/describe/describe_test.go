@@ -31,7 +31,7 @@ func TestDescribeAction(t *testing.T) {
 			Commit("feature commit").
 			TrackBranch("feature", "main")
 
-		err := describe.Action(s.Context, describe.Options{
+		err := describe.Action(t.Context(), deps(s), describe.Options{
 			Title: "Auth Feature",
 		}, nil)
 		require.NoError(t, err)
@@ -50,7 +50,7 @@ func TestDescribeAction(t *testing.T) {
 			Commit("feature commit").
 			TrackBranch("feature", "main")
 
-		err := describe.Action(s.Context, describe.Options{
+		err := describe.Action(t.Context(), deps(s), describe.Options{
 			Title:       "Auth Feature",
 			Description: "OAuth2 implementation with JWT tokens",
 		}, nil)
@@ -71,13 +71,13 @@ func TestDescribeAction(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// First set a description
-		err := describe.Action(s.Context, describe.Options{
+		err := describe.Action(t.Context(), deps(s), describe.Options{
 			Title: "Auth Feature",
 		}, nil)
 		require.NoError(t, err)
 
 		// Then clear it
-		err = describe.Action(s.Context, describe.Options{
+		err = describe.Action(t.Context(), deps(s), describe.Options{
 			Clear: true,
 		}, nil)
 		require.NoError(t, err)
@@ -95,13 +95,13 @@ func TestDescribeAction(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Set description first
-		err := describe.Action(s.Context, describe.Options{
+		err := describe.Action(t.Context(), deps(s), describe.Options{
 			Title: "Auth Feature",
 		}, nil)
 		require.NoError(t, err)
 
 		// Show description (should not error)
-		err = describe.Action(s.Context, describe.Options{
+		err = describe.Action(t.Context(), deps(s), describe.Options{
 			Show: true,
 		}, nil)
 		require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestDescribeAction(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Show description when none is set (should not error)
-		err := describe.Action(s.Context, describe.Options{
+		err := describe.Action(t.Context(), deps(s), describe.Options{
 			Show: true,
 		}, nil)
 		require.NoError(t, err)
@@ -127,7 +127,7 @@ func TestDescribeAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		err := describe.Action(s.Context, describe.Options{
+		err := describe.Action(t.Context(), deps(s), describe.Options{
 			Title: "Some Title",
 		}, nil)
 		require.Error(t, err)
@@ -146,7 +146,7 @@ func TestDescribeAction(t *testing.T) {
 			TrackBranch("child", "root")
 
 		// Set description while on child
-		err := describe.Action(s.Context, describe.Options{
+		err := describe.Action(t.Context(), deps(s), describe.Options{
 			Title: "Stack Title",
 		}, nil)
 		require.NoError(t, err)
@@ -170,7 +170,7 @@ func TestDescribeAction(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		handler := &testDescribeHandler{interactive: false}
-		err := describe.Action(s.Context, describe.Options{}, handler)
+		err := describe.Action(t.Context(), deps(s), describe.Options{}, handler)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "nothing to set")
 	})
@@ -318,4 +318,8 @@ func TestParseEditorContent(t *testing.T) {
 			}
 		})
 	}
+}
+
+func deps(s *scenario.Scenario) describe.Deps {
+	return describe.Deps{Engine: s.Context.Engine, Out: s.Context.Output}
 }

@@ -117,7 +117,7 @@ func TestDoctorDoesNotFetchAtStartup(t *testing.T) {
 	ctx, counting := countingContext(t, s)
 	// doctor's verdict (return value) is irrelevant here; we only assert it does
 	// no remote metadata fetch at startup.
-	_ = doctor.Action(ctx, doctor.Options{Trunk: "main"}, nil)
+	_ = doctor.Action(ctx.Context, doctor.Deps{Engine: ctx.Engine, GHRunner: ctx.GHRunner, RepoRoot: ctx.RepoRoot}, doctor.Options{Trunk: "main"}, nil)
 
 	require.Zero(t, counting.totalFetches(), "doctor must not fetch remote metadata at startup")
 }

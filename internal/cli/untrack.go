@@ -32,7 +32,7 @@ If the branch has children, they will also be untracked.`,
 
 				// Execute untrack action
 				handler := stack.NewUntrackUI(ctx.Output, utils.IsInteractive())
-				return untrack.Action(ctx, untrack.Options{
+				return untrack.Action(ctx.Context, untrack.Deps{Engine: ctx.Engine, Out: ctx.Output}, untrack.Options{
 					BranchName: branchName,
 					Force:      force,
 				}, handler)

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
@@ -23,8 +22,8 @@ type Options struct {
 	Show        bool   // Display the current description
 }
 
-// describeEngine lists exactly the engine methods describe calls.
-type describeEngine interface {
+// Engine lists exactly the engine methods describe calls.
+type Engine interface {
 	actions.MetadataPushEngine
 	engine.BranchLookup
 	CurrentBranch(ctx context.Context) *engine.Branch
@@ -37,18 +36,24 @@ type describeEngine interface {
 	MarkBranchesForPRBodyUpdate(ctx context.Context, branchNames []string) error
 }
 
+// Deps are the collaborators describe needs. Adapters build them from their
+// own runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	Out    output.Output
+}
+
 // Action implements the stackit describe command
-func Action(ctx *app.Context, opts Options, handler Handler) error {
+func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error {
 	if handler == nil {
 		handler = &NullHandler{}
 	}
 	defer handler.Cleanup()
 
-	var eng describeEngine = ctx.Engine
-	out := ctx.Output
+	eng, out := deps.Engine, deps.Out
 
 	// Get current branch
-	currentBranch := eng.CurrentBranch(ctx.Context)
+	currentBranch := eng.CurrentBranch(ctx)
 	if currentBranch == nil {
 		return errors.ErrNotOnBranch
 	}
@@ -71,18 +76,18 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Handle --show
 	if opts.Show {
-		return showDescription(ctx.Context, eng, out, *currentBranch, stackRoot)
+		return showDescription(ctx, eng, out, *currentBranch, stackRoot)
 	}
 
 	// Handle --clear
 	if opts.Clear {
-		if err := eng.ClearStackDescription(ctx.Context, *currentBranch); err != nil {
+		if err := eng.ClearStackDescription(ctx, *currentBranch); err != nil {
 			return fmt.Errorf("failed to clear stack description: %w", err)
 		}
 		out.Info("Cleared stack description for stack rooted at %s.", output.BranchName(stackRoot))
 
 		// Mark stack for PR updates and push metadata
-		if err := markStackAndPushMetadata(ctx, eng, stackRoot); err != nil {
+		if err := markStackAndPushMetadata(ctx, eng, out, stackRoot); err != nil {
 			out.Debug("Failed to push metadata changes: %v", err)
 		}
 		return nil
@@ -94,7 +99,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			Title:       opts.Title,
 			Description: opts.Description,
 		}
-		return applyStackDescription(ctx, eng, *currentBranch, stackRoot, desc, opts.Description)
+		return applyStackDescription(ctx, eng, out, *currentBranch, stackRoot, desc, opts.Description)
 	}
 
 	// Try reading from stdin when not interactive
@@ -102,13 +107,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		stdinContent, err := utils.ReadFromStdin()
 		if err == nil && stdinContent != "" {
 			if desc := ParseEditorContent(stdinContent); desc != nil {
-				return applyStackDescription(ctx, eng, *currentBranch, stackRoot, desc, TruncateDescription(desc.Description, 60))
+				return applyStackDescription(ctx, eng, out, *currentBranch, stackRoot, desc, TruncateDescription(desc.Description, 60))
 			}
 		}
 		return errors.New("nothing to set: pass --title/-m, --message-file/-F, pipe a description via stdin, or run in interactive mode")
 	}
 
-	existingDesc := eng.GetStackDescription(ctx.Context, *currentBranch)
+	existingDesc := eng.GetStackDescription(ctx, *currentBranch)
 	newDesc, err := openEditor(existingDesc)
 	if err != nil {
 		return err
@@ -119,16 +124,14 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return nil
 	}
 
-	return applyStackDescription(ctx, eng, *currentBranch, stackRoot, newDesc, TruncateDescription(newDesc.Description, 60))
+	return applyStackDescription(ctx, eng, out, *currentBranch, stackRoot, newDesc, TruncateDescription(newDesc.Description, 60))
 }
 
 // applyStackDescription sets the description on the stack root, prints a
 // confirmation, and pushes metadata. displayDesc is the (possibly truncated)
 // description text shown in the confirmation; pass "" to omit that line.
-func applyStackDescription(ctx *app.Context, eng describeEngine, branch engine.Branch, stackRoot string, desc *git.StackDescription, displayDesc string) error {
-	out := ctx.Output
-
-	if err := eng.SetStackDescription(ctx.Context, branch, desc); err != nil {
+func applyStackDescription(ctx context.Context, eng Engine, out output.Output, branch engine.Branch, stackRoot string, desc *git.StackDescription, displayDesc string) error {
+	if err := eng.SetStackDescription(ctx, branch, desc); err != nil {
 		return fmt.Errorf("failed to set stack description: %w", err)
 	}
 
@@ -138,7 +141,7 @@ func applyStackDescription(ctx *app.Context, eng describeEngine, branch engine.B
 		out.Info("  Description: %s", output.Dim(displayDesc))
 	}
 
-	if err := markStackAndPushMetadata(ctx, eng, stackRoot); err != nil {
+	if err := markStackAndPushMetadata(ctx, eng, out, stackRoot); err != nil {
 		out.Debug("Failed to push metadata changes: %v", err)
 	}
 	return nil
@@ -146,11 +149,9 @@ func applyStackDescription(ctx *app.Context, eng describeEngine, branch engine.B
 
 // markStackAndPushMetadata marks all stack branches for PR update and pushes metadata refs.
 // Unlike PushMetadataAndSyncPRs, this does NOT immediately update GitHub PRs.
-func markStackAndPushMetadata(ctx *app.Context, eng describeEngine, stackRoot string) error {
-	out := ctx.Output
-
+func markStackAndPushMetadata(ctx context.Context, eng Engine, out output.Output, stackRoot string) error {
 	// Mark all branches in the stack for PR body update
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	root := eng.GetBranch(stackRoot)
 	if root.IsTracked() {
 		if err := eng.MarkBranchesForPRBodyUpdate(ctx, graph.CollectBranches(root).Names()); err != nil {
@@ -159,10 +160,10 @@ func markStackAndPushMetadata(ctx *app.Context, eng describeEngine, stackRoot st
 	}
 
 	// Push metadata refs (fast git operation)
-	return actions.PushMetadataOnly(ctx, eng, []string{stackRoot})
+	return actions.PushMetadataOnly(ctx, out, eng, []string{stackRoot})
 }
 
-func showDescription(ctx context.Context, eng describeEngine, out output.Output, branch engine.Branch, stackRoot string) error { //nolint:unparam // error return for API consistency
+func showDescription(ctx context.Context, eng Engine, out output.Output, branch engine.Branch, stackRoot string) error { //nolint:unparam // error return for API consistency
 	desc := eng.GetStackDescription(ctx, branch)
 
 	if desc == nil || desc.IsEmpty() {

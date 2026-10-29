@@ -31,6 +31,10 @@ func (h *testScopeHandler) Cleanup() {}
 
 func (h *testScopeHandler) IsInteractive() bool { return h.isInteractive }
 
+func deps(s *scenario.Scenario) scope.Deps {
+	return scope.Deps{Engine: s.Context.Engine, Out: s.Context.Output}
+}
+
 func TestScopeAction(t *testing.T) {
 	t.Parallel()
 	t.Run("show scope when no args provided", func(t *testing.T) {
@@ -41,7 +45,7 @@ func TestScopeAction(t *testing.T) {
 			Commit("feature commit").
 			TrackBranch("feature", "main")
 
-		err := scope.Action(s.Context, scope.Options{
+		err := scope.Action(t.Context(), deps(s), scope.Options{
 			Show: true,
 		}, nil)
 		require.NoError(t, err)
@@ -55,7 +59,7 @@ func TestScopeAction(t *testing.T) {
 			Commit("feature commit").
 			TrackBranch("feature", "main")
 
-		err := scope.Action(s.Context, scope.Options{
+		err := scope.Action(t.Context(), deps(s), scope.Options{
 			Scope: "JIRA-123",
 		}, nil)
 		require.NoError(t, err)
@@ -73,13 +77,13 @@ func TestScopeAction(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// First set a scope
-		err := scope.Action(s.Context, scope.Options{
+		err := scope.Action(t.Context(), deps(s), scope.Options{
 			Scope: "JIRA-123",
 		}, nil)
 		require.NoError(t, err)
 
 		// Then unset it
-		err = scope.Action(s.Context, scope.Options{
+		err = scope.Action(t.Context(), deps(s), scope.Options{
 			Unset: true,
 		}, nil)
 		require.NoError(t, err)
@@ -90,7 +94,7 @@ func TestScopeAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		err := scope.Action(s.Context, scope.Options{
+		err := scope.Action(t.Context(), deps(s), scope.Options{
 			Scope: "JIRA-123",
 		}, nil)
 		require.Error(t, err)
@@ -106,7 +110,7 @@ func TestScopeAction(t *testing.T) {
 			TrackBranch("JIRA-100-feature", "main")
 
 		// Set initial scope
-		err := scope.Action(s.Context, scope.Options{
+		err := scope.Action(t.Context(), deps(s), scope.Options{
 			Scope: "JIRA-100",
 		}, nil)
 		require.NoError(t, err)
@@ -116,7 +120,7 @@ func TestScopeAction(t *testing.T) {
 			isInteractive: true,
 			confirmRename: false, // Decline rename
 		}
-		err = scope.Action(s.Context, scope.Options{
+		err = scope.Action(t.Context(), deps(s), scope.Options{
 			Scope: "JIRA-200",
 		}, handler)
 		require.NoError(t, err)
@@ -134,7 +138,7 @@ func TestScopeAction(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Set initial scope
-		err := scope.Action(s.Context, scope.Options{
+		err := scope.Action(t.Context(), deps(s), scope.Options{
 			Scope: "JIRA-100",
 		}, nil)
 		require.NoError(t, err)
@@ -144,7 +148,7 @@ func TestScopeAction(t *testing.T) {
 			isInteractive: true,
 			confirmRename: true,
 		}
-		err = scope.Action(s.Context, scope.Options{
+		err = scope.Action(t.Context(), deps(s), scope.Options{
 			Scope: "JIRA-200",
 		}, handler)
 		require.NoError(t, err)
@@ -160,7 +164,7 @@ func TestScopeAction(t *testing.T) {
 			TrackBranch("JIRA-100-feature", "main")
 
 		// Set initial scope
-		err := scope.Action(s.Context, scope.Options{
+		err := scope.Action(t.Context(), deps(s), scope.Options{
 			Scope: "JIRA-100",
 		}, nil)
 		require.NoError(t, err)
@@ -169,7 +173,7 @@ func TestScopeAction(t *testing.T) {
 		handler := &testScopeHandler{
 			isInteractive: false,
 		}
-		err = scope.Action(s.Context, scope.Options{
+		err = scope.Action(t.Context(), deps(s), scope.Options{
 			Scope: "JIRA-200",
 		}, handler)
 		require.NoError(t, err)

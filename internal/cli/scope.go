@@ -49,7 +49,7 @@ Use 'none' or 'clear' as the scope name to explicitly break the inheritance chai
 				}
 
 				handler := stack.NewScopeUI(ctx.Output, utils.IsInteractive())
-				return scope.Action(ctx, opts, handler)
+				return scope.Action(ctx.Context, scope.Deps{Engine: ctx.Engine, Out: ctx.Output}, opts, handler)
 			})
 		},
 	}

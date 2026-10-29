@@ -81,7 +81,7 @@ Examples:
 				handler := &describeHandler{
 					interactive: utils.IsInteractive(),
 				}
-				return describe.Action(ctx, opts, handler)
+				return describe.Action(ctx.Context, describe.Deps{Engine: ctx.Engine, Out: ctx.Output}, opts, handler)
 			})
 		},
 	}

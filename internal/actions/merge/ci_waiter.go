@@ -154,15 +154,7 @@ func (w *CIWaiter) WaitForChecks(ctx context.Context, branchName string, prNumbe
 
 			if !isReallyPending {
 				// Calculate max duration for future estimates
-				var maxDuration time.Duration
-				for _, check := range status.Checks {
-					if !check.FinishedAt.IsZero() && !check.StartedAt.IsZero() {
-						d := check.FinishedAt.Sub(check.StartedAt)
-						if d > maxDuration {
-							maxDuration = d
-						}
-					}
-				}
+				maxDuration := maxCheckDuration(status.Checks)
 
 				elapsed := time.Since(startTime)
 				if w.output != nil {

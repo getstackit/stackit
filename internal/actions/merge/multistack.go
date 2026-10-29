@@ -7,6 +7,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // ExecuteMultiStack performs the multi-stack merge operation.
@@ -267,7 +268,7 @@ func validateBranchesMatchRemote(ctx context.Context, eng engine.Engine, stacks 
 			branchBuilder.Add(eng.GetBranch(branchName))
 		}
 	}
-	remoteCtx, cancelRemote := app.WithRemoteOperationTimeout(ctx)
+	remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
 	defer cancelRemote()
 	remoteStatuses := eng.ReadBranchRemoteStatuses(remoteCtx, branchBuilder.Build())
 

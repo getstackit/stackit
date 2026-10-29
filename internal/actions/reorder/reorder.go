@@ -1,4 +1,6 @@
-package actions
+// Package reorder implements the reorder command, which reorders the branches
+// between trunk and the current branch and restacks their descendants.
+package reorder
 
 import (
 	"context"
@@ -7,59 +9,75 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/validation"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
 
-// ErrReorderCanceled is returned by an OrderEditor when the user cancels.
-var ErrReorderCanceled = errors.New("reorder canceled")
+// ErrCanceled is returned by an OrderEditor when the user cancels.
+var ErrCanceled = errors.New("reorder canceled")
 
 // OrderEditor lets the user interactively choose a new branch order.
 // Implementations live in adapters (e.g. the CLI's Bubble Tea reorder view).
 type OrderEditor interface {
 	// EditOrder receives branches tip-first (trunk is passed only for
 	// display) and returns the new tip-first order. It returns
-	// ErrReorderCanceled when the user cancels.
+	// ErrCanceled when the user cancels.
 	EditOrder(branchesTipFirst []string, trunk string) ([]string, error)
 }
 
-// ReorderOptions configures ReorderAction.
-type ReorderOptions struct {
+// Options configures Action.
+type Options struct {
 	// Editor is the interactive order editor. When nil, the order is edited
 	// as text in $EDITOR instead.
 	Editor OrderEditor
 }
 
-// ReorderAction performs the reorder operation
-func ReorderAction(ctx *app.Context, opts ReorderOptions) error {
-	eng := ctx.Engine
-	out := ctx.Output
-	gctx := ctx.Context
+// Engine lists exactly the engine methods reorder calls: the precondition
+// checks, the ownership guard, the stack reads, and the parent rewrite.
+type Engine interface {
+	validation.GitOperationEngine
+	actions.OwnershipEngine
+	Trunk() engine.Branch
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+	ReparentBranchesToParents(ctx context.Context, moves []engine.BranchParentMove, opts engine.ReparentOpts) error
+}
+
+// Deps are the collaborators reorder needs. Adapters build them from their own
+// runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	actions.MutationDeps
+}
+
+// Action performs the reorder operation
+func Action(ctx context.Context, deps Deps, opts Options) error {
+	eng := deps.Engine
+	out := deps.Out
 
 	out.Debug("reorder: starting reorder action")
 
 	// Pre-checks using validation chain
 	if err := (validation.Chain{
-		validation.MustBeOnBranch(ctx.Context, eng),
-		validation.MustNotHaveRebaseInProgress(gctx, eng),
-		validation.MustNotHaveUncommittedChanges(gctx, eng),
-		validation.CurrentBranchMustNotBeTrunk(ctx.Context, eng, "reorder"),
+		validation.MustBeOnBranch(ctx, eng),
+		validation.MustNotHaveRebaseInProgress(ctx, eng),
+		validation.MustNotHaveUncommittedChanges(ctx, eng),
+		validation.CurrentBranchMustNotBeTrunk(ctx, eng, "reorder"),
 	}).Validate(); err != nil {
 		out.Debug("reorder: validation failed: %v", err)
 		return err
 	}
 
-	currentBranch := eng.CurrentBranch(ctx.Context).Name()
+	currentBranch := eng.CurrentBranch(ctx).Name()
 	currentBranchObj := eng.GetBranch(currentBranch)
 	out.Debug("reorder: current branch object: name=%s, isTrunk=%v, isTracked=%v",
 		currentBranchObj.Name(), currentBranchObj.IsTrunk(), currentBranchObj.IsTracked())
 
 	// Build StackGraph for efficient traversals
 	out.Debug("reorder: building stack graph")
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	out.Debug("reorder: stack graph built successfully")
 
 	// Collect branches: get ancestors from trunk to current branch
@@ -85,7 +103,7 @@ func ReorderAction(ctx *app.Context, opts ReorderOptions) error {
 				branch.Name(), branch.IsTrunk(), branch.IsTracked())
 		}
 	}
-	if err := EnsureCanModifyNamesHere(ctx, branches...); err != nil {
+	if err := actions.EnsureCanModifyNames(ctx, eng, deps.Here, branches...); err != nil {
 		return fmt.Errorf("cannot reorder stack: %w", err)
 	}
 	out.Debug("reorder: filtered to %d reorderable branches: %v", len(branches), branches)
@@ -118,7 +136,7 @@ func ReorderAction(ctx *app.Context, opts ReorderOptions) error {
 		var err error
 		newOrder, err = opts.Editor.EditOrder(displayBranches, trunkName)
 		if err != nil {
-			if errors.Is(err, ErrReorderCanceled) {
+			if errors.Is(err, ErrCanceled) {
 				out.Debug("reorder: user canceled reorder via TUI")
 				out.Info("Reorder canceled.")
 				return nil
@@ -169,11 +187,11 @@ func ReorderAction(ctx *app.Context, opts ReorderOptions) error {
 	// parent metadata and then restacks, so a conflict partway through needs a
 	// rollback point of its own — without one, abort reached for an unrelated
 	// command's snapshot.
-	TakeBestEffortSnapshot(ctx, NewSnapshot("reorder"))
+	deps.Snapshots.Take(ctx, actions.NewSnapshot("reorder"))
 
 	// Update parent relationships
 	out.Debug("reorder: updating parent relationships")
-	if err := updateParentRelationships(gctx, eng, newOrder, out); err != nil {
+	if err := updateParentRelationships(ctx, eng, newOrder, out); err != nil {
 		out.Debug("reorder: failed to update parent relationships: %v", err)
 		return fmt.Errorf("failed to update parent relationships: %w", err)
 	}
@@ -198,7 +216,7 @@ func ReorderAction(ctx *app.Context, opts ReorderOptions) error {
 
 	// Restack all affected branches
 	out.Debug("reorder: starting restack of affected branches")
-	if err := RestackBranches(ctx, affectedBranches); err != nil {
+	if err := deps.Restack.Restack(ctx, affectedBranches); err != nil {
 		out.Debug("reorder: failed to restack branches: %v", err)
 		return fmt.Errorf("failed to restack branches: %w", err)
 	}
@@ -277,7 +295,7 @@ func parseEditorContent(content string, originalBranches []string) ([]string, er
 }
 
 // updateParentRelationships updates the parent of each branch in the new order
-func updateParentRelationships(ctx context.Context, eng reorderUpdateEngine, newOrder []string, out output.Output) error {
+func updateParentRelationships(ctx context.Context, eng Engine, newOrder []string, out output.Output) error {
 	out.Debug("reorder: updateParentRelationships: processing %d branches", len(newOrder))
 
 	// Set parent of first branch to trunk, then chain each subsequent branch
@@ -303,13 +321,8 @@ func updateParentRelationships(ctx context.Context, eng reorderUpdateEngine, new
 	return nil
 }
 
-type reorderUpdateEngine interface {
-	engine.StackNavigator
-	engine.BranchTracking
-}
-
 // findFirstAffectedBranch finds the first branch that moved or changed parent
-func findFirstAffectedBranch(eng engine.StackNavigator, originalOrder, newOrder []string, out output.Output) string {
+func findFirstAffectedBranch(eng Engine, originalOrder, newOrder []string, out output.Output) string {
 	out.Debug("reorder: findFirstAffectedBranch: comparing %d branches", len(newOrder))
 
 	trunk := eng.Trunk().Name()

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 )
@@ -27,7 +28,7 @@ func getMergeMethodWithPause(ctx *app.Context, githubClient github.Client, handl
 
 // calculateBaselineEstimate tries to find a branch with successful CI and use its timing as a baseline
 func calculateBaselineEstimate(ctx context.Context, plan *Plan, client github.Client, splog output.Output) time.Duration {
-	remoteCtx, cancelRemote := app.WithRemoteOperationTimeout(ctx)
+	remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
 	defer cancelRemote()
 	statuses, err := client.BatchGetPRChecksStatus(remoteCtx, plan.BranchNames())
 	if err != nil {

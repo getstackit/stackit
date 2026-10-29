@@ -3,7 +3,7 @@ package navigation
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/openpr"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 )
@@ -35,7 +35,7 @@ Examples:
 				if len(args) > 0 {
 					target = args[0]
 				}
-				return actions.OpenPRAction(ctx, actions.OpenPROptions{
+				return openpr.Action(ctx.Context, openpr.Deps{Engine: ctx.Engine, Out: ctx.Output}, openpr.Options{
 					Target: target,
 					Stack:  stack,
 				})

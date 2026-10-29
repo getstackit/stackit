@@ -1,37 +1,55 @@
-package actions
+// Package share implements the share command, which renders the current stack
+// as Slack-flavored markdown for copy-pasting.
+package share
 
 import (
+	"context"
 	"fmt"
+	"iter"
 	"strings"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/output"
 )
 
-// DefaultShareMarker is appended to the current branch's line in shared output.
-const DefaultShareMarker = "👈"
+// Engine lists exactly the engine methods share calls.
+type Engine interface {
+	CurrentBranch(ctx context.Context) *engine.Branch
+	GetBranch(branchName string) engine.Branch
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+	BranchesDepthFirst(startBranch engine.Branch) iter.Seq2[engine.Branch, int]
+}
 
-// ShareOptions configures how the stack is rendered for sharing.
-type ShareOptions struct {
+// Deps are the collaborators share needs.
+type Deps struct {
+	Engine Engine
+	Out    output.Output
+}
+
+// DefaultMarker is appended to the current branch's line in shared output.
+const DefaultMarker = "👈"
+
+// Options configures how the stack is rendered for sharing.
+type Options struct {
 	// BranchName selects the stack to share. Defaults to the current branch.
 	BranchName string
 	// Marker indicates the current branch in the output. Defaults to
-	// DefaultShareMarker.
+	// DefaultMarker.
 	Marker string
 }
 
-// ShareAction renders the current stack as Slack-flavored markdown (mrkdwn)
+// Action renders the current stack as Slack-flavored markdown (mrkdwn)
 // suitable for copy-pasting into a Slack message. Each branch is emitted as a
 // bullet: branches with an open PR become a clickable link (#<number> <title>),
 // while branches without a PR fall back to their branch name so the stack is
 // still complete before submit. Branches are listed base-first, mirroring the
 // stack navigation footer that Stackit writes into PR bodies.
-func ShareAction(ctx *app.Context, opts ShareOptions) error {
-	eng := ctx.Engine
+func Action(ctx context.Context, deps Deps, opts Options) error {
+	eng := deps.Engine
 
-	currentBranch := eng.CurrentBranch(ctx.Context)
+	currentBranch := eng.CurrentBranch(ctx)
 	branchName := opts.BranchName
 	if branchName == "" {
 		if currentBranch == nil {
@@ -55,10 +73,10 @@ func ShareAction(ctx *app.Context, opts ShareOptions) error {
 
 	marker := opts.Marker
 	if marker == "" {
-		marker = DefaultShareMarker
+		marker = DefaultMarker
 	}
 
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	base := eng.GetBranch(shareStackBase(eng, branchName))
 
 	var sb strings.Builder
@@ -78,13 +96,13 @@ func ShareAction(ctx *app.Context, opts ShareOptions) error {
 		return errors.New("no branches to share in the current stack")
 	}
 
-	ctx.Output.Info("%s", output)
+	deps.Out.Info("%s", output)
 	return nil
 }
 
 // shareStackBase walks up to the branch directly above trunk, which is the root
 // of the visible stack.
-func shareStackBase(eng engine.Engine, branchName string) string {
+func shareStackBase(eng Engine, branchName string) string {
 	branch := eng.GetBranch(branchName)
 	parent := branch.Parent()
 	if parent == nil || parent.IsTrunk() {

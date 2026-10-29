@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/state"
 	"github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/cli/stack"
 )
@@ -35,20 +36,20 @@ func TestJSONOutput(t *testing.T) {
 			sh := sh.WithT(t)
 			requireReadOnly(sh, func() {
 				sh.Run("state --json")
-				var state actions.StateResult
-				require.NoError(t, json.Unmarshal([]byte(sh.Output()), &state), "state --json should be valid JSON")
+				var st state.Result
+				require.NoError(t, json.Unmarshal([]byte(sh.Output()), &st), "state --json should be valid JSON")
 
-				require.Equal(t, "feature-a", state.CurrentBranch)
-				require.False(t, state.Detached)
-				require.NotEmpty(t, state.Trunk)
+				require.Equal(t, "feature-a", st.CurrentBranch)
+				require.False(t, st.Detached)
+				require.NotEmpty(t, st.Trunk)
 				// No in-progress operation on a fresh stack.
-				require.Equal(t, "none", state.Operation.Kind)
-				require.False(t, state.Operation.InProgress)
-				require.NotNil(t, state.Operation.ConflictedFiles)
+				require.Equal(t, "none", st.Operation.Kind)
+				require.False(t, st.Operation.InProgress)
+				require.NotNil(t, st.Operation.ConflictedFiles)
 				// The staged file was committed by create, so the tree is clean.
-				require.True(t, state.WorkingTree.Clean)
+				require.True(t, st.WorkingTree.Clean)
 				// The stack is embedded (same shape as tree --json).
-				require.GreaterOrEqual(t, state.Stack.Summary.TotalBranches, 1)
+				require.GreaterOrEqual(t, st.Stack.Summary.TotalBranches, 1)
 
 				sh.Run("state").
 					OutputContains("On feature-a").
@@ -147,7 +148,7 @@ func TestJSONOutput(t *testing.T) {
 			sh.WriteFile("extra.txt", "x") // WriteFile stages the file
 
 			sh.Run("state --json")
-			var result actions.StateResult
+			var result state.Result
 			require.NoError(t, json.Unmarshal([]byte(sh.Output()), &result))
 
 			require.False(t, result.WorkingTree.Clean)

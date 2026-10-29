@@ -3,7 +3,7 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/debug"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 )
@@ -35,7 +35,11 @@ Output is formatted as pretty-printed JSON for easy reading and parsing.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
 				// Run debug action
-				return actions.DebugAction(ctx, actions.DebugOptions{
+				return debug.Action(ctx.Context, debug.Deps{
+					Engine:   ctx.Engine,
+					Out:      ctx.Output,
+					RepoRoot: ctx.RepoRoot,
+				}, debug.Options{
 					Limit:      limit,
 					ShowRemote: showRemote,
 				})

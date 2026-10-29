@@ -1,4 +1,7 @@
-package actions
+// Package modify implements the modify command, which amends (or adds) a
+// commit on the current branch or a downstack ancestor and restacks its
+// descendants.
+package modify
 
 import (
 	"context"
@@ -6,8 +9,8 @@ import (
 
 	"github.com/getstackit/stackit/internal/term"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/validation"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
@@ -15,8 +18,8 @@ import (
 	"github.com/getstackit/stackit/internal/output"
 )
 
-// ModifyOptions contains options for the modify command
-type ModifyOptions struct {
+// Options contains options for the modify command
+type Options struct {
 	// Staging options
 	All    bool // Stage all changes before committing (-a)
 	Update bool // Stage updates to tracked files only (-u)
@@ -38,17 +41,42 @@ type ModifyOptions struct {
 	Into string
 }
 
-// ModifyAction performs the modify operation
-func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
-	eng := ctx.Engine
-	out := ctx.Output
-	gctx := ctx.Context
+// Engine lists exactly the engine methods modify calls: the branch
+// validators, the ownership guard, and the checkout/stage/commit mutations.
+type Engine interface {
+	validation.GitOperationEngine
+	actions.OwnershipEngine
+	Trunk() engine.Branch
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+	ListWorktrees(ctx context.Context) (git.WorktreeList, error)
+	CheckoutBranch(ctx context.Context, branch engine.Branch) error
+	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
+	StageChanges(ctx context.Context, opts git.StagingOptions) error
+	Commit(ctx context.Context, opts git.CommitOptions) error
+	InteractiveRebase(ctx context.Context, onto string) error
+}
+
+// Deps are the collaborators modify needs. Adapters build them from their own
+// runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	actions.MutationDeps
+	// RepoRoot locates the continuation state a restack conflict writes.
+	RepoRoot string
+	// Verify runs commit hooks; false passes --no-verify.
+	Verify bool
+}
+
+// Action performs the modify operation
+func Action(ctx context.Context, deps Deps, opts Options) (err error) {
+	eng := deps.Engine
+	out := deps.Out
 
 	// Validate preconditions
-	if err := validation.ModifyBranchChain(ctx.Context, eng, "modify").Validate(); err != nil {
+	if err := validation.ModifyBranchChain(ctx, eng, "modify").Validate(); err != nil {
 		return err
 	}
-	originalBranchName := eng.CurrentBranch(ctx.Context).Name()
+	originalBranchName := eng.CurrentBranch(ctx).Name()
 
 	if opts.Into != "" && opts.InteractiveRebase {
 		return errors.New("--into cannot be combined with --interactive-rebase")
@@ -56,16 +84,16 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 
 	targetBranchName := originalBranchName
 	if opts.Into != "" {
-		if err := validateModifyIntoTarget(ctx.Context, eng, originalBranchName, opts.Into); err != nil {
+		if err := validateModifyIntoTarget(ctx, eng, originalBranchName, opts.Into); err != nil {
 			return err
 		}
-		if err := ensureModifyTargetNotCheckedOutElsewhere(gctx, eng, opts.Into); err != nil {
+		if err := ensureModifyTargetNotCheckedOutElsewhere(ctx, eng, opts.Into); err != nil {
 			return err
 		}
 		targetBranchName = opts.Into
 	}
 	targetBranchObj := eng.GetBranch(targetBranchName)
-	if err := EnsureCanModifyNamesHere(ctx, originalBranchName, targetBranchName); err != nil {
+	if err := actions.EnsureCanModifyNames(ctx, eng, deps.Here, originalBranchName, targetBranchName); err != nil {
 		return err
 	}
 
@@ -88,30 +116,30 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 	if opts.All {
 		capture = engine.WorktreeCaptureUntracked
 	}
-	snapshotOpts := NewSnapshot("modify",
-		WithFlagValue("--into", opts.Into),
-		WithFlagValue("-m", opts.Message),
-		WithFlag(opts.CreateCommit, "--commit"),
-		WithFlag(opts.All, "--all"),
-		WithFlag(opts.Update, "--update"),
-		WithFlag(opts.Patch, "--patch"),
-		WithFlag(opts.InteractiveRebase, "--interactive-rebase"),
-		WithWorktreeCapture(capture),
+	snapshotOpts := actions.NewSnapshot("modify",
+		actions.WithFlagValue("--into", opts.Into),
+		actions.WithFlagValue("-m", opts.Message),
+		actions.WithFlag(opts.CreateCommit, "--commit"),
+		actions.WithFlag(opts.All, "--all"),
+		actions.WithFlag(opts.Update, "--update"),
+		actions.WithFlag(opts.Patch, "--patch"),
+		actions.WithFlag(opts.InteractiveRebase, "--interactive-rebase"),
+		actions.WithWorktreeCapture(capture),
 	)
-	TakeBestEffortSnapshot(ctx, snapshotOpts)
+	deps.Snapshots.Take(ctx, snapshotOpts)
 
 	// Handle interactive rebase separately
 	if opts.InteractiveRebase {
-		return interactiveRebaseAction(ctx)
+		return interactiveRebaseAction(ctx, deps)
 	}
 
 	// Check if rebase is in progress (only for non-interactive mode)
-	if err := validation.MustNotHaveRebaseInProgress(gctx, eng).Validate(); err != nil {
+	if err := validation.MustNotHaveRebaseInProgress(ctx, eng).Validate(); err != nil {
 		return err
 	}
 
 	if targetBranchName != originalBranchName {
-		if err := eng.CheckoutBranch(gctx, targetBranchObj); err != nil {
+		if err := eng.CheckoutBranch(ctx, targetBranchObj); err != nil {
 			if git.IsLocalChangesError(err) {
 				return fmt.Errorf("cannot modify %s because your staged changes conflict with it; commit or stash them first, or use 'stackit absorb' to route the change to the commit that should own it", targetBranchName)
 			}
@@ -126,10 +154,10 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 			// return to, or --into's "without checking it out, then returns"
 			// contract quietly stops holding the moment a restack conflicts.
 			if _, ok := errors.AsType[*errors.ConflictWorkflowError](err); ok {
-				recordConflictReturnBranch(ctx, originalBranchName)
+				recordConflictReturnBranch(deps, originalBranchName)
 				return
 			}
-			if checkoutErr := eng.CheckoutBranch(gctx, eng.GetBranch(originalBranchName)); checkoutErr != nil {
+			if checkoutErr := eng.CheckoutBranch(ctx, eng.GetBranch(originalBranchName)); checkoutErr != nil {
 				out.Error("Failed to return to %s: %v", originalBranchName, checkoutErr)
 			}
 		}()
@@ -137,7 +165,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 
 	// Check if branch is empty when amending
 	if !opts.CreateCommit {
-		isEmpty, err := eng.IsBranchEmpty(gctx, targetBranchName)
+		isEmpty, err := eng.IsBranchEmpty(ctx, targetBranchName)
 		if err != nil {
 			return fmt.Errorf("failed to check if branch is empty: %w", err)
 		}
@@ -154,7 +182,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 		Update: opts.Update,
 		Patch:  opts.Patch,
 	}
-	if err := ctx.Engine.StageChanges(gctx, stagingOpts); err != nil {
+	if err := eng.StageChanges(ctx, stagingOpts); err != nil {
 		return err
 	}
 
@@ -168,7 +196,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 	}
 
 	// Check if there are staged changes
-	hasStagedChanges, err := eng.HasStagedChanges(gctx)
+	hasStagedChanges, err := eng.HasStagedChanges(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check staged changes: %w", err)
 	}
@@ -194,10 +222,10 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 		Edit:        opts.Edit,
 		Verbose:     opts.Verbose,
 		ResetAuthor: opts.ResetAuthor,
-		NoVerify:    !ctx.Verify,
+		NoVerify:    !deps.Verify,
 	}
 
-	if err := eng.Commit(gctx, commitOpts); err != nil {
+	if err := eng.Commit(ctx, commitOpts); err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 
@@ -210,12 +238,12 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 
 	// Restack upstack branches (rooted at the target so descendants of a
 	// downstack --into target, including the original current branch, are covered)
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	upstackBranches := graph.Range(targetBranchObj, engine.StackRange{RecursiveChildren: true})
 
 	if len(upstackBranches) > 0 {
 		out.Info("Restacking %d upstack branch(es)...", len(upstackBranches))
-		if err := RestackBranches(ctx, upstackBranches); err != nil {
+		if err := deps.Restack.Restack(ctx, upstackBranches); err != nil {
 			return fmt.Errorf("failed to restack upstack branches: %w", err)
 		}
 	}
@@ -232,24 +260,24 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 // Best-effort on purpose: failing to record where to return is a worse outcome
 // to surface as a hard error than the conflict the user is already dealing
 // with, and `continue` falls back to the rebased branch when it is unset.
-func recordConflictReturnBranch(ctx *app.Context, branchName string) {
-	state, err := config.GetContinuationState(ctx.RepoRoot)
+func recordConflictReturnBranch(deps Deps, branchName string) {
+	state, err := config.GetContinuationState(deps.RepoRoot)
 	if err != nil {
-		ctx.Output.Debug("Failed to read continuation state to record return branch: %v", err)
+		deps.Out.Debug("Failed to read continuation state to record return branch: %v", err)
 		return
 	}
 	if state.CurrentBranchOverride == branchName {
 		return
 	}
 	state.ReturnToBranch = branchName
-	if err := config.PersistContinuationState(ctx.RepoRoot, state); err != nil {
-		ctx.Output.Debug("Failed to record return branch %s: %v", branchName, err)
+	if err := config.PersistContinuationState(deps.RepoRoot, state); err != nil {
+		deps.Out.Debug("Failed to record return branch %s: %v", branchName, err)
 	}
 }
 
 // validateModifyIntoTarget ensures --into targets a genuine, modifiable
 // downstack ancestor of the current branch.
-func validateModifyIntoTarget(ctx context.Context, eng engine.Engine, currentBranchName, targetName string) error {
+func validateModifyIntoTarget(ctx context.Context, eng Engine, currentBranchName, targetName string) error {
 	if !eng.BranchNames().Contains(targetName) {
 		return fmt.Errorf("branch %s does not exist", targetName)
 	}
@@ -276,7 +304,7 @@ func validateModifyIntoTarget(ctx context.Context, eng engine.Engine, currentBra
 // ensureModifyTargetNotCheckedOutElsewhere refuses to modify a branch that is
 // checked out in another worktree, pointing the user at that worktree instead
 // of silently detaching HEAD there (which is what a plain CheckoutBranch would do).
-func ensureModifyTargetNotCheckedOutElsewhere(ctx context.Context, eng engine.Engine, targetName string) error {
+func ensureModifyTargetNotCheckedOutElsewhere(ctx context.Context, eng Engine, targetName string) error {
 	worktrees, err := eng.ListWorktrees(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check worktrees: %w", err)
@@ -288,12 +316,11 @@ func ensureModifyTargetNotCheckedOutElsewhere(ctx context.Context, eng engine.En
 }
 
 // interactiveRebaseAction performs an interactive rebase on the branch's commits
-func interactiveRebaseAction(ctx *app.Context) error {
-	eng := ctx.Engine
-	out := ctx.Output
-	gctx := ctx.Context
+func interactiveRebaseAction(ctx context.Context, deps Deps) error {
+	eng := deps.Engine
+	out := deps.Out
 
-	currentBranch := eng.CurrentBranch(ctx.Context)
+	currentBranch := eng.CurrentBranch(ctx)
 
 	// Get the parent branch to determine rebase base
 	parent := currentBranch.Parent()
@@ -309,9 +336,9 @@ func interactiveRebaseAction(ctx *app.Context) error {
 		output.BranchName(parentName))
 
 	// Run interactive rebase
-	if err := eng.InteractiveRebase(gctx, parentName); err != nil {
+	if err := eng.InteractiveRebase(ctx, parentName); err != nil {
 		// Check if rebase is in progress (conflict or user canceled)
-		if eng.IsRebaseInProgress(gctx) {
+		if eng.IsRebaseInProgress(ctx) {
 			return errors.New("interactive rebase paused. Resolve conflicts and run 'git rebase --continue' or 'git rebase --abort'")
 		}
 		// Rebase might have been aborted by user
@@ -321,12 +348,12 @@ func interactiveRebaseAction(ctx *app.Context) error {
 	out.Info("Interactive rebase completed.")
 
 	// Restack upstack branches
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	upstackBranches := graph.Range(*currentBranch, engine.StackRange{RecursiveChildren: true})
 
 	if len(upstackBranches) > 0 {
 		out.Info("Restacking %d upstack branch(es)...", len(upstackBranches))
-		if err := RestackBranches(ctx, upstackBranches); err != nil {
+		if err := deps.Restack.Restack(ctx, upstackBranches); err != nil {
 			return fmt.Errorf("failed to restack upstack branches: %w", err)
 		}
 	}

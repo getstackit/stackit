@@ -1,30 +1,51 @@
-package actions
+// Package state implements the state command, a single machine-readable
+// snapshot of the stack, working tree, and any in-progress operation.
+package state
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/output"
 )
 
-// StateOptions configures the state command.
-type StateOptions struct {
+// Engine is the full engine: the stack section is built by
+// actions.BuildTreeJSON, which takes an engine.Engine.
+type Engine = engine.Engine
+
+// Deps are the collaborators state needs.
+type Deps struct {
+	Engine Engine
+	Out    output.Output
+	// GitHub supplies PR/CI status for the stack section. May be nil.
+	GitHub github.Client
+	// RepoRoot locates the continuation file that marks a halted stackit
+	// operation.
+	RepoRoot string
+}
+
+// Options configures the state command.
+type Options struct {
 	JSON bool
 }
 
-// StateResult is a complete machine-readable snapshot of the repository's
+// Result is a complete machine-readable snapshot of the repository's
 // stack, working tree, and any in-progress operation. Agents read this single
 // result instead of fanning out across separate branch/git-status/log/info
 // calls, and it removes brittle scraping of `.git` for conflict state.
-type StateResult struct {
-	CurrentBranch string            `json:"current_branch"` // "" when detached
-	Detached      bool              `json:"detached"`
-	Trunk         string            `json:"trunk"`
-	WorkingTree   WorkingTreeStatus `json:"working_tree"`
-	Operation     OperationStatus   `json:"operation"`
-	Stack         TreeJSONResult    `json:"stack"`
+type Result struct {
+	CurrentBranch string                 `json:"current_branch"` // "" when detached
+	Detached      bool                   `json:"detached"`
+	Trunk         string                 `json:"trunk"`
+	WorkingTree   WorkingTreeStatus      `json:"working_tree"`
+	Operation     OperationStatus        `json:"operation"`
+	Stack         actions.TreeJSONResult `json:"stack"`
 }
 
 // WorkingTreeStatus reports the staged/unstaged/untracked state of the worktree.
@@ -48,33 +69,33 @@ type OperationStatus struct {
 	ConflictedFiles []string `json:"conflicted_files"`
 }
 
-// StateAction prints a complete snapshot of the stack and working tree.
-func StateAction(ctx *app.Context, opts StateOptions) error {
-	result := BuildState(ctx, opts)
+// Action prints a complete snapshot of the stack and working tree.
+func Action(ctx context.Context, deps Deps, opts Options) error {
+	result := Build(ctx, deps)
 
 	if opts.JSON {
 		data, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON: %w", err)
 		}
-		ctx.Output.Info("%s", string(data))
+		deps.Out.Info("%s", string(data))
 		return nil
 	}
 
-	printStateHuman(ctx, result)
+	printStateHuman(deps.Out, result)
 	return nil
 }
 
-// BuildState gathers the snapshot without printing it.
-func BuildState(ctx *app.Context, _ StateOptions) StateResult {
-	eng := ctx.Engine
+// Build gathers the snapshot without printing it.
+func Build(ctx context.Context, deps Deps) Result {
+	eng := deps.Engine
 
-	result := StateResult{
+	result := Result{
 		Trunk: eng.Trunk().Name(),
-		Stack: BuildTreeJSON(ctx.Context, ctx.Engine, ctx.GitHub(), TreeJSONRequest{Style: TreeStyleNormal}),
+		Stack: actions.BuildTreeJSON(ctx, eng, deps.GitHub, actions.TreeJSONRequest{Style: actions.TreeStyleNormal}),
 	}
 
-	if cur := eng.CurrentBranch(ctx.Context); cur != nil {
+	if cur := eng.CurrentBranch(ctx); cur != nil {
 		result.CurrentBranch = cur.Name()
 	} else {
 		result.Detached = true
@@ -82,10 +103,10 @@ func BuildState(ctx *app.Context, _ StateOptions) StateResult {
 
 	// Working-tree state via a single git status --porcelain call.
 	// A failed check is non-fatal; log and avoid reporting a clean tree.
-	status, statusErr := eng.GetWorkingTreeStatus(ctx.Context)
+	status, statusErr := eng.GetWorkingTreeStatus(ctx)
 	clean := status.Clean()
 	if statusErr != nil {
-		ctx.Output.Debug("state: working-tree status check failed: %v", statusErr)
+		deps.Out.Debug("state: working-tree status check failed: %v", statusErr)
 		clean = false
 	}
 	result.WorkingTree = WorkingTreeStatus{
@@ -98,23 +119,23 @@ func BuildState(ctx *app.Context, _ StateOptions) StateResult {
 	// In-progress operation + conflicts.
 	op := OperationStatus{Kind: "none", ConflictedFiles: []string{}}
 	switch {
-	case eng.IsRebaseInProgress(ctx.Context):
+	case eng.IsRebaseInProgress(ctx):
 		op.Kind = "rebase"
 		op.InProgress = true
-	case eng.IsMergeInProgress(ctx.Context):
+	case eng.IsMergeInProgress(ctx):
 		op.Kind = "merge"
 		op.InProgress = true
 	}
 	if op.InProgress {
-		files, err := eng.GetUnmergedFiles(ctx.Context)
+		files, err := eng.GetUnmergedFiles(ctx)
 		if err != nil {
-			ctx.Output.Debug("state: failed to list unmerged files: %v", err)
+			deps.Out.Debug("state: failed to list unmerged files: %v", err)
 		} else {
 			op.ConflictedFiles = files
 		}
 	}
 	// A pending continuation file means a stackit operation halted on a conflict.
-	if _, err := config.GetContinuationState(ctx.RepoRoot); err == nil {
+	if _, err := config.GetContinuationState(deps.RepoRoot); err == nil {
 		op.StackitHalted = true
 	}
 	result.Operation = op
@@ -122,9 +143,7 @@ func BuildState(ctx *app.Context, _ StateOptions) StateResult {
 	return result
 }
 
-func printStateHuman(ctx *app.Context, r StateResult) {
-	out := ctx.Output
-
+func printStateHuman(out output.Output, r Result) {
 	if r.Detached {
 		out.Info("HEAD detached (trunk: %s)", r.Trunk)
 	} else {

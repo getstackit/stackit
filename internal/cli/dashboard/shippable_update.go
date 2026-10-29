@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/squash"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/shippable"
@@ -479,7 +480,13 @@ func (m *shippableModel) executeSquash() (tea.Model, tea.Cmd) {
 		quietCtx := m.quietCtx()
 
 		// The action checks out the target and restores the current branch.
-		if err := actions.SquashAction(quietCtx, actions.SquashOptions{Branch: branchName, NoEdit: true}); err != nil {
+		deps := squash.Deps{
+			Engine:       quietCtx.Engine,
+			MutationDeps: actions.MutationDepsFrom(quietCtx),
+			Log:          quietCtx.Logger,
+			Verify:       quietCtx.Verify,
+		}
+		if err := squash.Action(quietCtx.Context, deps, squash.Options{Branch: branchName, NoEdit: true}); err != nil {
 			return squashCompleteMsg{branch: branchName, err: err}
 		}
 

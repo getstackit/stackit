@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/rename"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/tui"
@@ -47,12 +48,16 @@ Note that this removes any association to a pull request, as GitHub pull request
 					newName = args[0]
 				}
 
-				opts := actions.RenameOptions{
+				opts := rename.Options{
 					NewName: newName,
 					Force:   force,
 				}
 
-				return actions.RenameAction(ctx, opts, renameHandler{})
+				return rename.Action(ctx.Context, rename.Deps{
+					Engine:    ctx.Engine,
+					Out:       ctx.Output,
+					Snapshots: actions.SnapshotsFrom(ctx),
+				}, opts, renameHandler{})
 			})
 		},
 	}

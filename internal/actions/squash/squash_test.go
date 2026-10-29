@@ -1,15 +1,17 @@
-package actions
+package squash_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/squash"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
-func TestSquashActionTargetBranchRestoresOriginal(t *testing.T) {
+func TestSquashTargetBranchRestoresOriginal(t *testing.T) {
 	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{"feature": "main"}).
@@ -20,9 +22,18 @@ func TestSquashActionTargetBranchRestoresOriginal(t *testing.T) {
 	before := s.BranchCommitCount("feature")
 	require.Greater(t, before, 1)
 
-	err := SquashAction(s.Context, SquashOptions{Branch: "feature", NoEdit: true})
+	err := squash.Action(t.Context(), deps(s), squash.Options{Branch: "feature", NoEdit: true})
 	require.NoError(t, err)
 
 	s.Rebuild().ExpectBranch("main")
 	require.Equal(t, 1, s.BranchCommitCount("feature"))
+}
+
+func deps(s *scenario.Scenario) squash.Deps {
+	return squash.Deps{
+		Engine:       s.Context.Engine,
+		MutationDeps: actions.MutationDepsFrom(s.Context),
+		Log:          s.Context.Logger,
+		Verify:       s.Context.Verify,
+	}
 }

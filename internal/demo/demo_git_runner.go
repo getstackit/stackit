@@ -27,7 +27,7 @@ func (d *demoGitRunner) InitDefaultRepo() error {
 	return nil
 }
 
-func (d *demoGitRunner) GetRemote() string {
+func (d *demoGitRunner) GetRemote(_ context.Context) string {
 	return "origin"
 }
 
@@ -41,7 +41,7 @@ func (d *demoGitRunner) FetchRemoteShas(_ context.Context, _ string) (git.Remote
 	return make(git.RemoteBranchSHAs), nil
 }
 
-func (d *demoGitRunner) GetConfig(_ string) (string, error) {
+func (d *demoGitRunner) GetConfig(_ context.Context, _ string) (string, error) {
 	return "", nil
 }
 
@@ -81,15 +81,15 @@ func (d *demoGitRunner) ListIgnoredFiles(_ context.Context, _ git.WorktreePath) 
 	return nil, nil
 }
 
-func (d *demoGitRunner) EnsureMetadataRefspecConfigured() error {
+func (d *demoGitRunner) EnsureMetadataRefspecConfigured(_ context.Context) error {
 	return nil
 }
 
-func (d *demoGitRunner) EnsureStackMetaRefspecConfigured() error {
+func (d *demoGitRunner) EnsureStackMetaRefspecConfigured(_ context.Context) error {
 	return nil
 }
 
-func (d *demoGitRunner) GetCurrentBranch() (string, error) {
+func (d *demoGitRunner) GetCurrentBranch(_ context.Context) (string, error) {
 	return d.currentBranch, nil
 }
 
@@ -323,7 +323,7 @@ func (d *demoGitRunner) GetReflog(_ context.Context, _ int, _ string) (string, e
 	return "", nil
 }
 
-func (d *demoGitRunner) GetRebaseHead() (string, error) {
+func (d *demoGitRunner) GetRebaseHead(_ context.Context) (string, error) {
 	return "rebase-head-sha", nil
 }
 
@@ -351,11 +351,11 @@ func (d *demoGitRunner) SoftReset(_ context.Context, _ string) error {
 	return nil
 }
 
-func (d *demoGitRunner) CommitWithOptions(_ git.CommitOptions) error {
+func (d *demoGitRunner) CommitWithOptions(_ context.Context, _ git.CommitOptions) error {
 	return nil
 }
 
-func (d *demoGitRunner) Commit(_ string, _ int, _ bool) error {
+func (d *demoGitRunner) Commit(_ context.Context, _ string, _ int, _ bool) error {
 	return nil
 }
 
@@ -597,15 +597,15 @@ func (d *demoGitRunner) RunInteractive(_ context.Context, _ ...string) error {
 	return nil
 }
 
-func (d *demoGitRunner) ListRefs(_ string) (map[string]string, error) {
+func (d *demoGitRunner) ListRefs(_ context.Context, _ string) (map[string]string, error) {
 	return make(map[string]string), nil
 }
 
-func (d *demoGitRunner) RefDecorations() (map[string][]git.RefDecoration, error) {
+func (d *demoGitRunner) RefDecorations(_ context.Context) (map[string][]git.RefDecoration, error) {
 	return make(map[string][]git.RefDecoration), nil
 }
 
-func (d *demoGitRunner) CheckCommutation(_ git.Hunk, _, _ string) (bool, error) {
+func (d *demoGitRunner) CheckCommutation(_ context.Context, _ git.Hunk, _, _ string) (bool, error) {
 	return true, nil
 }
 
@@ -637,7 +637,7 @@ func (d *demoGitRunner) TestRemoteRefCompatibility(_ context.Context) error {
 	return nil
 }
 
-func (d *demoGitRunner) ReadWorktreeMeta(_ string) (*git.WorktreeMeta, error) {
+func (d *demoGitRunner) ReadWorktreeMeta(_ context.Context, _ string) (*git.WorktreeMeta, error) {
 	return nil, nil
 }
 
@@ -649,11 +649,11 @@ func (d *demoGitRunner) DeleteWorktreeMeta(_ context.Context, _ string) error {
 	return nil
 }
 
-func (d *demoGitRunner) ListWorktreeMetas() (map[string]*git.WorktreeMeta, error) {
+func (d *demoGitRunner) ListWorktreeMetas(_ context.Context) (map[string]*git.WorktreeMeta, error) {
 	return make(map[string]*git.WorktreeMeta), nil
 }
 
-func (d *demoGitRunner) ListWorktreeRegistrations() (map[string]git.WorktreeRegistration, error) {
+func (d *demoGitRunner) ListWorktreeRegistrations(_ context.Context) (map[string]git.WorktreeRegistration, error) {
 	return make(map[string]git.WorktreeRegistration), nil
 }
 

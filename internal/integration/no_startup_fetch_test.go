@@ -70,7 +70,7 @@ func remoteMetadataScenario(t *testing.T) *scenario.Scenario {
 func countingContext(t *testing.T, s *scenario.Scenario) (*app.Context, *countingFetchRunner) {
 	t.Helper()
 	counting := &countingFetchRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{RepoRoot: s.Scene.Dir, Trunk: "main", Git: counting})
+	eng, err := engine.NewEngine(t.Context(), engine.Options{RepoRoot: s.Scene.Dir, Trunk: "main", Git: counting})
 	require.NoError(t, err)
 	ctx := app.NewContext(eng, app.WithRepoRoot(s.Scene.Dir), app.WithWriter(&bytes.Buffer{}), app.WithGitHubRunner(counting))
 	return ctx, counting

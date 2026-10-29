@@ -47,7 +47,7 @@ as an argument to move multiple levels at once.`,
 				steps = parsedSteps
 
 				// Get current branch
-				currentBranch := ctx.Engine.CurrentBranch()
+				currentBranch := ctx.Engine.CurrentBranch(ctx.Context)
 				if currentBranch == nil {
 					return errors.ErrNotOnBranch
 				}

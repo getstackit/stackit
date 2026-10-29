@@ -31,7 +31,7 @@ type ShareOptions struct {
 func ShareAction(ctx *app.Context, opts ShareOptions) error {
 	eng := ctx.Engine
 
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	branchName := opts.BranchName
 	if branchName == "" {
 		if currentBranch == nil {
@@ -58,7 +58,7 @@ func ShareAction(ctx *app.Context, opts ShareOptions) error {
 		marker = DefaultShareMarker
 	}
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	base := eng.GetBranch(shareStackBase(eng, branchName))
 
 	var sb strings.Builder

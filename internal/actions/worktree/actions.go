@@ -134,7 +134,7 @@ func snapshotWorktree(ctx *app.Context, entry *Entry) (*worktreeSnapshot, error)
 	}
 	snapshot.AnchorRev = anchorRev
 
-	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+	graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	snapshot.ChildNames = append(snapshot.ChildNames, graph.Children(anchorBranch)...)
 	return snapshot, nil
 }
@@ -165,7 +165,7 @@ func restoreAnchorBranch(ctx *app.Context, snapshot *worktreeSnapshot) error {
 	if err := ctx.Engine.SetParent(ctx.Context, anchorBranch, ctx.Engine.GetBranch(snapshot.AnchorParent), engine.DivergenceRecompute); err != nil {
 		return fmt.Errorf("failed to restore anchor parent for %s: %w", anchorName, err)
 	}
-	if err := ctx.Engine.SetBranchType(anchorBranch, git.BranchTypeWorktreeAnchor); err != nil {
+	if err := ctx.Engine.SetBranchType(ctx.Context, anchorBranch, git.BranchTypeWorktreeAnchor); err != nil {
 		return fmt.Errorf("failed to restore anchor branch type for %s: %w", anchorName, err)
 	}
 	if snapshot.AnchorScope != "" {
@@ -340,7 +340,7 @@ func CreateAction(ctx *app.Context, opts CreateOptions) (*WorktreeResult, error)
 		mainGit := git.NewRunnerWithPath(mainRepoRoot, ctx.Logger)
 
 		// Trunk and undo settings come from the main repo's config (opts.Config).
-		mainEng, err := engine.NewEngine(engine.Options{
+		mainEng, err := engine.NewEngine(ctx.Context, engine.Options{
 			RepoRoot:          mainRepoRoot,
 			Trunk:             cfg.Trunk(),
 			MaxUndoStackDepth: cfg.UndoStackDepth(),
@@ -367,7 +367,7 @@ func CreateAction(ctx *app.Context, opts CreateOptions) (*WorktreeResult, error)
 	}
 
 	// Inform user if not on trunk (worktree is always created from trunk)
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	if currentBranch == nil {
 		out.Info("Creating worktree from %s (currently in detached HEAD state)", trunk.GetName())
 	} else if currentBranch.GetName() != trunk.GetName() {
@@ -424,7 +424,7 @@ func resolveWorktreeTarget(ctx *app.Context, eng engine.Engine, cfg RepoConfig, 
 		return worktreeTarget{}, errors.New("worktree name cannot contain path separators or special characters: /\\:*?\"<>|")
 	}
 
-	existingWorktrees, err := eng.ListManagedWorktrees()
+	existingWorktrees, err := eng.ListManagedWorktrees(ctx.Context)
 	if err != nil {
 		return worktreeTarget{}, fmt.Errorf("failed to check existing worktrees: %w", err)
 	}
@@ -473,7 +473,7 @@ func createWorktreeAnchor(ctx *app.Context, eng engine.Engine, anchorName, paren
 		cleanup()
 		return engine.Branch{}, nil, fmt.Errorf("failed to set anchor parent: %w", err)
 	}
-	if err := eng.SetBranchType(anchorBranch, git.BranchTypeWorktreeAnchor); err != nil {
+	if err := eng.SetBranchType(ctx.Context, anchorBranch, git.BranchTypeWorktreeAnchor); err != nil {
 		cleanup()
 		return engine.Branch{}, nil, fmt.Errorf("failed to set anchor branch type: %w", err)
 	}

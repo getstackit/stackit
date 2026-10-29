@@ -101,7 +101,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Get current branch
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	if currentBranch == nil {
 		return errors.ErrNotOnBranch
 	}
@@ -150,7 +150,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 			// Build type choices based on commit count
 			availableTypes := buildTypeChoices(true)
-			selectedStyle, err := interactiveHandler.PromptSplitType(availableTypes)
+			selectedStyle, err := interactiveHandler.PromptSplitType(ctx.Context, availableTypes)
 			if err != nil {
 				return err
 			}
@@ -270,7 +270,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				IncludeCurrent:    false,
 				RecursiveChildren: true,
 			}
-			graph := eng.Graph(engine.SortStrategyAlphabetical)
+			graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 			upstackBranches := graph.Range(*currentBranch, rng)
 			if len(upstackBranches) > 0 {
 				if err := actions.RestackBranches(ctx, upstackBranches); err != nil {
@@ -298,7 +298,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		IncludeCurrent:    false,
 		RecursiveChildren: true,
 	}
-	upstackGraph := eng.Graph(engine.SortStrategyAlphabetical)
+	upstackGraph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	upstackBranches := upstackGraph.Range(*currentBranch, upstackRng)
 
 	// Apply the split

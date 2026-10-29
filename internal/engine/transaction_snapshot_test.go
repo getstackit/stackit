@@ -45,7 +45,7 @@ func TestMetadataTransactionBatchesBothTiers(t *testing.T) {
 			t.Parallel()
 			scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 			r := &metadataCountingRunner{Runner: git.NewRunnerWithPath(scene.Dir, nil)}
-			e, err := engine.NewEngine(engine.Options{RepoRoot: scene.Dir, Trunk: "main", Git: r, LoadMode: engine.LoadModeBranchesOnly})
+			e, err := engine.NewEngine(t.Context(), engine.Options{RepoRoot: scene.Dir, Trunk: "main", Git: r, LoadMode: engine.LoadModeBranchesOnly})
 			require.NoError(t, err)
 			names := make([]string, count)
 			for i := range names {
@@ -104,12 +104,12 @@ func TestMetadataTransactionProtectsReadBeforeStaging(t *testing.T) {
 				}
 				if initial == "existing" {
 					if local {
-						require.NoError(t, other.WriteLocalMetadata("feature", &git.LocalMeta{}))
+						require.NoError(t, other.WriteLocalMetadata(t.Context(), "feature", &git.LocalMeta{}))
 					} else {
-						require.NoError(t, other.WriteMetadata("feature", git.NewMeta()))
+						require.NoError(t, other.WriteMetadata(t.Context(), "feature", git.NewMeta()))
 					}
 				}
-				e, err := engine.NewEngine(engine.Options{RepoRoot: scene.Dir, Trunk: "main"})
+				e, err := engine.NewEngine(t.Context(), engine.Options{RepoRoot: scene.Dir, Trunk: "main"})
 				require.NoError(t, err)
 				tx := e.(interface {
 					BeginTx(string) *engine.MetadataTx
@@ -117,14 +117,14 @@ func TestMetadataTransactionProtectsReadBeforeStaging(t *testing.T) {
 				if local {
 					meta, err := tx.ReadLocalMetadata(t.Context(), "feature").One()
 					require.NoError(t, err)
-					require.NoError(t, other.WriteLocalMetadata("feature", &git.LocalMeta{NeedsPRBodyUpdate: true}))
+					require.NoError(t, other.WriteLocalMetadata(t.Context(), "feature", &git.LocalMeta{NeedsPRBodyUpdate: true}))
 					meta.Frozen = true
 					require.NoError(t, tx.UpdateLocalMeta("feature", meta))
 				} else {
 					meta, err := tx.ReadMetadata(t.Context(), "feature").One()
 					require.NoError(t, err)
 					scope := "external"
-					require.NoError(t, other.WriteMetadata("feature", git.NewMeta().WithScope(&scope)))
+					require.NoError(t, other.WriteMetadata(t.Context(), "feature", git.NewMeta().WithScope(&scope)))
 					require.NoError(t, tx.UpdateMeta("feature", meta.WithLockReason(git.LockReasonUser)))
 				}
 				require.Error(t, tx.Commit(t.Context()), "a change after reading must be rejected even before staging")
@@ -136,7 +136,7 @@ func TestMetadataTransactionProtectsReadBeforeStaging(t *testing.T) {
 func TestMetadataTransactionRequiresPreparation(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
-	e, err := engine.NewEngine(engine.Options{RepoRoot: scene.Dir, Trunk: "main"})
+	e, err := engine.NewEngine(t.Context(), engine.Options{RepoRoot: scene.Dir, Trunk: "main"})
 	require.NoError(t, err)
 	tx := e.(interface {
 		BeginTx(string) *engine.MetadataTx
@@ -165,7 +165,7 @@ func (e txEngine) Metadata() *git.MetadataStore { return e.metadata }
 func newTxEngine(t *testing.T, r git.Runner, dir string) txEngine {
 	t.Helper()
 	store := git.NewMetadataStore(r)
-	e, err := engine.NewEngine(engine.Options{RepoRoot: dir, Trunk: "main", Git: r, Metadata: store})
+	e, err := engine.NewEngine(t.Context(), engine.Options{RepoRoot: dir, Trunk: "main", Git: r, Metadata: store})
 	require.NoError(t, err)
 	return txEngine{txEngineImpl: e.(txEngineImpl), metadata: store}
 }
@@ -204,12 +204,12 @@ func stageTier(t *testing.T, tx *engine.MetadataTx, tier metadataTier) {
 }
 
 // writeTier writes a distinguishable tierBranch record directly through a store.
-func writeTier(store *git.MetadataStore, tier metadataTier, marker int64) error {
+func writeTier(ctx context.Context, store *git.MetadataStore, tier metadataTier, marker int64) error {
 	if tier == localTier {
-		return store.WriteLocalMetadata(tierBranch, &git.LocalMeta{NavigationCommentID: &marker})
+		return store.WriteLocalMetadata(ctx, tierBranch, &git.LocalMeta{NavigationCommentID: &marker})
 	}
 	scope := strconv.FormatInt(marker, 10)
-	return store.WriteMetadata(tierBranch, git.NewMeta().WithScope(&scope))
+	return store.WriteMetadata(ctx, tierBranch, git.NewMeta().WithScope(&scope))
 }
 
 // readTierMarker reads the marker writeTier stored, bypassing any cache.
@@ -233,8 +233,8 @@ func TestMetadataTransactionStagingWithoutReadErrors(t *testing.T) {
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	e := newTxEngine(t, git.NewRunnerWithPath(scene.Dir, nil), scene.Dir)
 	// The records exist on disk; only this transaction's read is missing.
-	require.NoError(t, writeTier(e.Metadata(), sharedTier, 1))
-	require.NoError(t, writeTier(e.Metadata(), localTier, 1))
+	require.NoError(t, writeTier(t.Context(), e.Metadata(), sharedTier, 1))
+	require.NoError(t, writeTier(t.Context(), e.Metadata(), localTier, 1))
 
 	tx := e.BeginTx("stage without reading")
 	const want = "metadata for feature must be read before staging"
@@ -262,7 +262,7 @@ func TestMetadataTransactionRereadAfterExternalChangeErrors(t *testing.T) {
 			scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 			r := git.NewRunnerWithPath(scene.Dir, nil)
 			e := newTxEngine(t, r, scene.Dir)
-			require.NoError(t, writeTier(e.Metadata(), tier, 1))
+			require.NoError(t, writeTier(t.Context(), e.Metadata(), tier, 1))
 
 			read := func(tx *engine.MetadataTx) error {
 				if tier == localTier {
@@ -277,7 +277,7 @@ func TestMetadataTransactionRereadAfterExternalChangeErrors(t *testing.T) {
 
 			// Another store on the same runner, so the engine's store sees the
 			// ref generation move and rereads the ref instead of its cache.
-			require.NoError(t, writeTier(git.NewMetadataStore(r), tier, 2))
+			require.NoError(t, writeTier(t.Context(), git.NewMetadataStore(r), tier, 2))
 
 			require.EqualError(t, read(tx), "metadata version changed after preparing feature")
 		})
@@ -341,11 +341,11 @@ func TestMetadataDirectWriteAfterInProcessRefUpdateSucceeds(t *testing.T) {
 			e := newTxEngine(t, r, scene.Dir)
 			// The direct write records an expectation in the store, exactly
 			// as a read would.
-			require.NoError(t, writeTier(e.Metadata(), tc.tier, 1))
+			require.NoError(t, writeTier(t.Context(), e.Metadata(), tc.tier, 1))
 
 			tc.write(t, e)
 
-			require.NoError(t, writeTier(e.Metadata(), tc.tier, 2))
+			require.NoError(t, writeTier(t.Context(), e.Metadata(), tc.tier, 2))
 			require.Equal(t, "2", readTierMarker(t, r, tc.tier))
 		})
 	}
@@ -366,12 +366,12 @@ func TestMetadataBlindWriteAfterInProcessRefUpdateCatchesOtherProcess(t *testing
 			// A separate runner stands in for another process: its writes do
 			// not move this engine's ref generations.
 			otherProcess := git.NewMetadataStore(git.NewRunnerWithPath(scene.Dir, nil))
-			require.NoError(t, writeTier(e.Metadata(), tc.tier, 1))
+			require.NoError(t, writeTier(t.Context(), e.Metadata(), tc.tier, 1))
 
 			tc.write(t, e)
-			require.NoError(t, writeTier(otherProcess, tc.tier, 2))
+			require.NoError(t, writeTier(t.Context(), otherProcess, tc.tier, 2))
 
-			require.ErrorContains(t, writeTier(e.Metadata(), tc.tier, 3), "another process changed it")
+			require.ErrorContains(t, writeTier(t.Context(), e.Metadata(), tc.tier, 3), "another process changed it")
 			require.Equal(t, "2", readTierMarker(t, r, tc.tier), "the other process's write must survive")
 		})
 	}
@@ -392,11 +392,11 @@ func TestMetadataTransactionRejectedCommitDropsStaleCache(t *testing.T) {
 				// A separate runner stands in for another process: its writes
 				// do not move this engine's ref generations.
 				otherProcess := git.NewMetadataStore(git.NewRunnerWithPath(scene.Dir, nil))
-				require.NoError(t, writeTier(e.Metadata(), tier, 1))
+				require.NoError(t, writeTier(t.Context(), e.Metadata(), tier, 1))
 
 				rejected := e.BeginTx("rejected")
 				stageTier(t, rejected, tier)
-				require.NoError(t, writeTier(otherProcess, tier, 2))
+				require.NoError(t, writeTier(t.Context(), otherProcess, tier, 2))
 				err := rejected.Commit(t.Context())
 				require.Error(t, err)
 				require.True(t, engine.IsConcurrentModificationError(err), "got: %v", err)
@@ -409,7 +409,7 @@ func TestMetadataTransactionRejectedCommitDropsStaleCache(t *testing.T) {
 					// expectation rule and replaces the other process's
 					// value. That is the accepted cost of not wedging;
 					// callers that care read first.
-					require.NoError(t, writeTier(e.Metadata(), tier, 3))
+					require.NoError(t, writeTier(t.Context(), e.Metadata(), tier, 3))
 					require.Equal(t, "3", readTierMarker(t, r, tier))
 					return
 				}

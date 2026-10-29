@@ -53,12 +53,12 @@ func BenchmarkWorktreeCreation(b *testing.B) {
 	if _, err := g.Run(ctx, "add", "test.txt"); err != nil {
 		b.Fatalf("failed to add file: %v", err)
 	}
-	if err := g.CommitWithOptions(git.CommitOptions{Message: "Initial commit"}); err != nil {
+	if err := g.CommitWithOptions(b.Context(), git.CommitOptions{Message: "Initial commit"}); err != nil {
 		b.Fatalf("failed to create initial commit: %v", err)
 	}
 
 	// Create engine
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(b.Context(), engine.Options{
 		RepoRoot: repoPath,
 		Trunk:    mainBranch,
 	})

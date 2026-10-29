@@ -20,7 +20,7 @@ type pluckEngine interface {
 	validation.BranchValidationEngine
 	Trunk() engine.Branch
 	IsTrunk(branch engine.Branch) bool
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
 	GetAllCommits(branch engine.Branch) (git.Commits, error)
 	BatchRevisions(branches engine.Branches) engine.RevisionMap
 	GetDivergencePoint(branchName string) (string, error)
@@ -52,12 +52,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 	defer handler.Cleanup()
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Default source to current branch
 	source := opts.Source
 	if source == "" {
-		currentBranch := eng.CurrentBranch()
+		currentBranch := eng.CurrentBranch(ctx.Context)
 		if currentBranch == nil {
 			return errors.New("not on a branch and no source branch specified")
 		}
@@ -265,7 +265,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.OnStep(StepRestackingOrphans, basehandler.StatusStarted, "Restacking branches...")
 
 	// Rebuild graph after parent changes
-	graph = eng.Graph(engine.SortStrategyAlphabetical)
+	graph = eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Collect all branches that need restacking:
 	// 1. The children (now on grandparent) and their descendants
@@ -304,8 +304,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 // InvalidOntoTargets returns the branches source cannot be plucked onto:
 // source itself and all of its descendants.
-func InvalidOntoTargets(eng engine.StackView, source string) map[string]bool {
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+func InvalidOntoTargets(ctx context.Context, eng engine.StackView, source string) map[string]bool {
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	descendants := graph.Range(eng.GetBranch(source), engine.StackRange{
 		RecursiveChildren: true,
 		IncludeCurrent:    true,

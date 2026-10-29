@@ -55,7 +55,7 @@ func (h *cliInitHandler) SelectTrunk(_ context.Context, branchNames []string, in
 	return selected, nil
 }
 
-func (h *cliInitHandler) OnSuccess(result initaction.Result) {
+func (h *cliInitHandler) OnSuccess(ctx context.Context, result initaction.Result) {
 	trunkName, wasInitialized, isReset := result.Trunk, result.WasInitialized, result.Reset
 	splog := output.NewConsoleOutput(h.writer, false)
 
@@ -84,7 +84,7 @@ func (h *cliInitHandler) OnSuccess(result initaction.Result) {
 	splog.Info("Run '%s' to change these settings.", style.ColorCyan("stackit config"))
 
 	if !h.noInteractive && tui.IsTTY() {
-		if _, err := rerere.EnsureEnabled(h.runner, true, nil); err != nil {
+		if _, err := rerere.EnsureEnabled(ctx, h.runner, true, nil); err != nil {
 			splog.Warn("Failed to enable git rerere: %v", err)
 		}
 	}

@@ -37,7 +37,7 @@ func makeStackForLoadModeTest(t *testing.T) *scenario.Scenario {
 
 func newEngineWithMode(t *testing.T, repoRoot string, mode engine.LoadMode) engine.Engine {
 	t.Helper()
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: repoRoot,
 		Trunk:    "main",
 		LoadMode: mode,
@@ -56,7 +56,7 @@ func TestNewEngineDoesNotFetchRemoteMetadata(t *testing.T) {
 	require.NoError(t, s.Scene.Repo.RunGitCommand("push", "origin", "refs/stackit/metadata/feature"))
 	require.NoError(t, s.Scene.Repo.RunGitCommand("update-ref", "-d", "refs/stackit/remote-metadata/feature"))
 
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		LoadMode: engine.LoadModeShared,
@@ -142,7 +142,7 @@ func TestLoadMode_SharedSkipsLocalBatch(t *testing.T) {
 	gitRunnerMetadata := git.NewMetadataStore(gitRunner)
 	require.NoError(t, gitRunner.InitDefaultRepo())
 
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      gitRunner,
@@ -191,7 +191,7 @@ func TestLoadMode_BranchesOnly_ReadsBranchListOnly(t *testing.T) {
 	gitRunnerMetadata := git.NewMetadataStore(gitRunner)
 	require.NoError(t, gitRunner.InitDefaultRepo())
 
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      gitRunner,
@@ -218,7 +218,7 @@ func TestLoadMode_BranchesOnly_LazilyLoadsBranchChain(t *testing.T) {
 	gitRunnerMetadata := git.NewMetadataStore(gitRunner)
 	require.NoError(t, gitRunner.InitDefaultRepo())
 
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      gitRunner,
@@ -245,7 +245,7 @@ func TestLoadMode_BranchesOnly_GetScopeLazilyLoadsParentChain(t *testing.T) {
 	gitRunnerMetadata := git.NewMetadataStore(gitRunner)
 	require.NoError(t, gitRunner.InitDefaultRepo())
 
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      gitRunner,
@@ -275,7 +275,7 @@ func TestLoadMode_ConcurrentEnsureLoaded(t *testing.T) {
 	gitRunnerMetadata := git.NewMetadataStore(gitRunner)
 	require.NoError(t, gitRunner.InitDefaultRepo())
 
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      gitRunner,

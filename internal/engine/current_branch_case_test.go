@@ -28,7 +28,7 @@ func TestCurrentBranchResolvesRefCasing(t *testing.T) {
 		s.RunGit("symbolic-ref", "HEAD", "refs/heads/Claude/feature")
 		s.Rebuild()
 
-		current := s.Engine.CurrentBranch()
+		current := s.Engine.CurrentBranch(t.Context())
 		require.NotNil(t, current)
 		require.Equal(t, "claude/feature", current.GetName())
 	})
@@ -38,7 +38,7 @@ func TestCurrentBranchResolvesRefCasing(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.CreateBranch("claude/feature").Commit("feature change")
 
-		current := s.Engine.CurrentBranch()
+		current := s.Engine.CurrentBranch(t.Context())
 		require.NotNil(t, current)
 		require.Equal(t, "claude/feature", current.GetName())
 	})
@@ -51,7 +51,7 @@ func TestCurrentBranchResolvesRefCasing(t *testing.T) {
 		s.RunGit("symbolic-ref", "HEAD", "refs/heads/Claude/feature")
 		s.Rebuild()
 
-		name, err := s.Engine.ValidateOnBranch()
+		name, err := s.Engine.ValidateOnBranch(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, "claude/feature", name)
 

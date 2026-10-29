@@ -54,7 +54,7 @@ func TestUntrackedRecoveryUsesArchive(t *testing.T) {
 	s.WithInitialCommit()
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("tracked content", "tracked"))
 	require.NoError(t, s.Scene.Repo.CreateChange("captured notes", "fresh", true))
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir, Trunk: "main",
 		Git: failingUntrackedRestore{git.NewRunnerWithPath(s.Scene.Dir, nil)},
 	})
@@ -380,7 +380,7 @@ func TestRestoreSnapshot(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Get initial metadata SHA
-		initialMetadata, err := s.Metadata.ListMetadata()
+		initialMetadata, err := s.Metadata.ListMetadata(t.Context())
 		require.NoError(t, err)
 		initialFeatureMetadataSHA := initialMetadata["feature"]
 		require.NotEmpty(t, initialFeatureMetadataSHA)
@@ -400,7 +400,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify metadata restored
-		restoredMetadata, err := s.Metadata.ListMetadata()
+		restoredMetadata, err := s.Metadata.ListMetadata(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, initialFeatureMetadataSHA, restoredMetadata["feature"])
 	})

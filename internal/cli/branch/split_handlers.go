@@ -1,6 +1,7 @@
 package branch
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"slices"
@@ -119,7 +120,7 @@ func (h *TUISplitHandler) IsInteractive() bool {
 
 // PromptSplitType asks the user to choose between available split types.
 // Uses the unified split model's type selection state.
-func (h *TUISplitHandler) PromptSplitType(availableTypes []split.TypeChoice) (split.Style, error) {
+func (h *TUISplitHandler) PromptSplitType(ctx context.Context, availableTypes []split.TypeChoice) (split.Style, error) {
 	if !utils.IsInteractive() {
 		return "", errors.ErrCanceled
 	}
@@ -139,7 +140,7 @@ func (h *TUISplitHandler) PromptSplitType(availableTypes []split.TypeChoice) (sp
 	cfg := splitcomp.Config{
 		AvailableTypes: compTypes,
 	}
-	model := splitcomp.NewModel(cfg)
+	model := splitcomp.NewModel(ctx, cfg)
 
 	// Run as standalone program (no alt screen to avoid flashing between views)
 	p := tea.NewProgram(model, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout))
@@ -164,13 +165,13 @@ func (h *TUISplitHandler) PromptSplitType(availableTypes []split.TypeChoice) (sp
 
 // PromptDirection asks the user where to place the new branch using an interactive tree view.
 // Uses the unified split model's direction selection state.
-func (h *TUISplitHandler) PromptDirection(ctx split.DirectionContext) (split.Direction, error) {
+func (h *TUISplitHandler) PromptDirection(ctx context.Context, dirCtx split.DirectionContext) (split.Direction, error) {
 	if !utils.IsInteractive() {
 		return "", errors.ErrCanceled
 	}
 
 	// Use the existing direction selector which has the tree preview
-	selected, err := tui.PromptDirectionSelect(ctx.Engine, ctx.CurrentBranch, ctx.ParentBranch, ctx.Children)
+	selected, err := tui.PromptDirectionSelect(ctx, dirCtx.Engine, dirCtx.CurrentBranch, dirCtx.ParentBranch, dirCtx.Children)
 	if err != nil {
 		return "", err
 	}
@@ -353,7 +354,7 @@ func (h *TUISplitHandler) PromptSelectHunks(hunks []git.Hunk) ([]git.Hunk, error
 
 // StartWizard initializes the unified split model for wizard mode.
 // This is called by the action layer when starting a wizard-based split.
-func (h *TUISplitHandler) StartWizard(eng engine.Engine, branch engine.Branch, preselectedStyle split.Style, preselectedDir split.Direction, availableTypes []split.TypeChoice) {
+func (h *TUISplitHandler) StartWizard(ctx context.Context, eng engine.Engine, branch engine.Branch, preselectedStyle split.Style, preselectedDir split.Direction, availableTypes []split.TypeChoice) {
 	// Convert types to component format
 	compTypes := make([]splitcomp.TypeChoice, len(availableTypes))
 	for i, t := range availableTypes {
@@ -373,7 +374,7 @@ func (h *TUISplitHandler) StartWizard(eng engine.Engine, branch engine.Branch, p
 		AvailableTypes:       compTypes,
 	}
 
-	h.model = splitcomp.NewModel(cfg)
+	h.model = splitcomp.NewModel(ctx, cfg)
 
 	// Build existing branch names for validation
 	existingNames := make(map[string]bool)

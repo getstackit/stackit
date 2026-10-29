@@ -183,7 +183,7 @@ func (c *ConsolidateMergeExecutor) createMergeBranch(ctx context.Context) (strin
 	}
 
 	// Mark as utility branch so it can be auto-deleted without confirmation during sync
-	if err := c.engine.SetBranchType(c.engine.GetBranch(branchName), git.BranchTypeUtility); err != nil {
+	if err := c.engine.SetBranchType(ctx, c.engine.GetBranch(branchName), git.BranchTypeUtility); err != nil {
 		splog.Debug("Failed to set branch type: %v", err)
 	}
 
@@ -211,7 +211,7 @@ func (c *ConsolidateMergeExecutor) createMergeBranch(ctx context.Context) (strin
 		return "", fmt.Errorf("failed to merge branches: %w", err)
 	}
 
-	if err := c.engine.PushBranches(ctx, c.engine.GetRemote(), []git.PushSpec{{BranchName: branchName, LeaseMode: git.PushLeaseNone}}, git.PushOptions{
+	if err := c.engine.PushBranches(ctx, c.engine.GetRemote(ctx), []git.PushSpec{{BranchName: branchName, LeaseMode: git.PushLeaseNone}}, git.PushOptions{
 		Force:    false,
 		NoVerify: true,
 	}).One(); err != nil {
@@ -223,7 +223,7 @@ func (c *ConsolidateMergeExecutor) createMergeBranch(ctx context.Context) (strin
 }
 
 func (c *ConsolidateMergeExecutor) createConsolidationPR(ctx context.Context, branchName string) (*github.PullRequestInfo, error) {
-	content := c.prGenerator.GenerateConsolidationPR(c.plan.BranchesToMerge)
+	content := c.prGenerator.GenerateConsolidationPR(ctx, c.plan.BranchesToMerge)
 
 	opts := github.CreatePROptions{
 		Title: content.Title,

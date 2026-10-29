@@ -36,7 +36,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		out.Info("No continuation state found. Continuing rebase only.")
 		// Try to continue the rebase anyway (user might have started it manually)
 		// But we need a rebasedBranchBase - try to get it from current branch's parent
-		currentBranch := eng.CurrentBranch()
+		currentBranch := eng.CurrentBranch(ctx.Context)
 		if currentBranch == nil {
 			return errors.ErrNotOnBranch
 		}
@@ -84,7 +84,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		// Get current branch name for conflict status
 		branchName := result.BranchName
 		if branchName == "" {
-			currentBranch := eng.CurrentBranch()
+			currentBranch := eng.CurrentBranch(ctx.Context)
 			if currentBranch == nil {
 				return errors.ErrNotOnBranch
 			}

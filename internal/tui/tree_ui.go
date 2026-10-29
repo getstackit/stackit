@@ -125,13 +125,13 @@ func NewTreeModel(ctx context.Context, eng TreeEngine, ghClient github.Client, o
 
 	// Detect worktrees (builds both empty and stack-root maps in one call)
 	start := time.Now()
-	worktrees := stackview.BuildWorktreeIndex(eng)
+	worktrees := stackview.BuildWorktreeIndex(ctx, eng)
 	emptyWorktreeNames := worktrees.EmptyAnchorNames()
 	treeDebug("BuildWorktreeIndex completed in %v, found %d empty worktrees", time.Since(start), len(worktrees.Empty))
 
 	// Create renderer synchronously for instant display
 	start = time.Now()
-	renderer := NewStackTreeRendererWithOptions(eng, engine.SortStrategySmart, filter, emptyWorktreeNames)
+	renderer := NewStackTreeRendererWithOptions(ctx, eng, engine.SortStrategySmart, filter, emptyWorktreeNames)
 	treeDebug("NewStackTreeRendererWithOptions completed in %v", time.Since(start))
 
 	// Build minimal annotations synchronously (includes worktree info, no git/network calls)
@@ -158,7 +158,7 @@ func NewTreeModel(ctx context.Context, eng TreeEngine, ghClient github.Client, o
 	start = time.Now()
 	trunkName := eng.Trunk().GetName()
 	selectedBranch := ""
-	if current := eng.CurrentBranch(); current != nil {
+	if current := eng.CurrentBranch(ctx); current != nil {
 		selectedBranch = current.GetName()
 	} else {
 		selectedBranch = trunkName
@@ -310,7 +310,7 @@ func (m *TreeModel) enrichData() tea.Cmd {
 		ciStatuses := ciRes.statuses
 
 		// Detect worktrees (builds both empty and stack-root maps in one call)
-		worktrees := stackview.BuildWorktreeIndex(eng)
+		worktrees := stackview.BuildWorktreeIndex(ctx, eng)
 
 		// Resolve the git-computed annotation stats (short SHA, commit count, diff
 		// stats) for all branches as one batched value, instead of warming the

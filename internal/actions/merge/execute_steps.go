@@ -114,7 +114,7 @@ func executeUpdatePRBase(ctx *app.Context, eng mergeExecuteEngine, step PlanStep
 
 	// Rebase the branch onto trunk
 	// Save current branch state since git.Rebase no longer does this
-	currentBranchObj := eng.CurrentBranch()
+	currentBranchObj := eng.CurrentBranch(ctx.Context)
 	currentBranch := ""
 	if currentBranchObj != nil {
 		currentBranch = currentBranchObj.GetName()

@@ -25,7 +25,7 @@ func SquashAction(ctx *app.Context, opts SquashOptions) error {
 	out := ctx.Output
 	context := ctx.Context
 
-	originalBranch := ctx.Navigator().CurrentBranch()
+	originalBranch := ctx.Navigator().CurrentBranch(ctx.Context)
 	currentBranch := originalBranch
 	if opts.Branch != "" && (originalBranch == nil || originalBranch.GetName() != opts.Branch) {
 		target := ctx.Navigator().GetBranch(opts.Branch)
@@ -83,7 +83,7 @@ func SquashAction(ctx *app.Context, opts SquashOptions) error {
 		IncludeCurrent:    false,
 		RecursiveChildren: true,
 	}
-	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+	graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	upstackBranches := graph.Range(*currentBranch, rng)
 
 	// Log upstack branches for diagnostics

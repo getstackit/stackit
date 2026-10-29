@@ -44,7 +44,7 @@ If no --onto is specified, opens an interactive selector to choose the target.`,
 				// Default source to current branch
 				sourceBranch := source
 				if sourceBranch == "" {
-					currentBranch := ctx.Engine.CurrentBranch()
+					currentBranch := ctx.Engine.CurrentBranch(ctx.Context)
 					if currentBranch == nil {
 						return errors.New("not on a branch and no source branch specified")
 					}

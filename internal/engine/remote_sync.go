@@ -49,8 +49,8 @@ func (v RemoteMetadataView) Len() int {
 }
 
 // IsRemoteSyncEnabled checks if metadata compatibility has been verified and sync is enabled
-func (e *engineImpl) IsRemoteSyncEnabled() bool {
-	val, err := e.git.GetConfig("stackit.metadata-sync-enabled")
+func (e *engineImpl) IsRemoteSyncEnabled(ctx context.Context) bool {
+	val, err := e.git.GetConfig(ctx, "stackit.metadata-sync-enabled")
 	return err == nil && val == "true"
 }
 
@@ -72,11 +72,11 @@ func (e *engineImpl) BatchSetLastModifiedBy(ctx context.Context, branchNames []s
 	}
 
 	// Fetch git config once
-	name, err := e.git.GetConfig("user.name")
+	name, err := e.git.GetConfig(ctx, "user.name")
 	if err != nil {
 		return fmt.Errorf("git user.name is required but not set: %w", err)
 	}
-	email, _ := e.git.GetConfig("user.email")
+	email, _ := e.git.GetConfig(ctx, "user.email")
 
 	modifiedBy := &git.ModifiedBy{
 		GitName:  name,
@@ -128,7 +128,7 @@ const remoteMetadataRefPrefix = "refs/stackit/remote-metadata/"
 // LoadRemoteMetadataCache loads remote metadata refs into the engine's cache
 // with one batched object read.
 func (e *engineImpl) LoadRemoteMetadataCache(ctx context.Context) error {
-	remoteRefs, err := e.git.ListRefs(remoteMetadataRefPrefix)
+	remoteRefs, err := e.git.ListRefs(ctx, remoteMetadataRefPrefix)
 	if err != nil {
 		return err
 	}
@@ -413,12 +413,12 @@ type OrphanedMetadataInfo struct {
 
 // FindOrphanedLocalMetadata identifies branches that have local metadata but no corresponding local branch or remote metadata.
 // This handles scenarios where branches were deleted elsewhere or manually via git.
-func (e *engineImpl) FindOrphanedLocalMetadata() ([]OrphanedMetadataInfo, error) {
+func (e *engineImpl) FindOrphanedLocalMetadata(ctx context.Context) ([]OrphanedMetadataInfo, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
 	// List all local metadata refs
-	localRefs, err := e.git.ListRefs("refs/stackit/metadata/")
+	localRefs, err := e.git.ListRefs(ctx, "refs/stackit/metadata/")
 	if err != nil {
 		return nil, err
 	}
@@ -534,16 +534,16 @@ func (e *engineImpl) FetchRemoteMetadata(ctx context.Context) error {
 // never polluted with a dangling fetch refspec. The remote is resolved via
 // GetRemote (the current branch's tracking remote, falling back to origin), so
 // this works for non-origin remotes too.
-func (e *engineImpl) ConfigureRemoteMetadataSync(_ context.Context) error {
+func (e *engineImpl) ConfigureRemoteMetadataSync(ctx context.Context) error {
 	// `git config --get remote.<name>.url` exits non-zero when the remote does
 	// not exist; that absence is precisely the "no remote to configure" signal,
 	// so we treat the error as a no-op rather than a failure.
-	url, err := e.git.GetConfig(fmt.Sprintf("remote.%s.url", e.GetRemote()))
+	url, err := e.git.GetConfig(ctx, fmt.Sprintf("remote.%s.url", e.GetRemote(ctx)))
 	if err != nil {
 		return nil //nolint:nilerr // missing remote.<name>.url means there is no remote to sync
 	}
 	if strings.TrimSpace(url) == "" {
 		return nil
 	}
-	return e.git.EnsureMetadataRefspecConfigured()
+	return e.git.EnsureMetadataRefspecConfigured(ctx)
 }

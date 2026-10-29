@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -40,7 +41,7 @@ func SetBrowserOpener(fn func(url string) error) {
 func OpenPRAction(ctx *app.Context, opts OpenPROptions) error {
 	eng := ctx.Engine
 
-	branchName, err := resolvePRBranch(eng, opts.Target)
+	branchName, err := resolvePRBranch(ctx.Context, eng, opts.Target)
 	if err != nil {
 		return err
 	}
@@ -71,9 +72,9 @@ func OpenPRAction(ctx *app.Context, opts OpenPROptions) error {
 // resolvePRBranch turns target into a branch name. An empty target resolves to
 // the current branch; a numeric target resolves to whichever tracked branch
 // has that PR number; anything else is used as a branch name directly.
-func resolvePRBranch(eng engine.Engine, target string) (string, error) {
+func resolvePRBranch(ctx context.Context, eng engine.Engine, target string) (string, error) {
 	if target == "" {
-		current := eng.CurrentBranch()
+		current := eng.CurrentBranch(ctx)
 		if current == nil {
 			return "", errors.ErrNotOnBranch
 		}

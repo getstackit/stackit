@@ -45,7 +45,7 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 	require.True(t, gotPrInfo.IsLocked())
 
 	// 4. Rebuild engine to simulate fresh state
-	err = eng.Rebuild("main")
+	err = eng.Rebuild(t.Context(), "main")
 	require.NoError(t, err)
 
 	branch = eng.GetBranch("feature")

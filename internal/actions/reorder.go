@@ -43,23 +43,23 @@ func ReorderAction(ctx *app.Context, opts ReorderOptions) error {
 
 	// Pre-checks using validation chain
 	if err := (validation.Chain{
-		validation.MustBeOnBranch(eng),
+		validation.MustBeOnBranch(ctx.Context, eng),
 		validation.MustNotHaveRebaseInProgress(gctx, eng),
 		validation.MustNotHaveUncommittedChanges(gctx, eng),
-		validation.CurrentBranchMustNotBeTrunk(eng, "reorder"),
+		validation.CurrentBranchMustNotBeTrunk(ctx.Context, eng, "reorder"),
 	}).Validate(); err != nil {
 		out.Debug("reorder: validation failed: %v", err)
 		return err
 	}
 
-	currentBranch := eng.CurrentBranch().GetName()
+	currentBranch := eng.CurrentBranch(ctx.Context).GetName()
 	currentBranchObj := eng.GetBranch(currentBranch)
 	out.Debug("reorder: current branch object: name=%s, isTrunk=%v, isTracked=%v",
 		currentBranchObj.GetName(), currentBranchObj.IsTrunk(), currentBranchObj.IsTracked())
 
 	// Build StackGraph for efficient traversals
 	out.Debug("reorder: building stack graph")
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	out.Debug("reorder: stack graph built successfully")
 
 	// Collect branches: get ancestors from trunk to current branch

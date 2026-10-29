@@ -23,7 +23,7 @@ func TestResetTrunkToRemote(t *testing.T) {
 	newEngine := func(t *testing.T) (*testhelpers.Scene, engine.Engine) {
 		t.Helper()
 		scene := testhelpers.NewRemoteSceneParallel(t)
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot: scene.Dir,
 			Trunk:    "main",
 			Git:      git.NewRunnerWithPath(scene.Dir, nil),

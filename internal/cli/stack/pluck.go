@@ -45,7 +45,7 @@ would occur, the pluck will abort without making any changes.`,
 				// Default source to current branch
 				sourceBranch := source
 				if sourceBranch == "" {
-					currentBranch := ctx.Engine.CurrentBranch()
+					currentBranch := ctx.Engine.CurrentBranch(ctx.Context)
 					if currentBranch == nil {
 						return errors.New("not on a branch and no source branch specified")
 					}
@@ -92,7 +92,7 @@ would occur, the pluck will abort without making any changes.`,
 // interactivePluckOntoSelection shows an interactive branch selector for choosing the "onto" branch
 func interactivePluckOntoSelection(ctx *app.Context, sourceBranch string) (string, error) {
 	// Can't pluck onto the source itself or one of its descendants.
-	excludedBranches := pluck.InvalidOntoTargets(ctx.Engine, sourceBranch)
+	excludedBranches := pluck.InvalidOntoTargets(ctx.Context, ctx.Engine, sourceBranch)
 
 	// Show interactive selector
 	header := fmt.Sprintf("Select new parent for '%s' (children will be reparented to grandparent)", sourceBranch)

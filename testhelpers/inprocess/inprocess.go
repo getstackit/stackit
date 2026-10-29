@@ -3,6 +3,7 @@ package inprocess
 
 import (
 	"bytes"
+	"context"
 
 	"github.com/getstackit/stackit/internal/cli"
 )
@@ -35,7 +36,7 @@ func (c *CLI) Run(workDir string, args ...string) Result {
 	var buf bytes.Buffer
 
 	// Check for passthrough commands
-	if handled, err := cli.HandlePassthroughWithResult(fullArgs, cli.PassthroughReturnError, &buf, &buf); handled {
+	if handled, err := cli.HandlePassthroughWithResult(context.Background(), fullArgs, cli.PassthroughReturnError, &buf, &buf); handled {
 		output := buf.String()
 		if err != nil && output == "" {
 			output = err.Error()

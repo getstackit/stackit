@@ -105,7 +105,7 @@ func TestAbortAction(t *testing.T) {
 		require.ErrorIs(t, err, os.ErrNotExist, "continuation state should be gone")
 
 		// Verify state restored
-		s.Engine.Rebuild(s.Engine.Trunk().GetName())
+		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().GetName())
 		restoredSHA, err := s.Engine.GetBranch("feature").GetRevision()
 		require.NoError(t, err)
 		require.Equal(t, initialSHA, restoredSHA)
@@ -134,7 +134,7 @@ func TestAbortAction(t *testing.T) {
 
 		require.NoError(t, abort.Action(s.Context, abort.Options{Force: true}, nil))
 
-		s.Engine.Rebuild(s.Engine.Trunk().GetName())
+		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().GetName())
 		afterSHA, err := s.Engine.GetBranch("feature").GetRevision()
 		require.NoError(t, err)
 		require.Equal(t, haltedSHA, afterSHA,
@@ -162,7 +162,7 @@ func TestAbortAction(t *testing.T) {
 		require.NoError(t, abort.Action(s.Context, abort.Options{}, handler))
 		require.False(t, handler.promptConfirmCalled, "nothing to confirm when there is nothing to abort")
 
-		s.Engine.Rebuild(s.Engine.Trunk().GetName())
+		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().GetName())
 		afterSHA, err := s.Engine.GetBranch("feature").GetRevision()
 		require.NoError(t, err)
 		require.Equal(t, laterSHA, afterSHA, "a stale continuation must not roll back later work")
@@ -190,7 +190,7 @@ func TestAbortAction(t *testing.T) {
 
 		require.NoError(t, abort.Action(s.Context, abort.Options{Force: true}, nil))
 
-		s.Engine.Rebuild(s.Engine.Trunk().GetName())
+		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().GetName())
 		afterSHA, err := s.Engine.GetBranch("feature").GetRevision()
 		require.NoError(t, err)
 		require.Equal(t, haltedSHA, afterSHA, "abort must not guess at a different snapshot")

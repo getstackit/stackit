@@ -45,8 +45,8 @@ func (e *engineImpl) BranchNames() *BranchSet {
 }
 
 // CurrentBranch returns the current branch (nil if not on a branch)
-func (e *engineImpl) CurrentBranch() *Branch {
-	current, err := e.git.GetCurrentBranch()
+func (e *engineImpl) CurrentBranch(ctx context.Context) *Branch {
+	current, err := e.git.GetCurrentBranch(ctx)
 	if err != nil {
 		// Not on a branch (e.g., detached HEAD)
 		current = ""
@@ -72,16 +72,16 @@ func (e *engineImpl) CurrentBranch() *Branch {
 // CurrentBranchName returns the current branch name, or "" when HEAD is not on
 // a branch (e.g. a detached-HEAD server mirror). Use this for nil-safe reads
 // where a missing current branch should be absent rather than an error.
-func (e *engineImpl) CurrentBranchName() string {
-	if cb := e.CurrentBranch(); cb != nil {
+func (e *engineImpl) CurrentBranchName(ctx context.Context) string {
+	if cb := e.CurrentBranch(ctx); cb != nil {
 		return cb.GetName()
 	}
 	return ""
 }
 
 // ValidateOnBranch ensures the user is on a branch
-func (e *engineImpl) ValidateOnBranch() (string, error) {
-	currentBranch := e.CurrentBranch()
+func (e *engineImpl) ValidateOnBranch(ctx context.Context) (string, error) {
+	currentBranch := e.CurrentBranch(ctx)
 	if currentBranch == nil {
 		return "", errors.ErrNotOnBranch
 	}
@@ -237,20 +237,20 @@ func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) CommitBranchMap
 // RefDecorations returns local branch and tag refs grouped by the commit SHA
 // they point at, for git-log-style annotations. Annotated tags are dereferenced
 // to the commit they wrap. Thin passthrough to the git layer.
-func (e *engineImpl) RefDecorations() (map[string][]git.RefDecoration, error) {
-	return e.git.RefDecorations()
+func (e *engineImpl) RefDecorations(ctx context.Context) (map[string][]git.RefDecoration, error) {
+	return e.git.RefDecorations(ctx)
 }
 
 // SortBranchesTopologically sorts branches so parents come before children.
 // This ensures correct restack order (bottom of stack first).
-func (e *engineImpl) SortBranchesTopologically(branches Branches) Branches {
+func (e *engineImpl) SortBranchesTopologically(ctx context.Context, branches Branches) Branches {
 	if len(branches) == 0 {
 		return branches
 	}
 
 	// Build the graph once and pre-compute each branch's depth to avoid
 	// repeated lookups inside the sort comparator (O(n²) → O(n log n)).
-	graph := e.Graph(SortStrategyAlphabetical)
+	graph := e.Graph(ctx, SortStrategyAlphabetical)
 	depth := make(map[string]int, len(branches))
 	for _, b := range branches {
 		if node := graph.GetNode(b.GetName()); node != nil {

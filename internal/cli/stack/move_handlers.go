@@ -188,7 +188,7 @@ func selectOntoInteractive(ctx *app.Context, sourceBranch string) (string, []eng
 		Validator:    validator,
 	}
 
-	result, err := tui.PromptMoveSelect(ctx.Engine, config)
+	result, err := tui.PromptMoveSelect(ctx.Context, ctx.Engine, config)
 	if err != nil {
 		return "", nil, err
 	}

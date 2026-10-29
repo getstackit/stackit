@@ -23,7 +23,7 @@ func FreezeAction(ctx *app.Context, branchName string) error {
 	}
 
 	// Build StackGraph for efficient traversals
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Get downstack (ancestors including current)
 	branches := graph.Range(branch, engine.StackRange{

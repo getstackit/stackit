@@ -353,7 +353,7 @@ func TestPromptForShipDescription(t *testing.T) {
 		require.Contains(t, s.Output.String(), "stackit describe")
 
 		// No description should have been set.
-		require.Nil(t, s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a")))
+		require.Nil(t, s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("branch-a")))
 	})
 
 	t.Run("warns and continues when --yes skips the prompt", func(t *testing.T) {
@@ -362,7 +362,7 @@ func TestPromptForShipDescription(t *testing.T) {
 
 		promptForShipDescription(s.Context, branches, true)
 		require.Contains(t, s.Output.String(), "stackit describe")
-		require.Nil(t, s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a")))
+		require.Nil(t, s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("branch-a")))
 	})
 
 	t.Run("does not set a description when the user declines", func(t *testing.T) {
@@ -371,7 +371,7 @@ func TestPromptForShipDescription(t *testing.T) {
 		stubConfirm(t, false)
 
 		promptForShipDescription(s.Context, branches, false)
-		require.Nil(t, s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a")))
+		require.Nil(t, s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("branch-a")))
 	})
 
 	t.Run("sets the description from the entered title", func(t *testing.T) {
@@ -382,7 +382,7 @@ func TestPromptForShipDescription(t *testing.T) {
 
 		promptForShipDescription(s.Context, branches, false)
 
-		desc := s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a"))
+		desc := s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("branch-a"))
 		require.NotNil(t, desc)
 		require.Equal(t, "My stack title", desc.Title)
 		require.Contains(t, s.Output.String(), "My stack title")
@@ -395,7 +395,7 @@ func TestPromptForShipDescription(t *testing.T) {
 		stubTextInput(t, "   ")
 
 		promptForShipDescription(s.Context, branches, false)
-		require.Nil(t, s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a")))
+		require.Nil(t, s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("branch-a")))
 	})
 }
 

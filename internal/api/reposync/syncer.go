@@ -42,7 +42,7 @@ type Syncer struct {
 	// Seams, defaulting to the real implementations, so tests can drive the
 	// loop without git or a network.
 	fetch   func(ctx context.Context, repoRoot, remote, token string) error
-	refresh func(e *registry.RepoEntry)
+	refresh func(e *registry.RepoEntry, ctx context.Context)
 }
 
 // New builds a Syncer. provider may be nil (no GitHub App configured), in which
@@ -121,7 +121,7 @@ func (s *Syncer) syncEntry(ctx context.Context, e *registry.RepoEntry) error {
 	if err := s.fetch(ctx, e.RepoRoot, e.Remote, token); err != nil {
 		return fmt.Errorf("fetch: %w", err)
 	}
-	s.refresh(e)
+	s.refresh(e, ctx)
 	// The single success line for every sync path — interval loop, manual sync,
 	// and webhook-triggered. For a webhook push it follows the handler's
 	// "webhook: push accepted" line, completing the receive→refresh trace.

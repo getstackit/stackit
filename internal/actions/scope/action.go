@@ -23,7 +23,7 @@ type Options struct {
 type scopeEngine interface {
 	actions.MetadataPushEngine
 	engine.BranchLookup
-	CurrentBranch() *engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
 	Trunk() engine.Branch
 	GetScope(branch engine.Branch) engine.Scope
 	SetScopeAndMarkForUpdate(ctx context.Context, branch engine.Branch, scope engine.Scope) error
@@ -42,7 +42,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Get current branch
 	currentBranch := ""
-	if cb := eng.CurrentBranch(); cb != nil {
+	if cb := eng.CurrentBranch(ctx.Context); cb != nil {
 		currentBranch = cb.GetName()
 	}
 	isOnTrunk := currentBranch == eng.Trunk().GetName() || currentBranch == ""

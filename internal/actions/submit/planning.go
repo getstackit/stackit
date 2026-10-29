@@ -1,6 +1,7 @@
 package submit
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -206,7 +207,7 @@ func getBranchesToSubmit(ctx *app.Context, opts Options) ([]string, error) {
 	nav := ctx.Navigator()
 
 	// Get branch scope
-	branchName, err := resolveBranchNameFromNav(nav, opts.Branch)
+	branchName, err := resolveBranchNameFromNav(ctx.Context, nav, opts.Branch)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +217,7 @@ func getBranchesToSubmit(ctx *app.Context, opts Options) ([]string, error) {
 	if !stackRange.RecursiveParents && !stackRange.IncludeCurrent && !stackRange.RecursiveChildren {
 		stackRange = engine.StackRangeDownstack(engine.IncludeCurrentBranch)
 	}
-	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+	graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	stackBranches := graph.Range(nav.GetBranch(branchName), stackRange)
 	allBranches := stackBranches.Names()
 
@@ -235,6 +236,6 @@ func getBranchesToSubmit(ctx *app.Context, opts Options) ([]string, error) {
 }
 
 // resolveBranchNameFromNav resolves a branch name, defaulting to current branch if empty.
-func resolveBranchNameFromNav(nav engine.StackNavigator, branchName string) (string, error) {
-	return actions.ResolveBranchName(nav, branchName)
+func resolveBranchNameFromNav(ctx context.Context, nav engine.StackNavigator, branchName string) (string, error) {
+	return actions.ResolveBranchName(ctx, nav, branchName)
 }

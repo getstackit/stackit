@@ -41,7 +41,7 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors dirtyAnchorSet) *Work
 
 	// Get all managed worktrees
 	listStart := time.Now()
-	worktrees, err := ctx.Engine.ListManagedWorktrees()
+	worktrees, err := ctx.Engine.ListManagedWorktrees(ctx.Context)
 	ctx.Logger.Info("list managed worktrees completed durationMs=%d worktreeCount=%d", time.Since(listStart).Milliseconds(), len(worktrees))
 	if err != nil {
 		ctx.Output.Debug("Failed to list managed worktrees: %v", err)
@@ -52,7 +52,7 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors dirtyAnchorSet) *Work
 		return result
 	}
 
-	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+	graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Check each anchored worktree and remove it once it is clean and empty.
 	for _, wt := range worktrees {

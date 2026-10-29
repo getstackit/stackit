@@ -108,7 +108,7 @@ func newScenarioWithScene(t *testing.T, scene *testhelpers.Scene) *Scenario {
 	}
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 	metadata := git.NewMetadataStore(runner)
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot:          scene.Dir,
 		Trunk:             trunk,
 		MaxUndoStackDepth: maxUndoDepth,
@@ -238,7 +238,7 @@ func (s *Scenario) CreateBranchFromQuiet(name, startPoint string) *Scenario {
 func (s *Scenario) Rebuild() *Scenario {
 	s.T.Helper()
 	if s.Engine != nil {
-		err := s.Engine.Rebuild(s.Engine.Trunk().GetName())
+		err := s.Engine.Rebuild(s.T.Context(), s.Engine.Trunk().GetName())
 		require.NoError(s.T, err)
 	}
 	return s

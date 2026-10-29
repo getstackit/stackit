@@ -1,6 +1,7 @@
 package navigation
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -24,8 +25,8 @@ const (
 // navigationEngine lists exactly the engine methods navigation calls.
 type navigationEngine interface {
 	engine.BranchLookup
-	CurrentBranch() *engine.Branch
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	CurrentBranch(ctx context.Context) *engine.Branch
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
 }
 
 // SwitchBranchAction switches to a branch based on the given direction
@@ -36,7 +37,7 @@ func SwitchBranchAction(direction Direction, ctx *app.Context, handler Handler) 
 	defer handler.Cleanup()
 
 	var eng navigationEngine = ctx.Engine
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	if currentBranch == nil {
 		return actions.CheckoutResult{}, errors.ErrNotOnBranch
 	}
@@ -52,7 +53,7 @@ func SwitchBranchAction(direction Direction, ctx *app.Context, handler Handler) 
 	case DirectionTop:
 		// Walking toward the tips needs child relationships, which requires the
 		// full stack graph.
-		graph := eng.Graph(engine.SortStrategyAlphabetical)
+		graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 		targetBranch, err = traverseUpward(currentBranch.GetName(), eng, ctx.Output, graph, handler)
 		if err != nil {
 			return actions.CheckoutResult{}, err

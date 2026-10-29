@@ -23,7 +23,7 @@ func TestEnsureEnabled(t *testing.T) {
 			return true, nil
 		}
 
-		enabled, err := ensureEnabled(runner, false, nil, confirm)
+		enabled, err := ensureEnabled(t.Context(), runner, false, nil, confirm)
 		require.NoError(t, err)
 		require.False(t, enabled)
 		require.False(t, prompted)
@@ -40,15 +40,15 @@ func TestEnsureEnabled(t *testing.T) {
 			return true, nil
 		}
 
-		enabled, err := ensureEnabled(runner, true, nil, confirm)
+		enabled, err := ensureEnabled(t.Context(), runner, true, nil, confirm)
 		require.NoError(t, err)
 		require.True(t, enabled)
 
-		rerereEnabled, err := runner.GetConfig("rerere.enabled")
+		rerereEnabled, err := runner.GetConfig(t.Context(), "rerere.enabled")
 		require.NoError(t, err)
 		require.Equal(t, "true", rerereEnabled)
 
-		rerereAutoupdate, err := runner.GetConfig("rerere.autoupdate")
+		rerereAutoupdate, err := runner.GetConfig(t.Context(), "rerere.autoupdate")
 		require.NoError(t, err)
 		require.Equal(t, "true", rerereAutoupdate)
 	})
@@ -62,11 +62,11 @@ func TestEnsureEnabled(t *testing.T) {
 			return false, nil
 		}
 
-		enabled, err := ensureEnabled(runner, true, nil, confirm)
+		enabled, err := ensureEnabled(t.Context(), runner, true, nil, confirm)
 		require.NoError(t, err)
 		require.False(t, enabled)
 
-		declined, err := runner.GetConfig(declinedKey)
+		declined, err := runner.GetConfig(t.Context(), declinedKey)
 		require.NoError(t, err)
 		require.Equal(t, "true", declined)
 
@@ -76,7 +76,7 @@ func TestEnsureEnabled(t *testing.T) {
 			return true, nil
 		}
 
-		enabled, err = ensureEnabled(runner, true, nil, confirm)
+		enabled, err = ensureEnabled(t.Context(), runner, true, nil, confirm)
 		require.NoError(t, err)
 		require.False(t, enabled)
 		require.False(t, promptedAgain)
@@ -94,7 +94,7 @@ func TestEnsureEnabled(t *testing.T) {
 			return true, nil
 		}
 
-		enabled, err := ensureEnabled(runner, true, nil, confirm)
+		enabled, err := ensureEnabled(t.Context(), runner, true, nil, confirm)
 		require.NoError(t, err)
 		require.False(t, enabled)
 		require.False(t, prompted)
@@ -102,7 +102,7 @@ func TestEnsureEnabled(t *testing.T) {
 		// rerere.autoupdate must be set — the auto-continue loop in
 		// internal/git/rebase.go bails out when rerere applies a resolution
 		// without staging it.
-		autoupdate, err := runner.GetConfig("rerere.autoupdate")
+		autoupdate, err := runner.GetConfig(t.Context(), "rerere.autoupdate")
 		require.NoError(t, err)
 		require.Equal(t, "true", autoupdate)
 	})
@@ -119,11 +119,11 @@ func TestEnsureEnabled(t *testing.T) {
 			return false, nil
 		}
 
-		enabled, err := ensureEnabled(runner, true, nil, confirm)
+		enabled, err := ensureEnabled(t.Context(), runner, true, nil, confirm)
 		require.NoError(t, err)
 		require.False(t, enabled)
 
-		autoupdate, err := runner.GetConfig("rerere.autoupdate")
+		autoupdate, err := runner.GetConfig(t.Context(), "rerere.autoupdate")
 		require.NoError(t, err)
 		require.Equal(t, "true", autoupdate)
 	})
@@ -140,7 +140,7 @@ func TestEnsureEnabled(t *testing.T) {
 			return false, nil
 		}
 
-		_, err := ensureEnabled(runner, true, p, confirm)
+		_, err := ensureEnabled(t.Context(), runner, true, p, confirm)
 		require.NoError(t, err)
 		require.Equal(t, 1, p.pauseCount)
 		require.Equal(t, 1, p.resumeCount)

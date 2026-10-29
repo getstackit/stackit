@@ -25,7 +25,7 @@ func withWorktreeAnchor(t *testing.T, s *scenario.Scenario, name string) {
 	t.Helper()
 	s.CreateBranchFromQuiet(name, "main").Rebuild()
 	s.TrackBranch(name, "main")
-	require.NoError(t, s.Engine.SetBranchType(s.Engine.GetBranch(name), git.BranchTypeWorktreeAnchor))
+	require.NoError(t, s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch(name), git.BranchTypeWorktreeAnchor))
 }
 
 // TestRestackBranchesFastForwardsWorktreeAnchor covers the ordering half of
@@ -111,8 +111,8 @@ func TestRestackBranchesMissingRecordedRevDoesNotReplayTrunk(t *testing.T) {
 	// Legacy on-disk stack: no recorded parent revision.
 	meta, err := s.Metadata.ReadMetadata(t.Context(), "feature").One()
 	require.NoError(t, err)
-	require.NoError(t, s.Metadata.WriteMetadata("feature", meta.WithParentBranchRevision(nil)))
-	require.NoError(t, s.Engine.Rebuild("main"))
+	require.NoError(t, s.Metadata.WriteMetadata(t.Context(), "feature", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 
 	s.Checkout("main").Commit("trunk two").Rebuild()
 	_, err = s.Engine.RestackBranches(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature")), engine.RestackOpts{})

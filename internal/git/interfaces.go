@@ -6,8 +6,8 @@ import (
 
 // RepositoryReader provides read access to repository configuration and state.
 type RepositoryReader interface {
-	GetRemote() string
-	GetConfig(key string) (string, error)
+	GetRemote(ctx context.Context) string
+	GetConfig(ctx context.Context, key string) (string, error)
 	GetConfigAll(key string) ([]string, error)
 	GetRepoRoot() string
 	DiscoverRepoRoot() (string, error)
@@ -25,8 +25,8 @@ type RepositoryWriter interface {
 	InitDefaultRepo() error
 	SetConfig(key, value string) error
 	AddConfigValue(key, value string) error
-	EnsureMetadataRefspecConfigured() error
-	EnsureStackMetaRefspecConfigured() error
+	EnsureMetadataRefspecConfigured(ctx context.Context) error
+	EnsureStackMetaRefspecConfigured(ctx context.Context) error
 }
 
 // RemoteOperations handles interaction with remote repositories.
@@ -48,7 +48,7 @@ type RemoteOperations interface {
 
 // BranchReader provides read access to branch information.
 type BranchReader interface {
-	GetCurrentBranch() (string, error)
+	GetCurrentBranch(ctx context.Context) (string, error)
 	GetAllBranchNames(ctx context.Context) ([]string, error)
 	GetCurrentBranchOrSHA(ctx context.Context) (string, error)
 }
@@ -123,8 +123,8 @@ type StagingOperations interface {
 
 // CommitWriter handles commit creation and modification.
 type CommitWriter interface {
-	Commit(message string, verbose int, noVerify bool) error
-	CommitWithOptions(opts CommitOptions) error
+	Commit(ctx context.Context, message string, verbose int, noVerify bool) error
+	CommitWithOptions(ctx context.Context, opts CommitOptions) error
 	CommitAmendNoEdit(ctx context.Context) error
 }
 
@@ -136,7 +136,7 @@ type RebaseOperations interface {
 	RebaseAbort(ctx context.Context) error
 	InteractiveRebase(ctx context.Context, onto string) error
 	IsRebaseInProgress(ctx context.Context) bool
-	GetRebaseHead() (string, error)
+	GetRebaseHead(ctx context.Context) (string, error)
 	CheckRebaseInProgress(ctx context.Context) error
 }
 
@@ -191,7 +191,7 @@ type PatchOperations interface {
 	// tree only, never the index. It applies atomically or fails leaving the
 	// working tree untouched, so it can never write conflict markers.
 	ApplyPatchToWorktree(ctx context.Context, patch string) error
-	CheckCommutation(hunk Hunk, commitSHA, parentSHA string) (bool, error)
+	CheckCommutation(ctx context.Context, hunk Hunk, commitSHA, parentSHA string) (bool, error)
 }
 
 // WorktreeOperations handles worktree management.
@@ -217,11 +217,11 @@ type WorktreeOperations interface {
 
 // WorktreeRegistryOperations handles stackit-managed worktree tracking (local-only refs).
 type WorktreeRegistryOperations interface {
-	ReadWorktreeMeta(stackRoot string) (*WorktreeMeta, error)
+	ReadWorktreeMeta(ctx context.Context, stackRoot string) (*WorktreeMeta, error)
 	WriteWorktreeMeta(ctx context.Context, stackRoot string, meta *WorktreeMeta) error
 	DeleteWorktreeMeta(ctx context.Context, stackRoot string) error
-	ListWorktreeMetas() (map[string]*WorktreeMeta, error)
-	ListWorktreeRegistrations() (map[string]WorktreeRegistration, error)
+	ListWorktreeMetas(ctx context.Context) (map[string]*WorktreeMeta, error)
+	ListWorktreeRegistrations(ctx context.Context) (map[string]WorktreeRegistration, error)
 }
 
 // StatusOperations provides repository status information.
@@ -240,10 +240,10 @@ type RefOperations interface {
 	DeleteRefs(ctx context.Context, refNames ...string) error
 	VerifyRef(ctx context.Context, refName string) error
 	RefGeneration(ref string) uint64
-	ListRefs(prefix string) (map[string]string, error)
+	ListRefs(ctx context.Context, prefix string) (map[string]string, error)
 	// RefDecorations returns local branch and tag refs grouped by the commit SHA
 	// they point at, dereferencing annotated tags to the wrapped commit.
-	RefDecorations() (map[string][]RefDecoration, error)
+	RefDecorations(ctx context.Context) (map[string][]RefDecoration, error)
 }
 
 // ObjectOperations provides low-level Git object operations.

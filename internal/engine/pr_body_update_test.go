@@ -48,7 +48,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		err := eng.MarkBranchesForPRBodyUpdate(t.Context(), []string{"feature"})
 		require.NoError(t, err)
 
-		err = eng.ClearNeedsPRBodyUpdate("feature")
+		err = eng.ClearNeedsPRBodyUpdate(t.Context(), "feature")
 		require.NoError(t, err)
 
 		// Should no longer need update
@@ -67,7 +67,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		eng := s.Engine
 
 		// Clear without marking should not error
-		err := eng.ClearNeedsPRBodyUpdate("feature")
+		err := eng.ClearNeedsPRBodyUpdate(t.Context(), "feature")
 		require.NoError(t, err)
 	})
 
@@ -86,7 +86,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		require.NoError(t, err)
 
 		// Rebuild engine to simulate fresh state
-		err = eng.Rebuild("main")
+		err = eng.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// Should still need update
@@ -125,7 +125,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		require.Contains(t, needsUpdate, "feature-b")
 
 		// Clear only feature-a
-		err = eng.ClearNeedsPRBodyUpdate("feature-a")
+		err = eng.ClearNeedsPRBodyUpdate(t.Context(), "feature-a")
 		require.NoError(t, err)
 
 		needsUpdate = eng.GetBranchesNeedingPRBodyUpdate()

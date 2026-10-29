@@ -19,7 +19,7 @@ type tokenRunner struct {
 	ghArgs []string
 }
 
-func (r *tokenRunner) GetConfig(string) (string, error) {
+func (r *tokenRunner) GetConfig(context.Context, string) (string, error) {
 	return r.remoteURL, r.configErr
 }
 

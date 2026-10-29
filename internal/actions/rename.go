@@ -32,10 +32,10 @@ func RenameAction(ctx *app.Context, opts RenameOptions, handler RenameHandler) e
 	out := ctx.Output
 
 	// Validate preconditions
-	if err := validation.ModifyBranchChain(eng, "rename").Validate(); err != nil {
+	if err := validation.ModifyBranchChain(ctx.Context, eng, "rename").Validate(); err != nil {
 		return err
 	}
-	currentBranch := eng.CurrentBranch().GetName()
+	currentBranch := eng.CurrentBranch(ctx.Context).GetName()
 
 	newName := opts.NewName
 	if newName == "" {

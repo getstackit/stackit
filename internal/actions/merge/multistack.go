@@ -20,7 +20,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 
 	// 1. Discover available stacks
 	out.Debug("multistack: discovering available stacks")
-	stacks, err := DiscoverStacks(eng)
+	stacks, err := DiscoverStacks(ctx.Context, eng)
 	if err != nil {
 		out.Debug("multistack: failed to discover stacks: %v", err)
 		return nil, fmt.Errorf("failed to discover stacks: %w", err)

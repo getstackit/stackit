@@ -138,7 +138,7 @@ func TestCreateAction_Insert(t *testing.T) {
 		require.NoError(t, err)
 
 		// Rebuild engine to ensure it knows we're on child1
-		err = s.Context.Engine.Rebuild(s.Context.Engine.Trunk().GetName())
+		err = s.Context.Engine.Rebuild(t.Context(), s.Context.Engine.Trunk().GetName())
 		require.NoError(t, err)
 
 		// 3. Insert 'inserted' after child1
@@ -280,7 +280,7 @@ func TestCreateAction_Insert_Deep(t *testing.T) {
 		// 2. Go back to main
 		err = s.Scene.Repo.CheckoutBranch("main")
 		require.NoError(t, err)
-		err = s.Context.Engine.Rebuild("main")
+		err = s.Context.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// 3. Insert 'inserted' after main
@@ -342,7 +342,7 @@ func TestCreateAction_Worktree(t *testing.T) {
 		require.NotEmpty(t, stackRoot)
 		require.NotEqual(t, "feature-branch", stackRoot)
 
-		worktreeInfo, err := eng.GetWorktreeForStack(stackRoot)
+		worktreeInfo, err := eng.GetWorktreeForStack(t.Context(), stackRoot)
 		require.NoError(t, err)
 		require.NotNil(t, worktreeInfo)
 		require.Equal(t, stackRoot, worktreeInfo.AnchorBranch)

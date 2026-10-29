@@ -1,6 +1,7 @@
 package navigation
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -46,7 +47,7 @@ func printTreeJSON(ctx *app.Context, opts actions.TreeOptions) error {
 	if opts.BranchName != ctx.Engine.Trunk().GetName() || opts.Steps != nil {
 		// Scope the JSON to exactly what the text view would draw, before any
 		// expensive enrichment runs.
-		_, _, req.Branches = resolveVisibleTree(ctx.Engine, opts)
+		_, _, req.Branches = resolveVisibleTree(ctx.Context, ctx.Engine, opts)
 	}
 	// Short views are local and structural: never initialize the GitHub client.
 	var gh github.Client
@@ -65,7 +66,7 @@ func printTreeJSON(ctx *app.Context, opts actions.TreeOptions) error {
 
 func printTree(ctx *app.Context, opts actions.TreeOptions) error {
 	eng := ctx.Engine
-	renderer, worktrees, visibleBranches := resolveVisibleTree(eng, opts)
+	renderer, worktrees, visibleBranches := resolveVisibleTree(ctx.Context, eng, opts)
 	renderOpts := tree.RenderOptions{
 		Mode:        tree.RenderModeFull, // We want the full tree characters with stats
 		Steps:       opts.Steps,
@@ -98,9 +99,9 @@ func printTree(ctx *app.Context, opts actions.TreeOptions) error {
 // opts. Text and JSON views both resolve through it, so --stack and --steps
 // select the same branches in each. One managed-worktree listing backs both the
 // renderer (which empty anchors stay visible) and later worktree annotations.
-func resolveVisibleTree(eng engine.Engine, opts actions.TreeOptions) (*tree.StackTreeRenderer, *stackview.WorktreeIndex, engine.Branches) {
-	worktrees := stackview.BuildWorktreeIndex(eng)
-	renderer := newTreeRenderer(eng, worktrees)
+func resolveVisibleTree(ctx context.Context, eng engine.Engine, opts actions.TreeOptions) (*tree.StackTreeRenderer, *stackview.WorktreeIndex, engine.Branches) {
+	worktrees := stackview.BuildWorktreeIndex(ctx, eng)
+	renderer := newTreeRenderer(ctx, eng, worktrees)
 	visible := visibleTreeBranches(renderer, opts.BranchName, tree.RenderOptions{
 		Mode:  tree.RenderModeFull,
 		Steps: opts.Steps,
@@ -109,11 +110,11 @@ func resolveVisibleTree(eng engine.Engine, opts actions.TreeOptions) (*tree.Stac
 }
 
 // newTreeRenderer picks the renderer variant for the current worktrees.
-func newTreeRenderer(eng engine.StackView, worktrees *stackview.WorktreeIndex) *tree.StackTreeRenderer {
+func newTreeRenderer(ctx context.Context, eng engine.StackView, worktrees *stackview.WorktreeIndex) *tree.StackTreeRenderer {
 	if emptyAnchors := worktrees.EmptyAnchorNames(); emptyAnchors != nil {
-		return tui.NewStackTreeRendererWithEmptyWorktrees(eng, emptyAnchors)
+		return tui.NewStackTreeRendererWithEmptyWorktrees(ctx, eng, emptyAnchors)
 	}
-	return tui.NewStackTreeRenderer(eng)
+	return tui.NewStackTreeRenderer(ctx, eng)
 }
 
 // buildTreeAnnotations resolves annotations for just the branches that will

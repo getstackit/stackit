@@ -1,6 +1,7 @@
 package pr
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -70,19 +71,19 @@ func DefaultNavigationOptions() NavigationOptions {
 // location the footer is stripped, since it is posted as a comment or not at
 // all. Every writer of a PR body goes through here, so a body is never sent
 // with a stale or missing generated section.
-func ComposeBody(body, branch string, eng engine.BranchReader, opts NavigationOptions) string {
+func ComposeBody(ctx context.Context, body, branch string, eng engine.BranchReader, opts NavigationOptions) string {
 	composed := UpdatePRBodyLockSection(body, CreateLockSection(branch, eng))
 	if opts.Location == config.NavigationLocationBody {
-		return UpdatePRBodyFooter(composed, CreatePRBodyFooterWithOptions(branch, eng, opts))
+		return UpdatePRBodyFooter(composed, CreatePRBodyFooterWithOptions(ctx, branch, eng, opts))
 	}
 	return StripFooter(composed)
 }
 
 // countStackBranches counts the number of non-trunk branches in the stack.
-func countStackBranches(branch string, eng engine.BranchReader) int {
+func countStackBranches(ctx context.Context, branch string, eng engine.BranchReader) int {
 	terminalParentName := findTerminalParent(branch, eng)
 	terminalParent := eng.GetBranch(terminalParentName)
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	count := 0
 	branchRef := eng.GetBranch(branch)
@@ -102,13 +103,13 @@ func countStackBranches(branch string, eng engine.BranchReader) int {
 }
 
 // ShouldShowNavigation determines if navigation should be displayed based on options.
-func ShouldShowNavigation(opts NavigationOptions, branch string, eng engine.BranchReader) bool {
+func ShouldShowNavigation(ctx context.Context, opts NavigationOptions, branch string, eng engine.BranchReader) bool {
 	switch opts.When {
 	case config.NavigationWhenNever:
 		return false
 	case config.NavigationWhenMultiple:
 		// Only show navigation if there are 2 or more branches in the stack
-		return countStackBranches(branch, eng) >= 2
+		return countStackBranches(ctx, branch, eng) >= 2
 	case config.NavigationWhenAlways:
 		fallthrough
 	default:
@@ -119,8 +120,8 @@ func ShouldShowNavigation(opts NavigationOptions, branch string, eng engine.Bran
 // CreatePRBodyFooterWithOptions creates a PR body footer with dependency tree using custom options.
 // Returns empty string if neither navigation nor description should be shown.
 // The footer includes both the stack description and the navigation tree in a combined section.
-func CreatePRBodyFooterWithOptions(branch string, eng engine.BranchReader, opts NavigationOptions) string {
-	content := renderNavigationContent(branch, eng, opts)
+func CreatePRBodyFooterWithOptions(ctx context.Context, branch string, eng engine.BranchReader, opts NavigationOptions) string {
+	content := renderNavigationContent(ctx, branch, eng, opts)
 	if content == "" {
 		return ""
 	}
@@ -128,10 +129,10 @@ func CreatePRBodyFooterWithOptions(branch string, eng engine.BranchReader, opts 
 	return footerTitle + content + footerFooter
 }
 
-func renderNavigationContent(branch string, eng engine.BranchReader, opts NavigationOptions) string {
+func renderNavigationContent(ctx context.Context, branch string, eng engine.BranchReader, opts NavigationOptions) string {
 	branchObj := eng.GetBranch(branch)
-	showNav := ShouldShowNavigation(opts, branch, eng)
-	desc := eng.GetStackDescription(branchObj)
+	showNav := ShouldShowNavigation(ctx, opts, branch, eng)
+	desc := eng.GetStackDescription(ctx, branchObj)
 	descContent := formatStackDescription(desc)
 
 	// If nothing to show, return empty
@@ -155,7 +156,7 @@ func renderNavigationContent(branch string, eng engine.BranchReader, opts Naviga
 
 		terminalParentName := findTerminalParent(branch, eng)
 		terminalParent := eng.GetBranch(terminalParentName)
-		graph := eng.Graph(engine.SortStrategyAlphabetical)
+		graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 		// Add scope if present
 		scope := eng.GetScope(branchObj)
@@ -338,8 +339,8 @@ func StripLockSection(body string) string {
 // CreateNavigationComment creates the content for a navigation comment.
 // This includes both the stack description and the navigation tree.
 // Returns empty string if neither navigation nor description should be shown.
-func CreateNavigationComment(branch string, eng engine.BranchReader, opts NavigationOptions) string {
-	content := renderNavigationContent(branch, eng, opts)
+func CreateNavigationComment(ctx context.Context, branch string, eng engine.BranchReader, opts NavigationOptions) string {
+	content := renderNavigationContent(ctx, branch, eng, opts)
 	if content == "" {
 		return ""
 	}

@@ -386,7 +386,7 @@ func TestLeafMergeChecks(t *testing.T) { //nolint:tparallel // subtests share on
 			"branch1":     "main",
 			"branch2":     "branch1",
 		})
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 
 	// Rows share one graph, so they run sequentially.
 	t.Run("AllAreLeaves", func(t *testing.T) {

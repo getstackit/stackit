@@ -49,9 +49,9 @@ func (c Chain) Validate() error {
 // BranchValidationEngine is the minimal engine contract needed by validators.
 // Keeping this narrow avoids coupling callers to the full engine.Engine surface.
 type BranchValidationEngine interface {
-	ValidateOnBranch() (string, error)
+	ValidateOnBranch(ctx context.Context) (string, error)
 	GetBranch(branchName string) engine.Branch
-	CurrentBranch() *engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
 	BranchNames() *engine.BranchSet
 }
 
@@ -66,9 +66,9 @@ type GitStateReader interface {
 
 // MustBeOnBranch validates that HEAD is on a branch (not detached).
 // Returns a Validator that checks the engine's current branch state.
-func MustBeOnBranch(eng BranchValidationEngine) Validator {
+func MustBeOnBranch(ctx context.Context, eng BranchValidationEngine) Validator {
 	return ValidatorFunc(func() error {
-		_, err := eng.ValidateOnBranch()
+		_, err := eng.ValidateOnBranch(ctx)
 		return err
 	})
 }
@@ -124,9 +124,9 @@ func BranchMustNotBeTrunk(eng BranchValidationEngine, branchName string) Validat
 }
 
 // CurrentBranchMustBeModifiable validates that the current branch can be modified.
-func CurrentBranchMustBeModifiable(eng BranchValidationEngine) Validator {
+func CurrentBranchMustBeModifiable(ctx context.Context, eng BranchValidationEngine) Validator {
 	return ValidatorFunc(func() error {
-		currentBranch := eng.CurrentBranch()
+		currentBranch := eng.CurrentBranch(ctx)
 		if currentBranch == nil {
 			return errors.ErrNotOnBranch
 		}
@@ -136,9 +136,9 @@ func CurrentBranchMustBeModifiable(eng BranchValidationEngine) Validator {
 
 // CurrentBranchMustNotBeTrunk validates that the current branch is not trunk.
 // The operation parameter is used in the error message (e.g., "reorder", "fold").
-func CurrentBranchMustNotBeTrunk(eng BranchValidationEngine, operation string) Validator {
+func CurrentBranchMustNotBeTrunk(ctx context.Context, eng BranchValidationEngine, operation string) Validator {
 	return ValidatorFunc(func() error {
-		currentBranch := eng.CurrentBranch()
+		currentBranch := eng.CurrentBranch(ctx)
 		if currentBranch == nil {
 			return errors.ErrNotOnBranch
 		}
@@ -150,9 +150,9 @@ func CurrentBranchMustNotBeTrunk(eng BranchValidationEngine, operation string) V
 }
 
 // CurrentBranchMustBeTracked validates that the current branch is tracked by stackit.
-func CurrentBranchMustBeTracked(eng BranchValidationEngine) Validator {
+func CurrentBranchMustBeTracked(ctx context.Context, eng BranchValidationEngine) Validator {
 	return ValidatorFunc(func() error {
-		currentBranch := eng.CurrentBranch()
+		currentBranch := eng.CurrentBranch(ctx)
 		if currentBranch == nil {
 			return errors.ErrNotOnBranch
 		}

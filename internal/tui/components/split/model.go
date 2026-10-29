@@ -1,6 +1,7 @@
 package split
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -57,6 +58,10 @@ type Model struct {
 	// Configuration
 	config Config
 
+	// ctx bounds the engine reads the model makes while rendering. Bubble Tea
+	// calls View with no context, so the model keeps the one it was built with.
+	ctx context.Context
+
 	// Current state
 	state    State
 	subState SubState
@@ -97,7 +102,7 @@ type Model struct {
 }
 
 // NewModel creates a new split wizard model
-func NewModel(cfg Config) *Model {
+func NewModel(ctx context.Context, cfg Config) *Model {
 	ti := textinput.New()
 	ti.Placeholder = "branch-name"
 	ti.CharLimit = 100
@@ -105,6 +110,7 @@ func NewModel(cfg Config) *Model {
 
 	m := &Model{
 		config:      cfg,
+		ctx:         ctx,
 		help:        help.New(),
 		branchInput: ti,
 		keys:        DefaultKeyMap,
@@ -130,7 +136,7 @@ func NewModel(cfg Config) *Model {
 
 	// Build stack path for direction visualization
 	if cfg.Engine != nil && cfg.Branch.GetName() != "" {
-		m.buildStackPath()
+		m.buildStackPath(ctx)
 	}
 
 	return m
@@ -492,7 +498,7 @@ func (m *Model) viewSelectingDirection() string {
 	sb.WriteString("\n")
 
 	// Stack tree preview
-	sb.WriteString(m.renderStackTree())
+	sb.WriteString(m.renderStackTree(m.ctx))
 	sb.WriteString("\n\n")
 
 	sb.WriteString(m.help.View(navigationKeyMap{m.keys}))
@@ -526,12 +532,12 @@ func (m *Model) renderDirectionOptions() string {
 }
 
 // renderStackTree renders the stack tree with insertion point
-func (m *Model) renderStackTree() string {
+func (m *Model) renderStackTree(ctx context.Context) string {
 	if m.config.Engine == nil || len(m.stackPath) == 0 {
 		return ""
 	}
 
-	virtualTree := m.buildVirtualTree()
+	virtualTree := m.buildVirtualTree(ctx)
 	renderer := tree.NewRenderer(virtualTree)
 
 	// Set annotation for current branch
@@ -546,7 +552,7 @@ func (m *Model) renderStackTree() string {
 
 	// Mark children as re-parented when direction is "above"
 	if m.direction == DirectionAbove {
-		graph := m.config.Engine.Graph(engine.SortStrategySmart)
+		graph := m.config.Engine.Graph(ctx, engine.SortStrategySmart)
 		for _, child := range graph.Children(m.config.Branch) {
 			renderer.SetAnnotation(child, tree.BranchAnnotation{
 				CustomLabel: "(re-parented)",
@@ -643,12 +649,12 @@ func (m *Model) viewError() string {
 }
 
 // buildStackPath builds the path from trunk to current branch
-func (m *Model) buildStackPath() {
+func (m *Model) buildStackPath(ctx context.Context) {
 	if m.config.Engine == nil {
 		return
 	}
 
-	graph := m.config.Engine.Graph(engine.SortStrategySmart)
+	graph := m.config.Engine.Graph(ctx, engine.SortStrategySmart)
 	currentName := m.config.Branch.GetName()
 
 	var path []string
@@ -667,13 +673,13 @@ func (m *Model) buildStackPath() {
 }
 
 // buildVirtualTree creates a virtual tree structure for direction preview
-func (m *Model) buildVirtualTree() *virtualTree {
+func (m *Model) buildVirtualTree(ctx context.Context) *virtualTree {
 	trunkBranch := ""
 	if len(m.stackPath) > 0 {
 		trunkBranch = m.stackPath[0]
 	}
 
-	graph := m.config.Engine.Graph(engine.SortStrategySmart)
+	graph := m.config.Engine.Graph(ctx, engine.SortStrategySmart)
 	children := graph.Children(m.config.Branch)
 
 	return &virtualTree{

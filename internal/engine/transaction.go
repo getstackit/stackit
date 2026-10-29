@@ -459,7 +459,7 @@ func (e *engineImpl) WithRetry(ctx context.Context, operation func() error) erro
 				// Refresh cache before retry.
 				// We ignore rebuild errors because the operation itself might still succeed,
 				// and if it doesn't, it will fail with a more specific error.
-				_ = e.rebuild()
+				_ = e.rebuild(ctx)
 				continue
 			}
 			return err // Non-retryable error

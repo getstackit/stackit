@@ -100,6 +100,18 @@ utils.Run(items, func(it indexed) { results[it.i] = expensive(it.b) })
 
 A single long-lived background goroutine running *alongside* the main work (one `go func` total, not one per item) is fine and does not need a pool.
 
+## Context
+
+- Anything that can spawn git/gh or hit the network takes `ctx context.Context`
+  as its first parameter, and passes it down. Do not mint
+  `context.Background()` in library code; it detaches the work from Ctrl-C and
+  from API request deadlines. Roots (`main`, `TestMain`, a long-lived
+  background owner) are the only places that create one.
+- Never pass or accept a nil context, and do not add `if ctx == nil` fallbacks.
+- Do not store a context in a struct. The exception is a Bubble Tea model,
+  whose `Update`/`View` signatures cannot take one: keep the context it was
+  built with in a field.
+
 ## Error Handling
 
 - Always handle errors explicitly (never `_`)

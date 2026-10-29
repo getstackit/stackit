@@ -241,7 +241,7 @@ func (h *OnboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	summary := httpcontract.RepoSummary{ID: entry.ID, Owner: entry.Owner, Repo: entry.Name, DisplayName: entry.DisplayName}
 	if entry.Engine != nil {
 		summary.Trunk = entry.Engine.Trunk().GetName()
-		if cur := entry.Engine.CurrentBranch(); cur != nil {
+		if cur := entry.Engine.CurrentBranch(r.Context()); cur != nil {
 			summary.CurrentBranch = cur.GetName()
 		}
 	}

@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -40,7 +41,7 @@ func run() int {
 	}()
 
 	// Check for passthrough commands before processing with cobra
-	if cli.HandlePassthrough(os.Args) {
+	if cli.HandlePassthrough(context.Background(), os.Args) {
 		return 0 // HandlePassthrough already exited
 	}
 

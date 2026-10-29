@@ -50,7 +50,7 @@ func TestCheckStackStatePrunesOrphanedMetadataInOneBatch(t *testing.T) {
 	require.Contains(t, messages, "Pruned orphaned metadata for deleted branch orphan2")
 	require.Contains(t, messages, "All 2 orphaned metadata ref(s) pruned")
 
-	refs, err := s.Engine.ListMetadataRefs()
+	refs, err := s.Engine.ListMetadataRefs(t.Context())
 	require.NoError(t, err)
 	require.NotContains(t, refs, "orphan1")
 	require.NotContains(t, refs, "orphan2")

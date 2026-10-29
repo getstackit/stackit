@@ -20,15 +20,15 @@ func PopAction(ctx *app.Context, _ PopOptions) error {
 
 	// Validate preconditions
 	if err := (validation.Chain{
-		validation.MustBeOnBranch(eng),
-		validation.CurrentBranchMustNotBeTrunk(eng, "pop"),
-		validation.CurrentBranchMustBeTracked(eng),
+		validation.MustBeOnBranch(ctx.Context, eng),
+		validation.CurrentBranchMustNotBeTrunk(ctx.Context, eng, "pop"),
+		validation.CurrentBranchMustBeTracked(ctx.Context, eng),
 		validation.MustNotHaveRebaseInProgress(ctx.Context, eng),
 		validation.MustNotHaveUncommittedChanges(ctx.Context, eng),
 	}).Validate(); err != nil {
 		return err
 	}
-	currentBranch := eng.CurrentBranch().GetName()
+	currentBranch := eng.CurrentBranch(ctx.Context).GetName()
 	currentBranchObj := eng.GetBranch(currentBranch)
 
 	// Get parent branch

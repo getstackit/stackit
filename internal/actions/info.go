@@ -65,7 +65,7 @@ type branchInfoDebugLogger interface {
 
 // QueryBranchInfo gathers structured information for `stackit info`.
 func QueryBranchInfo(ctx context.Context, eng engine.Engine, opts BranchInfoQueryOptions, debug branchInfoDebugLogger) (BranchInfoResult, error) {
-	branchName, err := ResolveBranchName(eng, opts.BranchName)
+	branchName, err := ResolveBranchName(ctx, eng, opts.BranchName)
 	if err != nil {
 		return BranchInfoResult{}, err
 	}
@@ -93,7 +93,7 @@ func refreshRemoteMetadataForBranchInfo(ctx context.Context, eng engine.Engine, 
 }
 
 func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName string, branch engine.Branch, opts BranchInfoQueryOptions) (BranchInfoResult, error) {
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx)
 	isCurrent := currentBranch != nil && branchName == currentBranch.GetName()
 	isTrunk := branch.IsTrunk()
 
@@ -119,7 +119,7 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 		result.Parent = parent.GetName()
 	}
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	for _, child := range graph.ChildBranches(branch) {
 		result.Children = append(result.Children, child.GetName())
 	}
@@ -151,7 +151,7 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 	result.DiffStats.Deletions = diff.Deleted
 	result.DiffStats.FilesChanged = diff.FilesChanged
 
-	stackDesc := eng.GetStackDescription(branch)
+	stackDesc := eng.GetStackDescription(ctx, branch)
 	if stackDesc != nil && !stackDesc.IsEmpty() {
 		result.StackTitle = stackDesc.Title
 		result.StackDescription = stackDesc.Description

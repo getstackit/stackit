@@ -71,7 +71,7 @@ func TestCleanBranches(t *testing.T) {
 			RunGit("merge", "branch1")
 
 		// Rebuild to see changes
-		err := s.Engine.Rebuild("main")
+		err := s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// Mark branch1 as merged via PR info
@@ -110,7 +110,7 @@ func TestCleanBranches(t *testing.T) {
 			RunGit("merge", "branch1")
 
 		// Rebuild to see changes
-		err := s.Engine.Rebuild("main")
+		err := s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// Mark branch1 as merged
@@ -155,7 +155,7 @@ func TestCleanBranches(t *testing.T) {
 		s.Checkout("main").
 			RunGit("merge", "branch1").
 			RunGit("merge", "branch2")
-		require.NoError(t, s.Engine.Rebuild("main"))
+		require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 
 		for i, name := range []string{"branch1", "branch2"} {
 			prInfo := testhelpers.NewTestPrInfoMerged(git.PRNumber(i+1), "main")
@@ -220,7 +220,7 @@ func TestCleanBranches(t *testing.T) {
 			RunGit("merge", "branch1")
 
 		// Rebuild to see changes
-		err := s.Engine.Rebuild("main")
+		err := s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// Lock the branch (simulating consolidation)
@@ -255,7 +255,7 @@ func TestCleanBranches(t *testing.T) {
 		s.Checkout("main").
 			RunGit("merge", "branch1")
 
-		err := s.Engine.Rebuild("main")
+		err := s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// Mark branch1 as merged

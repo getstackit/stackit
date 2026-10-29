@@ -23,7 +23,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		err := repo.CreateChangeAndCommit("file1 content", "file1")
 		require.NoError(t, err)
 
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot: scene.Dir,
 			Trunk:    "main",
 		})
@@ -115,7 +115,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		err := repo.CreateChangeAndCommit("initial", "file")
 		require.NoError(t, err)
 
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot: scene.Dir,
 			Trunk:    "main",
 		})
@@ -168,7 +168,7 @@ func TestApplySplitToCommits(t *testing.T) {
 	t.Run("validates branch names and points match", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, testhelpers.BasicSceneSetup)
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot: scene.Dir,
 			Trunk:    "main",
 		})
@@ -204,7 +204,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		err := repo.CreateChangeAndCommit("file1 content", "file1")
 		require.NoError(t, err)
 
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot: scene.Dir,
 			Trunk:    "main",
 		})
@@ -280,7 +280,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		require.NoError(t, repo.CreateChangeAndCommit("first commit", "file1"))
 		require.NoError(t, repo.CreateChangeAndCommit("second commit", "file2"))
 
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot:     scene.Dir,
 			Trunk:        "main",
 			LinearStacks: true,
@@ -313,7 +313,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		err := repo.CreateChangeAndCommit("main content", "mainfile")
 		require.NoError(t, err)
 
-		eng, err := engine.NewEngine(engine.Options{
+		eng, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot: scene.Dir,
 			Trunk:    "main",
 		})

@@ -34,7 +34,7 @@ func PrecommitInstallActionWithOutput(repoRoot string, writer io.Writer) error {
 // PrecommitVerifyAction checks if the current branch can be modified
 func PrecommitVerifyAction(ctx *app.Context) error {
 	eng := ctx.Engine
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 
 	if currentBranch == nil {
 		// Not on a branch, allow the commit (e.g. initial commit or detached HEAD)

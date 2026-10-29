@@ -108,11 +108,11 @@ func persistMergeMethod(ctx *app.Context, cfg MergeMethodConfig, method github.M
 type mergeExecuteEngine interface {
 	// Branch graph reads
 	Trunk() engine.Branch
-	CurrentBranch() *engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
 	GetBranch(branchName string) engine.Branch
 	GetScope(branch engine.Branch) engine.Scope
-	GetStackDescription(branch engine.Branch) *git.StackDescription
-	GetRemote() string
+	GetStackDescription(ctx context.Context, branch engine.Branch) *git.StackDescription
+	GetRemote(ctx context.Context) string
 	GetCurrentRevision(ctx context.Context) (string, error)
 	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
 
@@ -121,7 +121,7 @@ type mergeExecuteEngine interface {
 	CheckoutBranch(ctx context.Context, branch engine.Branch) error
 	DeleteBranch(ctx context.Context, branch engine.Branch) error
 	SetParent(ctx context.Context, branch engine.Branch, parentBranch engine.Branch, mode engine.DivergenceMode) error
-	SetBranchType(branch engine.Branch, branchType git.BranchType) error
+	SetBranchType(ctx context.Context, branch engine.Branch, branchType git.BranchType) error
 	SetLocked(ctx context.Context, branches engine.Branches, reason engine.LockReason) (engine.BatchLockResult, error)
 	BatchUpsertPrInfo(ctx context.Context, updates map[string]*engine.PrInfo) error
 
@@ -366,7 +366,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		case engine.RestackDone:
 			// Success - now push the rebased branch and update PR base
 			// Force push is required since we rebased
-			if err := eng.PushBranches(ctx.Context, eng.GetRemote(), []git.PushSpec{{BranchName: step.BranchName, LeaseMode: git.PushLeaseNone}}, git.PushOptions{
+			if err := eng.PushBranches(ctx.Context, eng.GetRemote(ctx.Context), []git.PushSpec{{BranchName: step.BranchName, LeaseMode: git.PushLeaseNone}}, git.PushOptions{
 				Force:    true,
 				NoVerify: true, // Internal restack usually shouldn't run hooks
 			}).One(); err != nil {
@@ -382,7 +382,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 
 		case engine.RestackConflict:
 			// Save continuation state
-			currentBranch := eng.CurrentBranch()
+			currentBranch := eng.CurrentBranch(ctx.Context)
 			currentBranchName := ""
 			if currentBranch != nil {
 				currentBranchName = currentBranch.GetName()
@@ -399,7 +399,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		case engine.RestackUnneeded:
 			// Already up to date, but still need to ensure PR base is correct
 			// Push in case local is ahead of remote
-			if err := eng.PushBranches(ctx.Context, eng.GetRemote(), []git.PushSpec{{BranchName: step.BranchName, LeaseMode: git.PushLeaseNone}}, git.PushOptions{
+			if err := eng.PushBranches(ctx.Context, eng.GetRemote(ctx.Context), []git.PushSpec{{BranchName: step.BranchName, LeaseMode: git.PushLeaseNone}}, git.PushOptions{
 				Force:    true,
 				NoVerify: true,
 			}).One(); err != nil {

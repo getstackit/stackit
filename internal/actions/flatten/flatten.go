@@ -22,10 +22,10 @@ type Options struct {
 // flattenEngine lists exactly the engine methods flatten calls.
 type flattenEngine interface {
 	engine.BranchLookup
-	CurrentBranch() *engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
 	Trunk() engine.Branch
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
-	SortBranchesTopologically(branches engine.Branches) engine.Branches
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+	SortBranchesTopologically(ctx context.Context, branches engine.Branches) engine.Branches
 	BatchRevisions(branches engine.Branches) engine.RevisionMap
 	BatchDivergencePoints(branches engine.Branches) engine.RevisionMap
 	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec) (*engine.RebaseValidation, error)
@@ -43,7 +43,7 @@ type flattenEngine interface {
 // the handler.Complete summary path.
 func HasFlattenWork(ctx *app.Context, opts Options) (bool, error) {
 	var eng flattenEngine = ctx.Engine
-	branchName, err := actions.ResolveBranchName(eng, opts.BranchName)
+	branchName, err := actions.ResolveBranchName(ctx.Context, eng, opts.BranchName)
 	if err != nil {
 		return false, err
 	}
@@ -52,7 +52,7 @@ func HasFlattenWork(ctx *app.Context, opts Options) (bool, error) {
 		return false, fmt.Errorf("branch %q is not tracked by stackit", branchName)
 	}
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	branches := graph.FullStack(branch)
 	trunk := eng.Trunk()
 	for _, b := range branches {
@@ -78,7 +78,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	defer handler.Cleanup()
 
 	// Resolve branch name
-	branchName, err := actions.ResolveBranchName(eng, opts.BranchName)
+	branchName, err := actions.ResolveBranchName(ctx.Context, eng, opts.BranchName)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Build stack graph to get all related branches
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	branches := graph.FullStack(branch)
 
 	if len(branches) == 0 {
@@ -99,7 +99,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Sort topologically (parents before children)
-	sortedBranches := eng.SortBranchesTopologically(branches)
+	sortedBranches := eng.SortBranchesTopologically(ctx.Context, branches)
 
 	// Filter out trunk - we only flatten feature branches
 	trunk := eng.Trunk()
@@ -156,7 +156,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	for _, name := range allBranchesToValidate {
 		branchObjects = branchObjects.Append(eng.GetBranch(name))
 	}
-	sortedForValidation := eng.SortBranchesTopologically(branchObjects)
+	sortedForValidation := eng.SortBranchesTopologically(ctx.Context, branchObjects)
 
 	// Build rebase specs for all branches in topological order
 	allRebaseSpecs := buildRebaseSpecsForAll(eng, plan, sortedForValidation)
@@ -254,7 +254,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.OnStep(StepRestacking, basehandler.StatusStarted, "Restacking branches...")
 
 	// Rebuild graph after parent changes
-	graph = eng.Graph(engine.SortStrategyAlphabetical)
+	graph = eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Collect all branches that need restacking (moved branches and their descendants)
 	branchesToRestack := engine.Branches{}
@@ -275,7 +275,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			branchesToRestack = branchesToRestack.Append(branch)
 		}
 	}
-	branchesToRestack = eng.SortBranchesTopologically(branchesToRestack)
+	branchesToRestack = eng.SortBranchesTopologically(ctx.Context, branchesToRestack)
 
 	if err := actions.RestackBranches(ctx, branchesToRestack); err != nil {
 		handler.OnStep(StepRestacking, basehandler.StatusFailed, err.Error())

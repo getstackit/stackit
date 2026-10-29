@@ -23,7 +23,7 @@ and seeing which branch the current branch is based on.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.RunReadOnlyCurrentBranch(cmd, func(ctx *app.Context) error {
 				// Get current branch
-				currentBranch := ctx.Engine.CurrentBranch()
+				currentBranch := ctx.Engine.CurrentBranch(ctx.Context)
 				if currentBranch == nil {
 					return errors.ErrNotOnBranch
 				}

@@ -76,8 +76,8 @@ var modifyingGitCommands = []string{
 
 // HandlePassthrough checks if the command should be passed through to git
 // and executes it if so. Returns true if the command was handled (and the program should exit).
-func HandlePassthrough(args []string) bool {
-	handled, _ := HandlePassthroughWithResult(args, PassthroughExitProcess, os.Stdout, os.Stderr)
+func HandlePassthrough(ctx context.Context, args []string) bool {
+	handled, _ := HandlePassthroughWithResult(ctx, args, PassthroughExitProcess, os.Stdout, os.Stderr)
 	return handled
 }
 
@@ -94,7 +94,7 @@ const (
 
 // HandlePassthroughWithResult is like HandlePassthrough but, with
 // PassthroughReturnError, returns an error instead of exiting.
-func HandlePassthroughWithResult(args []string, exitMode PassthroughExitMode, out, errWriter io.Writer) (bool, error) {
+func HandlePassthroughWithResult(ctx context.Context, args []string, exitMode PassthroughExitMode, out, errWriter io.Writer) (bool, error) {
 	exit := exitMode == PassthroughExitProcess
 	if len(args) < 2 {
 		return false, nil
@@ -132,7 +132,7 @@ func HandlePassthroughWithResult(args []string, exitMode PassthroughExitMode, ou
 				if cwd != "" {
 					runner = git.NewRunnerWithPath(cwd, nil)
 				}
-				if locked, frozen, branch := isCurrentBranchLockedOrFrozen(runner); locked || frozen {
+				if locked, frozen, branch := isCurrentBranchLockedOrFrozen(ctx, runner); locked || frozen {
 					var state, cmd string
 					switch {
 					case locked && frozen:
@@ -192,14 +192,13 @@ func HandlePassthroughWithResult(args []string, exitMode PassthroughExitMode, ou
 	return false, nil
 }
 
-func isCurrentBranchLockedOrFrozen(runner git.Runner) (bool, bool, string) {
-	branch, err := runner.GetCurrentBranch()
+func isCurrentBranchLockedOrFrozen(ctx context.Context, runner git.Runner) (bool, bool, string) {
+	branch, err := runner.GetCurrentBranch(ctx)
 	if err != nil {
 		return false, false, ""
 	}
 	branch = strings.TrimSpace(branch)
 
-	ctx := context.Background()
 	store := git.NewMetadataStore(runner)
 
 	meta, err := store.ReadMetadata(ctx, branch).Get(branch)

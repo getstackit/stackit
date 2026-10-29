@@ -36,7 +36,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	out.Debug("split wizard: starting with opts=%+v", opts)
 
 	// Get current branch
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	if currentBranch == nil {
 		return errors.ErrNotOnBranch
 	}
@@ -88,7 +88,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		if style == "" {
 			handler.OnStep(StepChoosingType, handlerBase.StatusStarted, "Choose split type")
 
-			selectedStyle, err := handler.PromptSplitType(availableTypes)
+			selectedStyle, err := handler.PromptSplitType(ctx.Context, availableTypes)
 			if err != nil {
 				return err
 			}
@@ -111,7 +111,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 			}
 
 			// Get children of current branch
-			graph := eng.Graph(engine.SortStrategyAlphabetical)
+			graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 			childNames := graph.Children(*currentBranch)
 
 			dirCtx := DirectionContext{
@@ -121,7 +121,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 				Children:      childNames,
 			}
 
-			selectedDirection, err := handler.PromptDirection(dirCtx)
+			selectedDirection, err := handler.PromptDirection(ctx.Context, dirCtx)
 			if errors.Is(err, errors.ErrBack) {
 				// User wants to go back to type selection
 				style = ""
@@ -235,7 +235,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 				IncludeCurrent:    false,
 				RecursiveChildren: true,
 			}
-			graph := eng.Graph(engine.SortStrategyAlphabetical)
+			graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 			upstackBranches := graph.Range(*currentBranch, rng)
 			if len(upstackBranches) > 0 {
 				if err := actions.RestackBranches(ctx, upstackBranches); err != nil {

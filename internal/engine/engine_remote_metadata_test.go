@@ -119,7 +119,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 		err = eng.LoadRemoteMetadataCache(t.Context())
 		require.NoError(t, err)
 
-		orphaned, err := eng.FindOrphanedLocalMetadata()
+		orphaned, err := eng.FindOrphanedLocalMetadata(t.Context())
 		require.NoError(t, err)
 		require.Len(t, orphaned, 1, "expected 1 orphaned metadata entry")
 		require.Equal(t, "feature-c", orphaned[0].BranchName)
@@ -205,7 +205,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 
 		sh.Rebuild()
 
-		orphaned, err := eng.FindOrphanedLocalMetadata()
+		orphaned, err := eng.FindOrphanedLocalMetadata(t.Context())
 		require.NoError(t, err)
 
 		found := false

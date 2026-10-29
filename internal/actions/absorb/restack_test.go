@@ -20,7 +20,7 @@ func TestSelectRestackBranches(t *testing.T) {
 			"d": "a",
 		})
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 
 	t.Run("all mode uses descendants of oldest modified branch", func(t *testing.T) {
 		branches := selectRestackBranches(
@@ -69,7 +69,7 @@ func TestSelectRestackBranches(t *testing.T) {
 		require.NoError(t, err)
 		s.Rebuild()
 
-		refreshedGraph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+		refreshedGraph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 		branches := selectRestackBranches(
 			refreshedGraph,
 			s.Engine,

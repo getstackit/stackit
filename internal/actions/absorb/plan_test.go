@@ -62,7 +62,7 @@ func TestGeneratePlanJSON(t *testing.T) {
 		newFiles := []string{"new_file.go"}
 
 		// Generate plan JSON
-		planJSON, err := GeneratePlanJSON(
+		planJSON, err := GeneratePlanJSON(t.Context(),
 			"branch-b",
 			hunkTargets,
 			unabsorbedHunks,
@@ -124,7 +124,7 @@ func TestGeneratePlanJSON(t *testing.T) {
 		s.Checkout("branch-a")
 
 		// Generate plan with empty inputs
-		planJSON, err := GeneratePlanJSON(
+		planJSON, err := GeneratePlanJSON(t.Context(),
 			"branch-a",
 			[]git.HunkTarget{},
 			[]Unabsorbable{},

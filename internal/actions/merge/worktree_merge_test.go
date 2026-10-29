@@ -82,7 +82,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		require.NotContains(t, s.Engine.AllBranches().Names(), "branch-a")
 
 		// Verify your main workspace remains on main
-		currentBranch := s.Engine.CurrentBranch()
+		currentBranch := s.Engine.CurrentBranch(t.Context())
 		require.NotNil(t, currentBranch)
 		require.Equal(t, "main", currentBranch.GetName())
 	})

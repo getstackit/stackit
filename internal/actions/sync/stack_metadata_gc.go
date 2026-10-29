@@ -21,7 +21,7 @@ func gcOrphanedStackMetadata(ctx *app.Context) *StackMetadataGCResult {
 	}
 
 	// 1. Get all local stack metadata refs (returns map[stackID]sha)
-	allStackRefs, err := ctx.Engine.ListStackMetadata()
+	allStackRefs, err := ctx.Engine.ListStackMetadata(ctx.Context)
 	if err != nil {
 		ctx.Logger.Debug("failed to list stack metadata refs error=%v", err)
 		return result

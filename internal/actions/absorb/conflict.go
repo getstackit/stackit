@@ -39,7 +39,7 @@ func IsAbsorbInProgress(ctx *app.Context) bool {
 
 	// Check for detached HEAD (might be mid-absorb failure)
 	// engine.CurrentBranch() returns nil if in detached HEAD.
-	if ctx.Engine.CurrentBranch() == nil {
+	if ctx.Engine.CurrentBranch(ctx.Context) == nil {
 		// In detached HEAD - could be absorb or something else
 		// Check reflog for signs of absorb
 		reflog, _ := ctx.Engine.GetReflog(ctx.Context, 5, "%gs")
@@ -59,7 +59,7 @@ func ShowConflict(ctx *app.Context) error {
 	eng := ctx.Engine
 
 	// Check if we're in a detached HEAD state (might be mid-absorb failure)
-	if eng.CurrentBranch() == nil {
+	if eng.CurrentBranch(ctx.Context) == nil {
 		out.Warn("Repository is in detached HEAD state.")
 		out.Info("This may be from a failed absorb. Run 'stackit abort' to recover.")
 		out.Info("")
@@ -117,13 +117,13 @@ func ShowConflict(ctx *app.Context) error {
 	out.Info("")
 
 	// Get current branch info
-	currentBranchObj := eng.CurrentBranch()
+	currentBranchObj := eng.CurrentBranch(ctx.Context)
 	if currentBranchObj == nil {
 		return errors.New("not on a tracked branch")
 	}
 
 	// Build StackGraph for efficient traversals
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Get downstack commits
 	downstackBranches := graph.Range(*currentBranchObj, engine.StackRange{RecursiveParents: true})
@@ -156,7 +156,7 @@ func Abort(ctx *app.Context) error {
 	eng := ctx.Engine
 
 	// Check if we're in a detached HEAD state
-	if eng.CurrentBranch() != nil {
+	if eng.CurrentBranch(ctx.Context) != nil {
 		// Check for stashed changes from absorb
 		stashList, _ := eng.StashList(ctx.Context)
 		if strings.Contains(stashList, absorbStashMarker) {

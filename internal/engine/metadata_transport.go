@@ -17,9 +17,6 @@ import (
 // engine cache. Callers must pass a context with a deadline because this may
 // perform network I/O.
 func (e *engineImpl) EnsureRemoteMetadata(ctx context.Context) error {
-	if ctx == nil {
-		return errors.New("ensure remote metadata requires a context with a deadline")
-	}
 	if _, ok := ctx.Deadline(); !ok {
 		return errors.New("ensure remote metadata requires a context with a deadline")
 	}
@@ -47,7 +44,7 @@ func (e *engineImpl) testRemoteMetadataCompatibility(ctx context.Context) error 
 // metadata pushes can still succeed when local fetch configuration cannot be
 // updated.
 func (e *engineImpl) PrepareRemoteMetadataPush(ctx context.Context) error {
-	if e.IsRemoteSyncEnabled() {
+	if e.IsRemoteSyncEnabled(ctx) {
 		return nil
 	}
 	if err := e.testRemoteMetadataCompatibility(ctx); err != nil {
@@ -79,14 +76,14 @@ func (e *engineImpl) PushStackMetadata(ctx context.Context, stackIDs []string) e
 
 // ConfigureStackMetadataSync adds the stack-metadata refspec to the configured
 // remote so subsequent git fetches pick up stack-ref changes.
-func (e *engineImpl) ConfigureStackMetadataSync(_ context.Context) error {
-	return e.git.EnsureStackMetaRefspecConfigured()
+func (e *engineImpl) ConfigureStackMetadataSync(ctx context.Context) error {
+	return e.git.EnsureStackMetaRefspecConfigured(ctx)
 }
 
 // ListStackMetadata returns a map of local stack IDs to their ref SHAs. Used
 // by stack-metadata GC during sync.
-func (e *engineImpl) ListStackMetadata() (map[string]string, error) {
-	return e.metadata.ListStackMetas()
+func (e *engineImpl) ListStackMetadata(ctx context.Context) (map[string]string, error) {
+	return e.metadata.ListStackMetas(ctx)
 }
 
 // DeleteStackMetadata removes the local stack-metadata refs for the given

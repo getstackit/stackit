@@ -114,7 +114,7 @@ func (e *engineImpl) IsWorktreeAnchor(branch Branch) bool {
 }
 
 // SetBranchType sets the branch type for a branch
-func (e *engineImpl) SetBranchType(branch Branch, branchType git.BranchType) error {
+func (e *engineImpl) SetBranchType(ctx context.Context, branch Branch, branchType git.BranchType) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -130,7 +130,7 @@ func (e *engineImpl) SetBranchType(branch Branch, branchType git.BranchType) err
 	meta = meta.WithBranchType(branchType)
 
 	// Write metadata
-	if err := e.writeMetadata(branchName, meta); err != nil {
+	if err := e.writeMetadata(ctx, branchName, meta); err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
 
@@ -242,10 +242,6 @@ func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
 // requested branches. It lists remote branch SHAs once and does not mutate
 // engine state.
 func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
 	results := make(map[string]BranchRemoteStatus, len(branches))
 	if len(branches) == 0 {
 		return results
@@ -254,7 +250,7 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 	branchNames := branches.Names()
 	localShas, _ := e.git.ReadRevisions(ctx, branchNames...).ValuesAndErrors()
 
-	remote := e.git.GetRemote()
+	remote := e.git.GetRemote(ctx)
 	remoteShas, err := e.git.FetchRemoteShas(ctx, remote)
 	if err != nil {
 		remoteShas = map[string]string{}
@@ -328,14 +324,11 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 // fetched, fresh clone) it returns HasRemoteRef=false and AheadOrDiverged=false
 // so callers leave such repos unguarded.
 func (e *engineImpl) TrunkRemoteState(ctx context.Context) TrunkRemoteState {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	e.mu.RLock()
 	trunk := e.trunk
 	e.mu.RUnlock()
 
-	remote := e.git.GetRemote()
+	remote := e.git.GetRemote(ctx)
 	state := TrunkRemoteState{RemoteRef: remote + "/" + trunk}
 
 	remoteSha, err := e.git.ReadRevisions(ctx, "refs/remotes/"+remote+"/"+trunk).One()
@@ -617,8 +610,8 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 }
 
 // GetRemote returns the default remote name
-func (e *engineImpl) GetRemote() string {
-	return e.git.GetRemote()
+func (e *engineImpl) GetRemote(ctx context.Context) string {
+	return e.git.GetRemote(ctx)
 }
 
 // MissingRemoteBranches returns the subset of branchNames that no longer have a
@@ -634,7 +627,7 @@ func (e *engineImpl) MissingRemoteBranches(ctx context.Context, branchNames []st
 	if len(branchNames) == 0 {
 		return nil, nil
 	}
-	remote := e.GetRemote()
+	remote := e.GetRemote(ctx)
 
 	remoteShas, err := e.git.FetchRemoteShas(ctx, remote)
 	if err != nil {

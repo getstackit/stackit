@@ -16,7 +16,7 @@ type MetadataBackend interface {
 	CreateBlobs(ctx context.Context, contents ...string) ([]string, error)
 	UpdateRefs(ctx context.Context, updates []RefUpdate, message string) error
 	DeleteRefs(ctx context.Context, refs ...string) error
-	ListRefs(prefix string) (map[string]string, error)
+	ListRefs(ctx context.Context, prefix string) (map[string]string, error)
 	ReadRevisions(ctx context.Context, refs ...string) ReadResults[string]
 	RefGeneration(ref string) uint64
 }
@@ -218,7 +218,7 @@ func (r *MetadataStore) ReadLocalMetadata(ctx context.Context, branchNames ...st
 	return result
 }
 
-func (r *MetadataStore) WriteMetadata(branchName string, meta *Meta) error {
+func (r *MetadataStore) WriteMetadata(ctx context.Context, branchName string, meta *Meta) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	jsonData, err := json.Marshal(meta)
@@ -226,7 +226,7 @@ func (r *MetadataStore) WriteMetadata(branchName string, meta *Meta) error {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	sha, err := One(r.git.CreateBlobs(context.Background(), string(jsonData)))
+	sha, err := One(r.git.CreateBlobs(ctx, string(jsonData)))
 	if err != nil {
 		return fmt.Errorf("failed to create metadata blob: %w", err)
 	}
@@ -240,7 +240,7 @@ func (r *MetadataStore) WriteMetadata(branchName string, meta *Meta) error {
 	if r.generations[branchName] != generation {
 		r.metadataCache.entries.Delete(branchName)
 	}
-	if err := r.updateMetadataRefCAS(refName, branchName, sha); err != nil {
+	if err := r.updateMetadataRefCAS(ctx, refName, branchName, sha); err != nil {
 		return err
 	}
 
@@ -261,10 +261,10 @@ func (r *MetadataStore) WriteMetadata(branchName string, meta *Meta) error {
 // An unknown expectation (never read in this process, or invalidated since)
 // falls back to an unconditional write, which is what creating metadata for a
 // newly tracked branch needs.
-func (r *MetadataStore) updateMetadataRefCAS(refName, branchName, newSHA string) error {
+func (r *MetadataStore) updateMetadataRefCAS(ctx context.Context, refName, branchName, newSHA string) error {
 	expected := r.sharedExpectation(branchName)
 	if !expected.known() {
-		if err := r.git.UpdateRefs(context.Background(), []RefUpdate{{RefName: refName, NewSHA: newSHA}}, ""); err != nil {
+		if err := r.git.UpdateRefs(ctx, []RefUpdate{{RefName: refName, NewSHA: newSHA}}, ""); err != nil {
 			return fmt.Errorf("failed to write metadata ref: %w", err)
 		}
 		return nil
@@ -274,7 +274,7 @@ func (r *MetadataStore) updateMetadataRefCAS(refName, branchName, newSHA string)
 	// reported success for a ref another process may have moved in between —
 	// and the caller then cached metadata it never actually wrote. Let the
 	// compare-and-swap decide; it costs one update-ref.
-	err := r.git.UpdateRefs(context.Background(), []RefUpdate{expected.update(refName, newSHA)}, "")
+	err := r.git.UpdateRefs(ctx, []RefUpdate{expected.update(refName, newSHA)}, "")
 	if err != nil {
 		// The expectation is now known-stale. Dropping it forces the next read
 		// to come from disk: otherwise ReadMetadata answers from cache, recomputes
@@ -436,19 +436,19 @@ func (r *MetadataStore) ResetMetadataCacheStats() {
 	r.metadataCache.ResetStats()
 }
 
-func (r *MetadataStore) RenameMetadata(oldName, newName string) error {
+func (r *MetadataStore) RenameMetadata(ctx context.Context, oldName, newName string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	oldRefName := fmt.Sprintf("%s%s", MetadataRefPrefix, oldName)
 	newRefName := fmt.Sprintf("%s%s", MetadataRefPrefix, newName)
 
-	sha, err := r.git.ReadRevisions(context.Background(), oldRefName).One()
+	sha, err := r.git.ReadRevisions(ctx, oldRefName).One()
 	if err != nil {
 		return nil //nolint:nilerr // Nothing to rename
 	}
 
 	// Copy metadata to new ref (keep old ref for cleanup later)
-	if err := r.git.UpdateRefs(context.Background(), []RefUpdate{{RefName: newRefName, NewSHA: sha}}, ""); err != nil {
+	if err := r.git.UpdateRefs(ctx, []RefUpdate{{RefName: newRefName, NewSHA: sha}}, ""); err != nil {
 		return fmt.Errorf("failed to create new metadata ref: %w", err)
 	}
 
@@ -457,7 +457,7 @@ func (r *MetadataStore) RenameMetadata(oldName, newName string) error {
 	return nil
 }
 
-func (r *MetadataStore) WriteLocalMetadata(branchName string, meta *LocalMeta) error {
+func (r *MetadataStore) WriteLocalMetadata(ctx context.Context, branchName string, meta *LocalMeta) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	jsonData, err := json.Marshal(meta)
@@ -465,7 +465,7 @@ func (r *MetadataStore) WriteLocalMetadata(branchName string, meta *LocalMeta) e
 		return fmt.Errorf("failed to marshal local metadata: %w", err)
 	}
 
-	sha, err := One(r.git.CreateBlobs(context.Background(), string(jsonData)))
+	sha, err := One(r.git.CreateBlobs(ctx, string(jsonData)))
 	if err != nil {
 		return fmt.Errorf("failed to create local metadata blob: %w", err)
 	}
@@ -476,7 +476,7 @@ func (r *MetadataStore) WriteLocalMetadata(branchName string, meta *LocalMeta) e
 	// the new content matches it, because "matches what I read" is not the same
 	// as "matches what is on disk now".
 	if expected := r.localExpectation(branchName); expected.known() {
-		err := r.git.UpdateRefs(context.Background(), []RefUpdate{expected.update(refName, sha)}, "")
+		err := r.git.UpdateRefs(ctx, []RefUpdate{expected.update(refName, sha)}, "")
 		if err != nil {
 			r.metadataCache.Delete(branchName)
 			return fmt.Errorf("failed to write local metadata ref for %s (another process changed it; re-run to pick up their change): %w", branchName, err)
@@ -485,7 +485,7 @@ func (r *MetadataStore) WriteLocalMetadata(branchName string, meta *LocalMeta) e
 		r.localGenerations[branchName] = generation + 1
 		return nil
 	}
-	if err := r.git.UpdateRefs(context.Background(), []RefUpdate{{RefName: refName, NewSHA: sha}}, ""); err != nil {
+	if err := r.git.UpdateRefs(ctx, []RefUpdate{{RefName: refName, NewSHA: sha}}, ""); err != nil {
 		return fmt.Errorf("failed to write local metadata ref: %w", err)
 	}
 	r.metadataCache.PutLocalSHA(branchName, sha)
@@ -494,8 +494,8 @@ func (r *MetadataStore) WriteLocalMetadata(branchName string, meta *LocalMeta) e
 	return nil
 }
 
-func (r *MetadataStore) ListMetadata() (map[string]string, error) {
-	refs, err := r.git.ListRefs(MetadataRefPrefix)
+func (r *MetadataStore) ListMetadata(ctx context.Context) (map[string]string, error) {
+	refs, err := r.git.ListRefs(ctx, MetadataRefPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -555,12 +555,12 @@ func (r *MetadataStore) WriteLocalMetadataBlobs(ctx context.Context, metas []*Lo
 
 // ReadStackMeta reads stack metadata for a given stack ID.
 // Returns nil with no error if the stack doesn't exist.
-func (r *MetadataStore) ReadStackMeta(stackID string) (*StackMeta, error) {
+func (r *MetadataStore) ReadStackMeta(ctx context.Context, stackID string) (*StackMeta, error) {
 	refName := StackMetaRefName(stackID)
 
 	// Resolve the ref and read its blob in a single cat-file --batch lookup
 	// (which accepts ref names) instead of a rev-parse followed by a blob read.
-	objects, err := r.git.ReadObjects(context.Background(), refName)
+	objects, err := r.git.ReadObjects(ctx, refName)
 	object, found := objects[refName]
 	content := object.Content
 	if err != nil {
@@ -580,18 +580,18 @@ func (r *MetadataStore) ReadStackMeta(stackID string) (*StackMeta, error) {
 }
 
 // WriteStackMeta writes stack metadata for a given stack ID.
-func (r *MetadataStore) WriteStackMeta(stackID string, meta *StackMeta) error {
+func (r *MetadataStore) WriteStackMeta(ctx context.Context, stackID string, meta *StackMeta) error {
 	jsonData, err := json.Marshal(meta)
 	if err != nil {
 		return fmt.Errorf("failed to marshal stack metadata: %w", err)
 	}
 
-	sha, err := One(r.git.CreateBlobs(context.Background(), string(jsonData)))
+	sha, err := One(r.git.CreateBlobs(ctx, string(jsonData)))
 	if err != nil {
 		return fmt.Errorf("failed to create stack metadata blob: %w", err)
 	}
 
-	if err := r.git.UpdateRefs(context.Background(), []RefUpdate{{RefName: StackMetaRefName(stackID), NewSHA: sha}}, ""); err != nil {
+	if err := r.git.UpdateRefs(ctx, []RefUpdate{{RefName: StackMetaRefName(stackID), NewSHA: sha}}, ""); err != nil {
 		return fmt.Errorf("failed to write stack metadata ref: %w", err)
 	}
 
@@ -599,8 +599,8 @@ func (r *MetadataStore) WriteStackMeta(stackID string, meta *StackMeta) error {
 }
 
 // ListStackMetas returns a map of stack IDs to their ref SHAs.
-func (r *MetadataStore) ListStackMetas() (map[string]string, error) {
-	refs, err := r.git.ListRefs(StackMetaRefPrefix)
+func (r *MetadataStore) ListStackMetas(ctx context.Context) (map[string]string, error) {
+	refs, err := r.git.ListRefs(ctx, StackMetaRefPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -616,13 +616,13 @@ func (r *MetadataStore) ListStackMetas() (map[string]string, error) {
 
 // WriteStackMetaBlob creates a blob containing the stack metadata JSON and returns its SHA.
 // This does NOT update any refs - use this for batched/transactional writes.
-func (r *MetadataStore) WriteStackMetaBlob(meta *StackMeta) (string, error) {
+func (r *MetadataStore) WriteStackMetaBlob(ctx context.Context, meta *StackMeta) (string, error) {
 	jsonData, err := json.Marshal(meta)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal stack metadata: %w", err)
 	}
 
-	sha, err := One(r.git.CreateBlobs(context.Background(), string(jsonData)))
+	sha, err := One(r.git.CreateBlobs(ctx, string(jsonData)))
 	if err != nil {
 		return "", fmt.Errorf("failed to create stack metadata blob: %w", err)
 	}
@@ -631,8 +631,8 @@ func (r *MetadataStore) WriteStackMetaBlob(meta *StackMeta) (string, error) {
 }
 
 // GetStackMetaRefSHA returns the current SHA of a stack metadata ref, or empty string if not found.
-func (r *MetadataStore) GetStackMetaRefSHA(stackID string) string {
-	sha, err := r.git.ReadRevisions(context.Background(), StackMetaRefName(stackID)).One()
+func (r *MetadataStore) GetStackMetaRefSHA(ctx context.Context, stackID string) string {
+	sha, err := r.git.ReadRevisions(ctx, StackMetaRefName(stackID)).One()
 	if err != nil {
 		return ""
 	}

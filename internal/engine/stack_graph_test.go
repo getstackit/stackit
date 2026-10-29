@@ -20,7 +20,7 @@ func TestStackGraphOwningTrunk(t *testing.T) {
 			"branch2": "branch1",
 		})
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 	branch2 := s.Engine.GetBranch("branch2")
 
 	require.Equal(t, "main", graph.OwningTrunk(branch2, []string{"main"}))
@@ -38,7 +38,7 @@ func TestStackGraphRangeAncestorsExcludeTrunk(t *testing.T) {
 			"branch2": "branch1",
 		})
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 	branches := graph.Range(s.Engine.GetBranch("branch2"), engine.StackRange{RecursiveParents: true})
 
 	require.Equal(t, []string{"branch1"}, branches.Names())
@@ -56,7 +56,7 @@ func TestStackGraphRangeDescendantsOrderParentsFirst(t *testing.T) {
 			"stackB-child": "stackB",
 		})
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 	branches := graph.Range(s.Engine.Trunk(), engine.StackRange{
 		RecursiveChildren: true,
 	})
@@ -89,7 +89,7 @@ func TestStackGraphFilterPrunesSubtrees(t *testing.T) {
 			"b1": "b",
 		})
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, func(b engine.Branch) bool {
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, func(b engine.Branch) bool {
 		return b.GetName() != "b"
 	})
 
@@ -114,7 +114,7 @@ func TestStackGraphIsLeaf(t *testing.T) {
 			"child":  "parent",
 		})
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 
 	t.Run("leaf branch returns true", func(t *testing.T) {
 		t.Parallel()
@@ -143,7 +143,7 @@ func TestStackGraphCollectBranches(t *testing.T) {
 			"b":  "main",
 		})
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 
 	t.Run("collects all descendants depth-first", func(t *testing.T) {
 		t.Parallel()
@@ -184,7 +184,7 @@ func TestStackGraphIsRelated(t *testing.T) {
 			"b":  "main",
 		})
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 
 	t.Run("parent and child are related", func(t *testing.T) {
 		t.Parallel()
@@ -229,7 +229,7 @@ func TestStackGraphDepthGroups(t *testing.T) {
 			"a2": "a1",
 		})
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 
 	t.Run("DepthGroups exposes named grouped traversal", func(t *testing.T) {
 		t.Parallel()

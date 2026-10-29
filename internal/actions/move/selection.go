@@ -29,7 +29,7 @@ func PrepareSelection(ctx *app.Context, source string) (*Selection, error) {
 	var eng moveEngine = ctx.Engine
 	sourceBranch := eng.GetBranch(source)
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	descendants := graph.Range(sourceBranch, engine.StackRange{
 		RecursiveChildren: true,
 		IncludeCurrent:    true,
@@ -69,7 +69,7 @@ func (s *Selection) OldParentRev() string {
 
 // ValidateOnto validates a potential move target and returns validation, commits, and rebase specs.
 func (s *Selection) ValidateOnto(ctx context.Context, onto string) (*engine.RebaseValidation, []string, []engine.RebaseSpec, error) {
-	rebaseSpecs := BuildRebaseSpecs(s.eng, s.out, s.source, onto, s.oldParent, s.oldParentRev, s.descendants)
+	rebaseSpecs := BuildRebaseSpecs(ctx, s.eng, s.out, s.source, onto, s.oldParent, s.oldParentRev, s.descendants)
 
 	validation, err := s.eng.ValidateRebases(ctx, rebaseSpecs)
 	if err != nil {

@@ -17,7 +17,7 @@ func TestResolveBranchName(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		name, err := actions.ResolveBranchName(s.Engine, "feature")
+		name, err := actions.ResolveBranchName(t.Context(), s.Engine, "feature")
 		require.NoError(t, err)
 		require.Equal(t, "feature", name)
 	})
@@ -27,7 +27,7 @@ func TestResolveBranchName(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithLinearStack3().Checkout("b")
 
-		name, err := actions.ResolveBranchName(s.Engine, "")
+		name, err := actions.ResolveBranchName(t.Context(), s.Engine, "")
 		require.NoError(t, err)
 		require.Equal(t, "b", name)
 	})

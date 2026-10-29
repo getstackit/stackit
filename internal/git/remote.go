@@ -19,8 +19,8 @@ const DefaultRemote = "origin"
 // repo) is logged at debug level rather than surfaced, because callers want
 // a usable remote name; the debug line is the only breadcrumb when an
 // unhealthy repo masquerades as a clean "branch with no upstream → origin".
-func (r *runner) getRemote() string {
-	branch, err := r.GetCurrentBranch()
+func (r *runner) getRemote(ctx context.Context) string {
+	branch, err := r.GetCurrentBranch(ctx)
 	if err != nil {
 		r.debugLog("getRemote: GetCurrentBranch failed, falling back to %s: %v", DefaultRemote, err)
 		return DefaultRemote
@@ -28,7 +28,7 @@ func (r *runner) getRemote() string {
 	if branch == "" {
 		return DefaultRemote
 	}
-	out, err := r.Run(context.Background(),
+	out, err := r.Run(ctx,
 		"config", "--get", "branch."+branch+".remote",
 	)
 	if err == nil {
@@ -55,15 +55,6 @@ type RemoteBranchSHAs map[string]string
 // fetchRemoteShas lists the branch refs on a remote without modifying any
 // local refs. `git ls-remote --heads` returns only refs/heads/*.
 func (r *runner) fetchRemoteShas(ctx context.Context, remote string) (RemoteBranchSHAs, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if _, ok := ctx.Deadline(); !ok {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, DefaultCommandTimeout)
-		defer cancel()
-	}
-
 	out, err := r.Run(ctx, "ls-remote", "--heads", "--refs", remote)
 	if err != nil {
 		// Empty remote / no refs is not an error for callers; treat exit

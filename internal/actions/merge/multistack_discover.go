@@ -1,6 +1,8 @@
 package merge
 
 import (
+	"context"
+
 	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/engine"
 )
@@ -8,8 +10,8 @@ import (
 // DiscoverStacks returns all independent stacks rooted at trunk. Discovery
 // lives in stackview so read-only consumers (API, shippable) need not depend
 // on the merge package; this wrapper keeps merge's call sites unchanged.
-func DiscoverStacks(eng engine.BranchReader) (MultiStacks, error) {
-	return stackview.DiscoverStacks(eng), nil
+func DiscoverStacks(ctx context.Context, eng engine.BranchReader) (MultiStacks, error) {
+	return stackview.DiscoverStacks(ctx, eng), nil
 }
 
 // FilterStacks filters stacks based on selected root branch names.

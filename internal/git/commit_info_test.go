@@ -59,7 +59,7 @@ func TestGetRemoteRevision_UsesConfiguredRemote(t *testing.T) {
 	require.NoError(t, scene.Repo.RunGitCommand("branch", "upstream/main", mainSHA))
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	got, err := runner.ReadRevisions(t.Context(), runner.GetRemote()+"/"+"main").One()
+	got, err := runner.ReadRevisions(t.Context(), runner.GetRemote(t.Context())+"/"+"main").One()
 	require.NoError(t, err)
 	require.Equal(t, mainSHA, got)
 }

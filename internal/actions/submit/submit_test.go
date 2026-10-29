@@ -520,7 +520,7 @@ func TestSubmitReadsRemoteStatusOnceForStack(t *testing.T) {
 	// Build a second engine over the same repo with a runner that counts
 	// FetchRemoteShas, then drive submit through it.
 	counting := &countingRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      counting,
@@ -570,7 +570,7 @@ func TestSubmitDryRunCreateOnlySkipsRemoteStatusRead(t *testing.T) {
 	require.NoError(t, err)
 
 	counting := &countingRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      counting,
@@ -613,7 +613,7 @@ func TestSubmitPushesStackInSingleBatch(t *testing.T) {
 	require.NoError(t, err)
 
 	counting := &countingRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      counting,
@@ -669,7 +669,7 @@ func TestSubmitNoOpReadsRemoteOnceAndSkipsPush(t *testing.T) {
 	require.NoError(t, err)
 
 	counting := &countingRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      counting,
@@ -757,7 +757,7 @@ func TestSubmitDryRunWithWorktreeAnchorParent(t *testing.T) {
 			"feature":   "wt-anchor",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
 	s.Checkout("feature")
@@ -779,7 +779,7 @@ func TestSubmitDisplayTreeSkipsWorktreeAnchorParent(t *testing.T) {
 			"feature":   "wt-anchor",
 		})
 
-	err := s.Engine.SetBranchType(s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
+	err := s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
 	s.Checkout("feature")

@@ -206,13 +206,13 @@ func (e *engineImpl) TakeSnapshot(ctx context.Context, opts SnapshotOptions) err
 	currentBranch := e.currentBranch
 
 	// Get all branch SHAs in one git rev-parse call; misses (deleted branches) are omitted.
-	branchSHAs, _ := e.git.ReadRevisions(context.Background(), e.state.branches...).ValuesAndErrors()
+	branchSHAs, _ := e.git.ReadRevisions(ctx, e.state.branches...).ValuesAndErrors()
 	if branchSHAs == nil {
 		branchSHAs = make(map[string]string)
 	}
 
 	// Get all metadata ref SHAs
-	metadataRefs, err := e.metadata.ListMetadata()
+	metadataRefs, err := e.metadata.ListMetadata(ctx)
 	if err != nil {
 		// If we can't get metadata refs, continue with empty map
 		metadataRefs = make(map[string]string)
@@ -644,7 +644,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 	}
 
 	// Delete metadata refs that were created after the snapshot (separate operation)
-	currentMetadataRefs, err := e.metadata.ListMetadata()
+	currentMetadataRefs, err := e.metadata.ListMetadata(ctx)
 	if err == nil {
 		var toDelete []string
 		for branchName := range currentMetadataRefs {
@@ -658,7 +658,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 	}
 
 	// Rebuild engine state
-	if err := e.rebuildInternal(refreshCurrentBranchFromGit); err != nil {
+	if err := e.rebuildInternal(ctx, refreshCurrentBranchFromGit); err != nil {
 		return fmt.Errorf("failed to rebuild engine after restore: %w", err)
 	}
 
@@ -671,7 +671,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 			branch := e.GetBranch(snapshot.CurrentBranch)
 			// If we are already on this branch, checkout might not update the working directory
 			// after we've updated the ref. Use reset --hard to be sure.
-			current, _ := e.git.GetCurrentBranch()
+			current, _ := e.git.GetCurrentBranch(ctx)
 			if current == branch.GetName() {
 				if err := e.git.HardReset(ctx, "HEAD"); err != nil {
 					return fmt.Errorf("failed to reset working directory: %w", err)

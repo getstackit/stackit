@@ -21,7 +21,7 @@ func TestModel_Update_KeyMsg_Quit_MarksCanceled(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			model := NewModel(Config{AvailableTypes: []TypeChoice{{Style: StyleHunk, Available: true}}})
+			model := NewModel(t.Context(), Config{AvailableTypes: []TypeChoice{{Style: StyleHunk, Available: true}}})
 			model.Init()
 
 			newModel, cmd := model.Update(tt.msg)
@@ -36,7 +36,7 @@ func TestModel_Update_KeyMsg_Quit_MarksCanceled(t *testing.T) {
 
 func TestModel_Update_SpinnerTickMsg_DoesNotCancel(t *testing.T) {
 	t.Parallel()
-	model := NewModel(Config{AvailableTypes: []TypeChoice{{Style: StyleHunk, Available: true}}})
+	model := NewModel(t.Context(), Config{AvailableTypes: []TypeChoice{{Style: StyleHunk, Available: true}}})
 	model.Init()
 
 	newModel, cmd := model.Update(spinner.TickMsg{})

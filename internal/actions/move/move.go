@@ -33,8 +33,8 @@ type moveEngine interface {
 	validation.BranchValidationEngine
 	Trunk() engine.Branch
 	IsTrunk(branch engine.Branch) bool
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
-	SortBranchesTopologically(branches engine.Branches) engine.Branches
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+	SortBranchesTopologically(ctx context.Context, branches engine.Branches) engine.Branches
 	GetRevision(branch engine.Branch) (string, error)
 	GetAllCommits(branch engine.Branch) (git.Commits, error)
 	GetDivergencePoint(branchName string) (string, error)
@@ -70,7 +70,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	}
 	defer h.Cleanup()
 
-	source, err := resolveSource(eng, opts.Source)
+	source, err := resolveSource(ctx.Context, eng, opts.Source)
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 		return err
 	}
 
-	plan, err := buildMovePlan(eng, out, source, opts.Onto, opts.RebaseSpecs)
+	plan, err := buildMovePlan(ctx.Context, eng, out, source, opts.Onto, opts.RebaseSpecs)
 	if err != nil {
 		return err
 	}
@@ -130,9 +130,9 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	return nil
 }
 
-func resolveSource(eng moveEngine, source string) (string, error) {
+func resolveSource(ctx context.Context, eng moveEngine, source string) (string, error) {
 	if source == "" {
-		currentBranch := eng.CurrentBranch()
+		currentBranch := eng.CurrentBranch(ctx)
 		if currentBranch == nil {
 			return "", errors.New("not on a branch and no source branch specified")
 		}
@@ -178,8 +178,8 @@ func validateMoveTargets(eng moveEngine, source, onto string) error {
 	return nil
 }
 
-func buildMovePlan(eng moveEngine, out output.Output, source, onto string, rebaseSpecs []engine.RebaseSpec) (*movePlan, error) {
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+func buildMovePlan(ctx context.Context, eng moveEngine, out output.Output, source, onto string, rebaseSpecs []engine.RebaseSpec) (*movePlan, error) {
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	sourceBranch := eng.GetBranch(source)
 	ontoBranch := eng.GetBranch(onto)
@@ -199,7 +199,7 @@ func buildMovePlan(eng moveEngine, out output.Output, source, onto string, rebas
 	oldParentRev, _ := eng.GetDivergencePoint(source)
 
 	if len(rebaseSpecs) == 0 {
-		rebaseSpecs = BuildRebaseSpecs(eng, out, source, onto, oldParent, oldParentRev, descendants)
+		rebaseSpecs = BuildRebaseSpecs(ctx, eng, out, source, onto, oldParent, oldParentRev, descendants)
 	}
 
 	return &movePlan{
@@ -338,7 +338,7 @@ func restackAndMark(ctx *app.Context, plan *movePlan, sourceBranch engine.Branch
 	var eng moveEngine = ctx.Engine
 	out := ctx.Output
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	out.Info("Moved %s from %s to %s.",
 		output.CurrentBranch(plan.source),
@@ -450,7 +450,7 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 
 // BuildRebaseSpecs builds the rebase specifications for validating/executing the move.
 // Exported so it can be used by the selection validation callback.
-func BuildRebaseSpecs(eng moveEngine, out output.Output, source, onto string, oldParent *engine.Branch, oldParentRev string, descendants engine.Branches) []engine.RebaseSpec {
+func BuildRebaseSpecs(ctx context.Context, eng moveEngine, out output.Output, source, onto string, oldParent *engine.Branch, oldParentRev string, descendants engine.Branches) []engine.RebaseSpec {
 	rebaseSpecs := make([]engine.RebaseSpec, 0, len(descendants))
 
 	ontoBranch := eng.GetBranch(onto)
@@ -487,7 +487,7 @@ func BuildRebaseSpecs(eng moveEngine, out output.Output, source, onto string, ol
 
 	// For descendants, each will be rebased onto its parent (which is part of the moving stack)
 	// Since these are topologically ordered, each parent will be rebased before its children
-	sortedDescendants := eng.SortBranchesTopologically(descendants)
+	sortedDescendants := eng.SortBranchesTopologically(ctx, descendants)
 
 	// Prefetch every descendant's parent revision and divergence point in one
 	// batch instead of a git rev-parse and metadata read per descendant.

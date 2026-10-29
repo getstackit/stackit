@@ -24,7 +24,7 @@ func (e *engineImpl) ApplySplitToCommits(ctx context.Context, opts ApplySplitOpt
 			return fmt.Errorf("failed to read metadata: %w", err)
 		}
 		if parent := meta.GetParentBranchName(); parent != nil {
-			if err := e.validateLinearSiblingSplit(*parent, opts.BranchToSplit, opts.BranchNames); err != nil {
+			if err := e.validateLinearSiblingSplit(ctx, *parent, opts.BranchToSplit, opts.BranchNames); err != nil {
 				return err
 			}
 		}
@@ -119,7 +119,7 @@ func (e *engineImpl) ApplySplitToCommits(ctx context.Context, opts ApplySplitOpt
 			})
 		}
 
-		if err := e.writeMetadata(branchName, newMeta); err != nil {
+		if err := e.writeMetadata(ctx, branchName, newMeta); err != nil {
 			return fmt.Errorf("failed to write metadata for %s: %w", branchName, err)
 		}
 

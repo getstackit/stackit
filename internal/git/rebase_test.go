@@ -482,7 +482,7 @@ func TestGetRebaseHead(t *testing.T) {
 		require.True(t, runner.IsRebaseInProgress(t.Context()))
 
 		// Get rebase head
-		rebaseHead, err := runner.GetRebaseHead()
+		rebaseHead, err := runner.GetRebaseHead(t.Context())
 		require.NoError(t, err)
 		require.NotEmpty(t, rebaseHead)
 	})

@@ -115,7 +115,7 @@ func TestDrainPushesRestackedBranchesToRemote(t *testing.T) {
 	remoteDir = strings.TrimSpace(remoteDir)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	eng, err := engine.NewEngine(engine.Options{RepoRoot: scene.Dir, Trunk: "main", Git: runner})
+	eng, err := engine.NewEngine(t.Context(), engine.Options{RepoRoot: scene.Dir, Trunk: "main", Git: runner})
 	require.NoError(t, err)
 
 	// main -> a -> b, both with open PRs and both pushed.
@@ -123,7 +123,7 @@ func TestDrainPushesRestackedBranchesToRemote(t *testing.T) {
 		require.NoError(t, repo.CreateAndCheckoutBranch(b))
 		require.NoError(t, repo.CreateChangeAndCommit("content "+b, b))
 	}
-	require.NoError(t, eng.Rebuild("main"))
+	require.NoError(t, eng.Rebuild(t.Context(), "main"))
 	require.NoError(t, eng.TrackBranch(t.Context(), "a", "main"))
 	require.NoError(t, eng.TrackBranch(t.Context(), "b", "a"))
 	require.NoError(t, eng.UpsertPrInfo(t.Context(), eng.GetBranch("a"), testhelpers.NewTestPrInfo(101)))

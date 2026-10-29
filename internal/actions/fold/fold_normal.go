@@ -21,7 +21,7 @@ func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBra
 	}
 
 	// Build StackGraph for traversals
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(gctx, engine.SortStrategyAlphabetical)
 
 	// Get all descendants of parent before deletion (for restacking)
 	descendants := graph.Range(parentBranch, engine.StackRange{
@@ -43,7 +43,7 @@ func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBra
 	if len(descendants) > 0 {
 		// DeleteBranch rebuilds engine state internally; just refresh the graph
 		// snapshot (graphs are immutable copies of engine state at query time).
-		graph = eng.Graph(engine.SortStrategyAlphabetical)
+		graph = eng.Graph(gctx, engine.SortStrategyAlphabetical)
 
 		// Get updated descendants list (current branch's children are now children of parent)
 		updatedDescendants := graph.Range(parentBranch, engine.StackRange{

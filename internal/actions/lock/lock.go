@@ -15,7 +15,7 @@ import (
 // lockEngine lists exactly the engine methods lock and unlock call.
 type lockEngine interface {
 	engine.BranchLookup
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
 	ReadBranchRemoteStatuses(ctx context.Context, branches engine.Branches) engine.BranchRemoteStatuses
 	SetLocked(ctx context.Context, branches engine.Branches, reason engine.LockReason) (engine.BatchLockResult, error)
 }
@@ -40,7 +40,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 	}
 
 	// Build StackGraph for efficient traversals
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Get downstack (ancestors including current)
 	branches := graph.Range(branch, engine.StackRange{
@@ -135,7 +135,7 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 	}
 
 	// Build StackGraph for efficient traversals
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Get upstack (descendants including current)
 	branches := graph.Range(branch, engine.StackRange{

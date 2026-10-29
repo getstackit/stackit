@@ -15,6 +15,7 @@
 package actions
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -175,7 +176,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 	// purpose so the user resolves on top of the restacked parent, and
 	// 'stackit continue' finishes the rest of the stack.
 	if mode == ConflictModeContinue && len(conflictBranches) > 0 {
-		successBranches, blockedBranches = holdBackConflictedStacks(ctx.Engine, successBranches, conflictBranches, blockedBranches)
+		successBranches, blockedBranches = holdBackConflictedStacks(ctx.Context, ctx.Engine, successBranches, conflictBranches, blockedBranches)
 	}
 
 	// For standalone mode, enter conflict workflow on first conflict
@@ -184,7 +185,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 
 		// Restack successfully up to the conflict
 		if len(successBranches) > 0 {
-			currentBranchName := getCurrentBranchName(ctx.Engine)
+			currentBranchName := getCurrentBranchName(ctx.Context, ctx.Engine)
 			progress := func(branch engine.Branch, result engine.RestackBranchResult) {
 				reportRestackResult(ctx, branch, result, currentBranchName, callback)
 			}
@@ -201,13 +202,13 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 	if len(successBranches) > 0 {
 		// Keep track of where we started so sync mode can recover if a runtime conflict
 		// slips past validation and leaves a rebase in progress.
-		originalBranch := ctx.Engine.CurrentBranch()
+		originalBranch := ctx.Engine.CurrentBranch(ctx.Context)
 		originalRev := ""
 		if originalBranch == nil {
 			originalRev, _ = ctx.Engine.GetCurrentRevision(ctx.Context)
 		}
 
-		currentBranchName := getCurrentBranchName(ctx.Engine)
+		currentBranchName := getCurrentBranchName(ctx.Context, ctx.Engine)
 		progress := func(branch engine.Branch, result engine.RestackBranchResult) {
 			reportRestackResult(ctx, branch, result, currentBranchName, callback)
 		}
@@ -248,7 +249,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 
 	// Report conflicts and blocked branches via callback for sync mode
 	if mode == ConflictModeContinue && (len(conflictBranches) > 0 || len(blockedBranches) > 0) {
-		currentBranchName := getCurrentBranchName(ctx.Engine)
+		currentBranchName := getCurrentBranchName(ctx.Context, ctx.Engine)
 
 		for _, branchName := range conflictBranches {
 			if callback != nil {
@@ -278,8 +279,8 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 // independent stack (rooted at a child of trunk) contains a validation
 // conflict is moved from the apply set into the blocked set. Returns the
 // filtered apply set and the extended blocked list.
-func holdBackConflictedStacks(eng engine.BranchReader, success engine.Branches, conflicts, blocked []string) (engine.Branches, []string) {
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+func holdBackConflictedStacks(ctx context.Context, eng engine.BranchReader, success engine.Branches, conflicts, blocked []string) (engine.Branches, []string) {
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	trunk := eng.Trunk().GetName()
 	rootOf := func(name string) string {
 		cur := name
@@ -353,8 +354,8 @@ func classifyValidatedBranches(branches engine.Branches, plan *engine.RestackPla
 	return builder.Build(), conflicts, blocked
 }
 
-func getCurrentBranchName(eng engine.BranchReader) string {
-	currentBranch := eng.CurrentBranch()
+func getCurrentBranchName(ctx context.Context, eng engine.BranchReader) string {
+	currentBranch := eng.CurrentBranch(ctx)
 	if currentBranch == nil {
 		return ""
 	}
@@ -390,7 +391,7 @@ func reportPlannedResults(ctx *app.Context, branches engine.Branches, plannedRes
 		return
 	}
 	logRestackResults(ctx, plannedResults)
-	currentBranchName := getCurrentBranchName(ctx.Engine)
+	currentBranchName := getCurrentBranchName(ctx.Context, ctx.Engine)
 	for _, branch := range branches {
 		result, ok := plannedResults[branch.GetName()]
 		if !ok {
@@ -515,7 +516,7 @@ func enterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 	// on no rebase being in progress: checkout would fail on an unmerged index
 	// anyway, and a live conflict is the one state where detached is correct.
 	reattach := func() {}
-	if currentBranch := ctx.Engine.CurrentBranch(); currentBranch != nil {
+	if currentBranch := ctx.Engine.CurrentBranch(ctx.Context); currentBranch != nil {
 		currentRev, revErr := ctx.Engine.GetCurrentRevision(ctx.Context)
 		if revErr != nil {
 			return fmt.Errorf("failed to read HEAD before conflict workflow: %w", revErr)
@@ -793,7 +794,7 @@ func PrintConflictStatus(ctx *app.Context, branchName string) error {
 	}
 
 	// Get rebase head
-	rebaseHead, err := reader.GetRebaseHead()
+	rebaseHead, err := reader.GetRebaseHead(ctx.Context)
 	if err == nil && rebaseHead != "" {
 		rebaseHeadShort := utils.ShortRevision(rebaseHead, 0)
 		msg := output.Yellow(fmt.Sprintf("You are here (resolving %s):", rebaseHeadShort))

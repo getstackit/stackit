@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"iter"
 	"slices"
 )
@@ -33,12 +34,12 @@ type DepthGroup struct {
 
 // BuildStackGraph constructs a StackGraph using the provided engine reader and sorting strategy.
 // The optional filter is applied to branches; filtered-out branches are omitted along with their subtrees.
-func BuildStackGraph(eng StackView, strategy SortStrategy, filter func(Branch) bool) *StackGraph {
+func BuildStackGraph(ctx context.Context, eng StackView, strategy SortStrategy, filter func(Branch) bool) *StackGraph {
 	branches := eng.AllBranches()
 
 	trunk := eng.Trunk().GetName()
 	current := ""
-	if cb := eng.CurrentBranch(); cb != nil {
+	if cb := eng.CurrentBranch(ctx); cb != nil {
 		current = cb.GetName()
 	}
 
@@ -160,8 +161,8 @@ func BuildStackGraph(eng StackView, strategy SortStrategy, filter func(Branch) b
 }
 
 // Graph constructs a full StackGraph for the current engine state.
-func (e *engineImpl) Graph(strategy SortStrategy) *StackGraph {
-	return BuildStackGraph(e, strategy, nil)
+func (e *engineImpl) Graph(ctx context.Context, strategy SortStrategy) *StackGraph {
+	return BuildStackGraph(ctx, e, strategy, nil)
 }
 
 // GetNode returns the StackNode for a branch by name, or nil if not found.

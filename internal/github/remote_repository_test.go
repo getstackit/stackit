@@ -15,7 +15,7 @@ type remoteRepositoryRunner struct {
 	err       error
 }
 
-func (r remoteRepositoryRunner) GetConfig(string) (string, error) {
+func (r remoteRepositoryRunner) GetConfig(context.Context, string) (string, error) {
 	return r.remoteURL, r.err
 }
 

@@ -19,7 +19,7 @@ func TestBranchHeldBackCyclicMetadata(t *testing.T) {
 	newEngine := func(t *testing.T, states map[string]string) *engineImpl {
 		t.Helper()
 		dir, g := newOptimisticLockTestRepo(t)
-		eng, err := NewEngine(Options{RepoRoot: dir, Trunk: "main", Git: g})
+		eng, err := NewEngine(t.Context(), Options{RepoRoot: dir, Trunk: "main", Git: g})
 		require.NoError(t, err)
 		e, ok := eng.(*engineImpl)
 		require.True(t, ok)

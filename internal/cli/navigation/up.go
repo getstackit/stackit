@@ -46,13 +46,13 @@ the --to flag is used to specify a target branch to navigate towards.`,
 				steps = parsedSteps
 
 				// Get current branch
-				currentBranch := ctx.Engine.CurrentBranch()
+				currentBranch := ctx.Engine.CurrentBranch(ctx.Context)
 				if currentBranch == nil {
 					return errors.ErrNotOnBranch
 				}
 
 				// Build StackGraph for efficient traversals
-				graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+				graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 				// Traverse up the specified number of steps
 				targetBranch := currentBranch.GetName()

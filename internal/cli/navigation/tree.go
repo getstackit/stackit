@@ -101,7 +101,7 @@ func executeTree(cmd *cobra.Command, f *treeFlags, style actions.TreeStyle) erro
 		trunk := eng.Trunk()
 		branchName := trunk.GetName()
 		if f.stack || f.steps > 0 {
-			currentBranch := eng.CurrentBranch()
+			currentBranch := eng.CurrentBranch(ctx.Context)
 			if currentBranch == nil {
 				return errors.ErrNotOnBranch
 			}

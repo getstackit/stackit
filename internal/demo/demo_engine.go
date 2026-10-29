@@ -1,6 +1,7 @@
 package demo
 
 import (
+	"context"
 	"time"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -28,13 +29,13 @@ func init() {
 	// Register the demo engine factory with runtime package
 	app.DemoEngineFactory = func() (engine.Engine, github.GitCommandRunner) {
 		runner := NewDemoGitRunner()
-		eng, _ := newDemoEngineWithRunner(runner)
+		eng, _ := newDemoEngineWithRunner(context.Background(), runner)
 		return eng, runner
 	}
 }
 
-func newDemoEngineWithRunner(runner git.Runner) (engine.Engine, error) {
-	return engine.NewEngine(engine.Options{
+func newDemoEngineWithRunner(ctx context.Context, runner git.Runner) (engine.Engine, error) {
+	return engine.NewEngine(ctx, engine.Options{
 		RepoRoot: "/demo",
 		Trunk:    GetDemoTrunk(),
 		Git:      runner,

@@ -122,7 +122,7 @@ func repairRegistration(ctx *app.Context, cfg RepoConfig, entry Entry, wtInfo en
 		}
 
 		if ctx.Engine.IsWorktreeAnchor(stackRoot) {
-			existing, err := ctx.Engine.GetWorktreeForStack(stackRootName)
+			existing, err := ctx.Engine.GetWorktreeForStack(ctx.Context, stackRootName)
 			if err != nil {
 				return RepairEntry{}, fmt.Errorf("failed to inspect anchor registration: %w", err)
 			}

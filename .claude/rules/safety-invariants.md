@@ -75,7 +75,7 @@ This applies to: split, sync, create, merge, absorb, fold, restack, and any othe
 
 ```go
 // Example pattern
-currentBranch := eng.CurrentBranch()
+currentBranch := eng.CurrentBranch(ctx)
 if currentBranch == nil {
     return fmt.Errorf("not on a branch")
 }

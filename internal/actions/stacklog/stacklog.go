@@ -7,6 +7,8 @@
 package stacklog
 
 import (
+	"context"
+
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -14,11 +16,11 @@ import (
 // Source is the narrow engine dependency this action needs. engine.Engine
 // satisfies it.
 type Source interface {
-	CurrentBranch() *engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
 	Trunk() engine.Branch
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
 	BatchCommits(branches engine.Branches) map[string]git.Commits
-	RefDecorations() (map[string][]git.RefDecoration, error)
+	RefDecorations(ctx context.Context) (map[string][]git.RefDecoration, error)
 	GetRevision(branch engine.Branch) (string, error)
 }
 
@@ -57,8 +59,8 @@ type Result struct {
 // Gather collects the current stack's ancestor-path commits plus the decoration
 // map and trunk-tip marker. It never walks above HEAD (children are out of
 // scope) and excludes trunk from the band.
-func Gather(src Source) (Result, error) {
-	decorations, err := src.RefDecorations()
+func Gather(ctx context.Context, src Source) (Result, error) {
+	decorations, err := src.RefDecorations(ctx)
 	if err != nil {
 		return Result{}, err
 	}
@@ -75,14 +77,14 @@ func Gather(src Source) (Result, error) {
 		Decorations: decorations,
 	}
 
-	current := src.CurrentBranch()
+	current := src.CurrentBranch(ctx)
 	if current == nil || current.IsTrunk() {
 		return res, nil
 	}
 
 	// Downstack returns the ancestor path trunk-ward→current (trunk excluded).
 	// Reverse it so the branch we're standing on renders at the top.
-	branches := src.Graph(engine.SortStrategyAlphabetical).Downstack(*current, engine.IncludeCurrentBranch).Reverse()
+	branches := src.Graph(ctx, engine.SortStrategyAlphabetical).Downstack(*current, engine.IncludeCurrentBranch).Reverse()
 	if len(branches) == 0 {
 		// Current branch is untracked / not in the graph: no stack band to show.
 		return res, nil

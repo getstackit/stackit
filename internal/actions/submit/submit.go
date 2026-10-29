@@ -2,6 +2,7 @@
 package submit
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -140,7 +141,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	var targetBranch engine.Branch
 	if opts.Branch != "" {
 		targetBranch = nav.GetBranch(opts.Branch)
-	} else if cb := nav.CurrentBranch(); cb != nil {
+	} else if cb := nav.CurrentBranch(ctx.Context); cb != nil {
 		targetBranch = *cb
 	}
 
@@ -187,7 +188,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		// point the user at creating or checking out a branch rather than
 		// printing a bare "nothing to submit".
 		if opts.Branch == "" {
-			if cb := nav.CurrentBranch(); cb != nil && cb.IsTrunk() {
+			if cb := nav.CurrentBranch(ctx.Context); cb != nil && cb.IsTrunk() {
 				handler.OnEvent(CompletionEvent{
 					Outcome: OutcomeOnTrunk,
 					Message: fmt.Sprintf("You're on %s — nothing to submit from here.", cb.GetName()),
@@ -202,7 +203,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	ctx.Logger.Info("submit started branchCount=%v dryRun=%v", len(branches), opts.DryRun)
 
 	// Get current branch for display purposes (used to highlight in tree view)
-	currentBranch := nav.CurrentBranch()
+	currentBranch := nav.CurrentBranch(ctx.Context)
 	currentBranchName := ""
 	if currentBranch != nil {
 		currentBranchName = currentBranch.GetName()
@@ -230,7 +231,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// a blob). Branches sharing a stack root would otherwise repeat the same
 	// lookup.
 	worktreeByStackRoot := make(map[string]engine.WorktreePath)
-	if worktrees, err := ctx.Worktree().ListManagedWorktrees(); err == nil {
+	if worktrees, err := ctx.Worktree().ListManagedWorktrees(ctx.Context); err == nil {
 		for _, wt := range worktrees {
 			worktreeByStackRoot[wt.AnchorBranch] = wt.Path
 		}
@@ -446,7 +447,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if _, err := getGitHubClient(ctx); err != nil {
 		return err
 	}
-	remote := nav.GetRemote()
+	remote := nav.GetRemote(ctx.Context)
 
 	// Record every branch this submit is about to write before touching the
 	// remote. Pushing succeeds independently of the PR write that follows, and
@@ -571,7 +572,7 @@ func planNativeStackSync(ctx *app.Context, eng engine.Engine, branches engine.Br
 		return nativeStackSyncPlan{}, errors.New("native GitHub Stack creation requires stack.shape=linear; run 'stackit config set stack.shape linear'")
 	}
 
-	chains := partitionGitHubStackChains(eng, branches)
+	chains := partitionGitHubStackChains(ctx.Context, eng, branches)
 	plan := nativeStackSyncPlan{Eligible: make([]nativeStackChain, 0, len(chains))}
 	for _, chain := range chains {
 		component := nativeStackChain{Root: chain[0], Branches: chain}
@@ -585,7 +586,7 @@ func planNativeStackSync(ctx *app.Context, eng engine.Engine, branches engine.Br
 			})
 			continue
 		}
-		if err := validateGitHubStackChain(eng, chain); err != nil {
+		if err := validateGitHubStackChain(ctx.Context, eng, chain); err != nil {
 			plan.Skipped = append(plan.Skipped, nativeStackChainSkip{Chain: component, Reason: err})
 			continue
 		}
@@ -598,8 +599,8 @@ func planNativeStackSync(ctx *app.Context, eng engine.Engine, branches engine.Br
 // selected ancestor. `submit --stack` from trunk intentionally includes every
 // independent Stackit stack; GitHub needs those roots synchronized as distinct
 // native Stacks rather than one invalid combined chain.
-func partitionGitHubStackChains(eng engine.Engine, branches engine.Branches) []engine.Branches {
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+func partitionGitHubStackChains(ctx context.Context, eng engine.Engine, branches engine.Branches) []engine.Branches {
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	selected := make(map[string]bool, len(branches))
 	for _, branch := range branches {
 		selected[branch.GetName()] = true
@@ -630,8 +631,8 @@ func partitionGitHubStackChains(eng engine.Engine, branches engine.Branches) []e
 //
 // A selected component with a fork cannot be represented as a native GitHub
 // Stack. Independent roots are partitioned before this validation runs.
-func validateGitHubStackChain(eng engine.Engine, branches engine.Branches) error {
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+func validateGitHubStackChain(ctx context.Context, eng engine.Engine, branches engine.Branches) error {
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	trunk := eng.Trunk().GetName()
 	for i := 1; i < len(branches); i++ {
 		parent := graph.Parent(branches[i])
@@ -1247,7 +1248,7 @@ func composeRegeneratedBodies(ctx *app.Context, opts Options, infos []Info) {
 	}
 	for _, info := range infos {
 		if info.Action == engine.SubmitActionUpdate && info.Metadata != nil {
-			info.Metadata.Body = pr.ComposeBody(info.Metadata.Body, info.BranchName, ctx.Engine, navOpts)
+			info.Metadata.Body = pr.ComposeBody(ctx.Context, info.Metadata.Body, info.BranchName, ctx.Engine, navOpts)
 		}
 	}
 }

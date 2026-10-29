@@ -17,8 +17,8 @@ const stackitRefPrefix = "refs/stackit/"
 //
 // On failure the returned error string contains "reference not found" so
 // downstream callers that match on that legacy phrase continue to work.
-func (r *runner) resolveRefSHA(ref string) (string, error) {
-	return r.resolveRefSHAContext(context.Background(), ref)
+func (r *runner) resolveRefSHA(ctx context.Context, ref string) (string, error) {
+	return r.resolveRefSHAContext(ctx, ref)
 }
 
 func (r *runner) resolveRefSHAContext(ctx context.Context, ref string) (string, error) {
@@ -73,7 +73,7 @@ func (r *runner) ReadRevisions(ctx context.Context, names ...string) ReadResults
 	if len(names) == 1 {
 		name := names[0]
 		if name == "HEAD" {
-			if sha, ok := r.readHeadRevision(); ok {
+			if sha, ok := r.readHeadRevision(ctx); ok {
 				result.Set(name, sha)
 				return result
 			}

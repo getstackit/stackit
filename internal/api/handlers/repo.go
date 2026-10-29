@@ -41,7 +41,7 @@ func (h *RepoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Owner:         owner,
 		Repo:          repo,
 		Trunk:         entry.Engine.Trunk().GetName(),
-		CurrentBranch: entry.Engine.CurrentBranchName(),
+		CurrentBranch: entry.Engine.CurrentBranchName(r.Context()),
 		Remote:        entry.Remote,
 	}
 

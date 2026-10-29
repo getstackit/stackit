@@ -179,12 +179,12 @@ type CollectedBranches struct {
 // mergePlanEngine lists exactly the engine methods merge planning calls.
 type mergePlanEngine interface {
 	Trunk() engine.Branch
-	CurrentBranch() *engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
 	GetBranch(branchName string) engine.Branch
 	AllBranches() engine.Branches
 	GetScope(branch engine.Branch) engine.Scope
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
-	SortBranchesTopologically(branches engine.Branches) engine.Branches
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+	SortBranchesTopologically(ctx context.Context, branches engine.Branches) engine.Branches
 	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
 	ReadBranchRemoteStatuses(ctx context.Context, branches engine.Branches) engine.BranchRemoteStatuses
 }
@@ -213,7 +213,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 			return nil, fmt.Errorf("branch %s is not tracked by stackit", opts.TargetBranch)
 		}
 	} else {
-		cb := eng.CurrentBranch()
+		cb := eng.CurrentBranch(ctx)
 		if cb == nil {
 			return nil, errors.ErrNotOnBranch
 		}
@@ -224,7 +224,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	var planCurrentBranch string
 
 	// Build a StackGraph for efficient traversals
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	if opts.Scope != "" {
 		// Collect all branches with the specified scope
@@ -239,7 +239,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 		}
 
 		// Sort branches topologically so we merge in correct order (bottom to top)
-		scopeBranches = eng.SortBranchesTopologically(scopeBranches)
+		scopeBranches = eng.SortBranchesTopologically(ctx, scopeBranches)
 		allBranches = scopeBranches.Names()
 		// In scope mode, the "current branch" for the plan is the top-most branch in the scope
 		planCurrentBranch = allBranches[len(allBranches)-1]

@@ -560,7 +560,7 @@ func (m *shippableModel) renderStackTree(stack *shippable.Stack) (lines []string
 		for _, branch := range stack.Stack.AllBranches {
 			stackBranches[branch] = true
 		}
-		renderer = tui.NewStackTreeRendererWithFilter(m.engine, func(branchName string) bool {
+		renderer = tui.NewStackTreeRendererWithFilter(m.ctx.Context, m.engine, func(branchName string) bool {
 			return stackBranches[branchName]
 		})
 	}

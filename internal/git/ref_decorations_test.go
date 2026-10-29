@@ -38,7 +38,7 @@ func TestRefDecorations(t *testing.T) {
 	require.NoError(t, scene.Repo.RunGitCommand("branch", "feature"))
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	decos, err := runner.RefDecorations()
+	decos, err := runner.RefDecorations(t.Context())
 	require.NoError(t, err)
 
 	headSHA, err := runner.ReadRevisions(t.Context(), "refs/heads/main").One()

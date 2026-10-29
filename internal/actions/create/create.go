@@ -56,10 +56,10 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	defer h.Cleanup()
 
 	// Validate preconditions
-	if err := validation.MustBeOnBranch(eng).Validate(); err != nil {
+	if err := validation.MustBeOnBranch(ctx.Context, eng).Validate(); err != nil {
 		return Result{}, err
 	}
-	currentBranch := eng.CurrentBranch().GetName()
+	currentBranch := eng.CurrentBranch(ctx.Context).GetName()
 	requestedParent := currentBranch
 	if opts.Onto != "" {
 		requestedParent = opts.Onto

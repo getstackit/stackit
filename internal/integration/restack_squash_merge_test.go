@@ -28,7 +28,7 @@ func markPrWithState(t *testing.T, sh *scenario.Scenario, branch string, prNumbe
 		State:  &s,
 		Base:   &b,
 	})
-	require.NoError(t, sh.Metadata.WriteMetadata(branch, meta))
+	require.NoError(t, sh.Metadata.WriteMetadata(t.Context(), branch, meta))
 }
 
 // TestSquashMergeMultiCommitParent reproduces the case where a parent branch

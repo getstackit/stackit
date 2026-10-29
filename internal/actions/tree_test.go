@@ -19,7 +19,7 @@ func TestBuildTreeJSONHidesAnchorParents(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.CreateBranch("anchor").Commit("anchor")
 	s.TrackBranch("anchor", "main")
-	require.NoError(t, s.Engine.SetBranchType(s.Engine.GetBranch("anchor"), git.BranchTypeWorktreeAnchor))
+	require.NoError(t, s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("anchor"), git.BranchTypeWorktreeAnchor))
 	s.CreateBranch("feature").Commit("feature")
 	s.TrackBranch("feature", "anchor")
 

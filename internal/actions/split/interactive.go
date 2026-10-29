@@ -1,6 +1,8 @@
 package split
 
 import (
+	"context"
+
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -50,11 +52,11 @@ type InteractiveHandler interface {
 	// PromptSplitType asks the user to choose between available split types.
 	// availableTypes contains the choices with their availability status.
 	// Returns the selected Style or an error if canceled.
-	PromptSplitType(availableTypes []TypeChoice) (Style, error)
+	PromptSplitType(ctx context.Context, availableTypes []TypeChoice) (Style, error)
 
 	// PromptDirection asks the user where to place the new branch.
 	// Returns the selected Direction or an error if canceled.
-	PromptDirection(ctx DirectionContext) (Direction, error)
+	PromptDirection(ctx context.Context, dirCtx DirectionContext) (Direction, error)
 
 	// ShowHunkSummary displays a summary of the remaining changes before staging.
 	// This is informational only, no user input required.

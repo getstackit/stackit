@@ -401,7 +401,7 @@ func newContextWithConfig(ctx context.Context, repoRoot string, opts GlobalOptio
 	// ReadLocalMetadata at bootstrap — local metadata (Frozen, etc.)
 	// loads on first accessor call. For commands that never read local-only
 	// fields this cuts metadata I/O roughly in half on big repos.
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(ctx, engine.Options{
 		RepoRoot:          repoRoot,
 		Trunk:             trunk,
 		MaxUndoStackDepth: maxUndoDepth,

@@ -83,8 +83,8 @@ func (e *engineImpl) ListWorktrees(ctx context.Context) (git.WorktreeList, error
 }
 
 // GetRemoteURL returns the remote URL
-func (e *engineImpl) GetRemoteURL(_ context.Context) (string, error) {
-	return e.git.GetConfig("remote.origin.url")
+func (e *engineImpl) GetRemoteURL(ctx context.Context) (string, error) {
+	return e.git.GetConfig(ctx, "remote.origin.url")
 }
 
 // GetCurrentRevision returns the current revision (HEAD)
@@ -159,8 +159,8 @@ func (e *engineImpl) IsMergeInProgress(ctx context.Context) bool {
 }
 
 // GetRebaseHead returns the current rebase head
-func (e *engineImpl) GetRebaseHead() (string, error) {
-	return e.git.GetRebaseHead()
+func (e *engineImpl) GetRebaseHead(ctx context.Context) (string, error) {
+	return e.git.GetRebaseHead(ctx)
 }
 
 // HasUncommittedChanges checks if there are uncommitted changes
@@ -189,8 +189,8 @@ func (e *engineImpl) GitVersion(ctx context.Context) (git.Version, error) {
 }
 
 // GetConfig reads a git configuration value.
-func (e *engineImpl) GetConfig(key string) (string, error) {
-	return e.git.GetConfig(key)
+func (e *engineImpl) GetConfig(ctx context.Context, key string) (string, error) {
+	return e.git.GetConfig(ctx, key)
 }
 
 // SetConfig writes a git configuration value.
@@ -206,8 +206,8 @@ func (e *engineImpl) GetAllBranchNames(ctx context.Context) ([]string, error) {
 
 // ListMetadataRefs returns a map of branch name to metadata-ref SHA for every
 // stackit metadata ref, including refs whose branches no longer exist.
-func (e *engineImpl) ListMetadataRefs() (map[string]string, error) {
-	return e.metadata.ListMetadata()
+func (e *engineImpl) ListMetadataRefs(ctx context.Context) (map[string]string, error) {
+	return e.metadata.ListMetadata(ctx)
 }
 
 // ReadMetadataRaw reads a single branch's metadata directly from its ref,

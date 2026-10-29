@@ -9,7 +9,7 @@ import (
 
 // PullTrunk pulls the trunk branch from remote
 func (e *engineImpl) PullTrunk(ctx context.Context) (PullResult, error) {
-	remote := e.git.GetRemote()
+	remote := e.git.GetRemote(ctx)
 	e.mu.RLock()
 	trunk := e.trunk
 	e.mu.RUnlock()
@@ -18,14 +18,14 @@ func (e *engineImpl) PullTrunk(ctx context.Context) (PullResult, error) {
 		return PullConflict, err
 	}
 
-	return e.finishTrunkPull(gitResult)
+	return e.finishTrunkPull(ctx, gitResult)
 }
 
 // UpdateTrunkFromRemote updates trunk from the already-fetched remote-tracking
 // branch. Callers that need to batch the network fetch with other refspecs can
 // use FetchRemote first, then call this local update step.
 func (e *engineImpl) UpdateTrunkFromRemote(ctx context.Context) (PullResult, error) {
-	remote := e.git.GetRemote()
+	remote := e.git.GetRemote(ctx)
 	e.mu.RLock()
 	trunk := e.trunk
 	e.mu.RUnlock()
@@ -34,7 +34,7 @@ func (e *engineImpl) UpdateTrunkFromRemote(ctx context.Context) (PullResult, err
 		return PullConflict, err
 	}
 
-	return e.finishTrunkPull(gitResult)
+	return e.finishTrunkPull(ctx, gitResult)
 }
 
 // UpdateBranchFromRemote fast-forwards a single branch from its already-fetched
@@ -63,11 +63,11 @@ func (e *engineImpl) PullBranch(ctx context.Context, remote, branchName string) 
 	return pullResultFromGit(gitResult), nil
 }
 
-func (e *engineImpl) finishTrunkPull(gitResult git.PullResult) (PullResult, error) {
+func (e *engineImpl) finishTrunkPull(ctx context.Context, gitResult git.PullResult) (PullResult, error) {
 	result := pullResultFromGit(gitResult)
 
 	// Rebuild to refresh branch cache
-	if err := e.rebuild(); err != nil {
+	if err := e.rebuild(ctx); err != nil {
 		return result, fmt.Errorf("failed to rebuild after pull: %w", err)
 	}
 
@@ -90,7 +90,7 @@ func pullResultFromGit(gitResult git.PullResult) PullResult {
 
 // ResetTrunkToRemote resets trunk to match remote
 func (e *engineImpl) ResetTrunkToRemote(ctx context.Context) error {
-	remote := e.git.GetRemote()
+	remote := e.git.GetRemote(ctx)
 
 	e.mu.RLock()
 	trunk := e.trunk
@@ -153,7 +153,7 @@ func (e *engineImpl) ResetTrunkToRemote(ctx context.Context) error {
 	}
 
 	// Rebuild to refresh branch cache
-	if err := e.rebuild(); err != nil {
+	if err := e.rebuild(ctx); err != nil {
 		return fmt.Errorf("failed to rebuild after reset: %w", err)
 	}
 

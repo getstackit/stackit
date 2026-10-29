@@ -19,7 +19,7 @@ func TestStackMetaOperations(t *testing.T) {
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		runnerMetadata := git.NewMetadataStore(runner)
 
-		meta, err := runnerMetadata.ReadStackMeta("nonexistent-stack-id")
+		meta, err := runnerMetadata.ReadStackMeta(t.Context(), "nonexistent-stack-id")
 		require.NoError(t, err)
 		require.Nil(t, meta)
 	})
@@ -40,11 +40,11 @@ func TestStackMetaOperations(t *testing.T) {
 		}
 
 		// Write
-		err := runnerMetadata.WriteStackMeta(stackID, meta)
+		err := runnerMetadata.WriteStackMeta(t.Context(), stackID, meta)
 		require.NoError(t, err)
 
 		// Read back
-		readMeta, err := runnerMetadata.ReadStackMeta(stackID)
+		readMeta, err := runnerMetadata.ReadStackMeta(t.Context(), stackID)
 		require.NoError(t, err)
 		require.NotNil(t, readMeta)
 		require.Equal(t, stackID, readMeta.ID)
@@ -67,7 +67,7 @@ func TestStackMetaOperations(t *testing.T) {
 		}
 
 		// Write
-		err := runnerMetadata.WriteStackMeta(stackID, meta)
+		err := runnerMetadata.WriteStackMeta(t.Context(), stackID, meta)
 		require.NoError(t, err)
 
 		// Delete
@@ -75,7 +75,7 @@ func TestStackMetaOperations(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify deleted
-		readMeta, err := runnerMetadata.ReadStackMeta(stackID)
+		readMeta, err := runnerMetadata.ReadStackMeta(t.Context(), stackID)
 		require.NoError(t, err)
 		require.Nil(t, readMeta)
 	})
@@ -93,12 +93,12 @@ func TestStackMetaOperations(t *testing.T) {
 				ID:        stackID,
 				CreatedAt: time.Now(),
 			}
-			err := runnerMetadata.WriteStackMeta(stackID, meta)
+			err := runnerMetadata.WriteStackMeta(t.Context(), stackID, meta)
 			require.NoError(t, err)
 		}
 
 		// List
-		list, err := runnerMetadata.ListStackMetas()
+		list, err := runnerMetadata.ListStackMetas(t.Context())
 		require.NoError(t, err)
 		require.Len(t, list, 3)
 
@@ -213,12 +213,12 @@ func TestWriteStackMetaBlob(t *testing.T) {
 		}
 
 		// Write blob (does not create ref)
-		sha, err := runnerMetadata.WriteStackMetaBlob(meta)
+		sha, err := runnerMetadata.WriteStackMetaBlob(t.Context(), meta)
 		require.NoError(t, err)
 		require.NotEmpty(t, sha)
 
 		// Verify no ref exists yet
-		existingSHA := runnerMetadata.GetStackMetaRefSHA(stackID)
+		existingSHA := runnerMetadata.GetStackMetaRefSHA(t.Context(), stackID)
 		require.Empty(t, existingSHA)
 
 		// Use UpdateRef to create the stack meta ref
@@ -227,7 +227,7 @@ func TestWriteStackMetaBlob(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify we can read the metadata back
-		readMeta, err := runnerMetadata.ReadStackMeta(stackID)
+		readMeta, err := runnerMetadata.ReadStackMeta(t.Context(), stackID)
 		require.NoError(t, err)
 		require.NotNil(t, readMeta)
 		require.Equal(t, stackID, readMeta.ID)
@@ -254,11 +254,11 @@ func TestGetStackMetaRefSHA(t *testing.T) {
 		}
 
 		// Write stack meta
-		err := runnerMetadata.WriteStackMeta(stackID, meta)
+		err := runnerMetadata.WriteStackMeta(t.Context(), stackID, meta)
 		require.NoError(t, err)
 
 		// Get SHA
-		sha := runnerMetadata.GetStackMetaRefSHA(stackID)
+		sha := runnerMetadata.GetStackMetaRefSHA(t.Context(), stackID)
 		require.NotEmpty(t, sha)
 		require.Len(t, sha, 40) // Git SHAs are 40 hex characters
 	})
@@ -269,7 +269,7 @@ func TestGetStackMetaRefSHA(t *testing.T) {
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		runnerMetadata := git.NewMetadataStore(runner)
 
-		sha := runnerMetadata.GetStackMetaRefSHA("nonexistent-stack-id")
+		sha := runnerMetadata.GetStackMetaRefSHA(t.Context(), "nonexistent-stack-id")
 		require.Empty(t, sha)
 	})
 }

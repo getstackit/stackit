@@ -41,7 +41,7 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	// Since we are currently in the main engine, we can get it from there.
 	trunk := eng.Trunk()
 	worktreeGit := git.NewRunnerWithPath(worktreePath.String(), nil)
-	worktreeEng, err := engine.NewEngine(engine.Options{
+	worktreeEng, err := engine.NewEngine(ctx.Context, engine.Options{
 		RepoRoot:          worktreePath.String(),
 		Git:               worktreeGit,
 		Trunk:             trunk.GetName(),

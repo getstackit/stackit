@@ -133,7 +133,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 		require.Contains(t, syncResult.BranchesUpdated, "branch-c", "branch-c should have its PR base updated on GitHub")
 
 		// Rebuild engine
-		err = s.Engine.Rebuild("main")
+		err = s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// CRITICAL: Local parent should be PRESERVED (not changed by sync)
@@ -193,7 +193,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 			CommitChange("file-a-modified", "branch-a modified")
 
 		// Rebuild to update metadata
-		err = s.Engine.Rebuild("main")
+		err = s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// Manually restack children (simulating what modify would do)
@@ -335,7 +335,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 		require.NoError(t, err)
 
 		// Rebuild to pick up changes
-		err = s.Engine.Rebuild("main")
+		err = s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
 		// VERIFICATION: Local parent should be PRESERVED (branch-a, not changed to main)

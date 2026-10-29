@@ -76,7 +76,7 @@ Dry run complete
 				}
 			}
 
-			eng, err := engine.NewEngine(engine.Options{RepoRoot: s.Dir, Trunk: "main"})
+			eng, err := engine.NewEngine(t.Context(), engine.Options{RepoRoot: s.Dir, Trunk: "main"})
 			if err != nil {
 				return err
 			}

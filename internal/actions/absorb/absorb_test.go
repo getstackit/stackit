@@ -69,7 +69,7 @@ func TestAbsorbScopeBoundaries(t *testing.T) {
 		require.Equal(t, "PROJ-123", currentScope.String())
 
 		// Get downstack branches as absorb would
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+		graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 		downstackBranches := graph.Range(currentBranch, engine.StackRange{RecursiveParents: true})
 		// Include current branch
 		downstackBranches = engine.BranchesOf(currentBranch).Concat(downstackBranches)
@@ -111,7 +111,7 @@ func TestAbsorbScopeBoundaries(t *testing.T) {
 		require.True(t, currentScope.IsEmpty())
 
 		// Get downstack branches as absorb would
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+		graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 		downstackBranches := graph.Range(currentBranch, engine.StackRange{RecursiveParents: true})
 		// Include current branch
 		downstackBranches = engine.BranchesOf(currentBranch).Concat(downstackBranches)
@@ -166,7 +166,7 @@ func TestAbsorbScopeBoundaries(t *testing.T) {
 		require.Equal(t, "PROJ-123", currentScope.String())
 
 		// Get downstack branches as absorb would
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+		graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 		downstackBranches := graph.Range(currentBranch, engine.StackRange{RecursiveParents: true})
 		// Include current branch
 		downstackBranches = engine.BranchesOf(currentBranch).Concat(downstackBranches)
@@ -915,7 +915,7 @@ func TestAbsorbRestackConflictKeepsCleanWorktree(t *testing.T) {
 	require.NotContains(t, stashList, absorbStashMarker)
 
 	// branch-b was held back (still needs restack), not left mid-conflict.
-	require.NotEmpty(t, s.Engine.CurrentBranch())
+	require.NotEmpty(t, s.Engine.CurrentBranch(t.Context()))
 }
 
 // TestDropStagedStashIfRestored verifies the staged safety stash is dropped only

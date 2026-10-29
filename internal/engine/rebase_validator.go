@@ -208,7 +208,7 @@ func (e *engineImpl) ValidateRebases(ctx context.Context, specs []RebaseSpec) (*
 	}
 
 	// Group specs by dependency depth
-	graph := e.Graph(SortStrategySmart)
+	graph := e.Graph(ctx, SortStrategySmart)
 	levels := groupSpecsByDepth(graph, specs)
 
 	result := &RebaseValidation{

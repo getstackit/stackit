@@ -289,7 +289,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	targetBranch := ""
 	var targetPRNumber *git.PRNumber
 	if branchOrPR == "" {
-		current := eng.CurrentBranch()
+		current := eng.CurrentBranch(ctx.Context)
 		if current == nil {
 			return errors.New("not on a branch and no branch/PR specified")
 		}
@@ -321,7 +321,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		Type:  GetEventStarted,
 	})
 
-	remote := eng.GetRemote()
+	remote := eng.GetRemote(ctx.Context)
 	trunkName := eng.Trunk().GetName()
 
 	// Identify branches to sync (ancestors + descendants)
@@ -359,7 +359,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	// If target branch exists locally, identify local descendants
 	targetBranchObj := eng.GetBranch(targetBranch)
 	if !opts.Downstack && targetBranchObj.IsTracked() {
-		graph := eng.Graph(engine.SortStrategyAlphabetical)
+		graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 		upstack := graph.Range(targetBranchObj, engine.StackRange{RecursiveChildren: true})
 		for _, b := range upstack {
 			targets.appendBranches(b.GetName())
@@ -597,7 +597,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	if len(reanchored) > 0 {
 		report := LandedAncestorReport{
 			Reanchored: targets.reanchoredInSyncOrder(reanchored),
-			Stale:      targets.staleAfterReanchor(eng, reanchored, freezeSet),
+			Stale:      targets.staleAfterReanchor(ctx.Context, eng, reanchored, freezeSet),
 			CanRestack: opts.Restack,
 		}
 		for _, name := range report.Unanchored() {
@@ -658,7 +658,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 				}
 			}
 		}
-		sorted := eng.SortBranchesTopologically(uniqueBranches.Build())
+		sorted := eng.SortBranchesTopologically(ctx.Context, uniqueBranches.Build())
 		// Prefer the PR number discovered during sync (which may have come
 		// from remote metadata not copied into local metadata); fall back to
 		// local metadata otherwise.
@@ -713,7 +713,7 @@ func branchesHeldByOtherWorktrees(ctx context.Context, eng engine.Engine) (map[s
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
-	current := eng.CurrentBranchName()
+	current := eng.CurrentBranchName(ctx)
 	held := make(map[string]engine.WorktreePath, len(worktrees))
 	for _, wt := range worktrees {
 		// A detached worktree reports no branch, and so holds none.
@@ -829,13 +829,13 @@ func (targets *syncTargets) nearestAvailableAncestor(branchName string, unavaila
 // pendingFreeze is the set queued to be frozen once the sync loop finishes, so
 // that a branch created moments ago counts as frozen alongside one that already
 // was.
-func (targets *syncTargets) staleAfterReanchor(eng engine.Engine, reanchored map[string]Reanchored, pendingFreeze engine.Branches) []StaleBranch {
+func (targets *syncTargets) staleAfterReanchor(ctx context.Context, eng engine.Engine, reanchored map[string]Reanchored, pendingFreeze engine.Branches) []StaleBranch {
 	inSync := make(map[string]bool, len(targets.branches))
 	for _, name := range targets.branches {
 		inSync[name] = true
 	}
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	anchored := make(map[string]bool, len(reanchored))
 	mark := func(name string, hasAnchor bool) {
 		if !inSync[name] {

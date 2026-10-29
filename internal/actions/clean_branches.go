@@ -291,7 +291,7 @@ func buildDeletionPlan(ctx *app.Context, deleteStatuses engine.DeletionStatuses)
 	visited := make(map[string]bool)
 
 	// Build StackGraph for efficient traversals
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Start DFS from trunk children to handle the tracked hierarchy
 	trunk := eng.Trunk()

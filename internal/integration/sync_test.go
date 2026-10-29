@@ -53,7 +53,7 @@ func TestSync(t *testing.T) {
 		prInfo.Base = &newBase
 		meta = meta.WithPrInfo(prInfo)
 
-		err = sh.Metadata.WriteMetadata("feature-b", meta)
+		err = sh.Metadata.WriteMetadata(t.Context(), "feature-b", meta)
 		require.NoError(t, err)
 
 		// 3. Run sync
@@ -108,7 +108,7 @@ func TestSync(t *testing.T) {
 			prInfo.State = &state
 			prInfo.Base = &base
 			meta = meta.WithPrInfo(prInfo)
-			err := sh.Metadata.WriteMetadata(branch, meta)
+			err := sh.Metadata.WriteMetadata(t.Context(), branch, meta)
 			require.NoError(t, err)
 		}
 
@@ -130,7 +130,7 @@ func TestSync(t *testing.T) {
 			State:  &state,
 			Base:   &base,
 		})
-		err = sh.Metadata.WriteMetadata(mergeBranch, meta)
+		err = sh.Metadata.WriteMetadata(t.Context(), mergeBranch, meta)
 		require.NoError(t, err)
 
 		// 3. Run sync (which should call clean_branches)
@@ -170,7 +170,7 @@ func TestSync(t *testing.T) {
 			State:  &stateA,
 			Base:   &baseA,
 		})
-		_ = sh.Metadata.WriteMetadata("a", metaA)
+		_ = sh.Metadata.WriteMetadata(t.Context(), "a", metaA)
 
 		// b: OPEN pointing to main
 		metaB, _ := sh.Metadata.ReadMetadata(t.Context(), "b").One()
@@ -182,7 +182,7 @@ func TestSync(t *testing.T) {
 			State:  &stateB,
 			Base:   &baseB,
 		})
-		_ = sh.Metadata.WriteMetadata("b", metaB)
+		_ = sh.Metadata.WriteMetadata(t.Context(), "b", metaB)
 
 		// 1. Run sync
 		err := sync.Action(sh.Context, sync.Options{}, nil)
@@ -228,7 +228,7 @@ func TestSyncDraftPRs(t *testing.T) {
 		IsDraft: &isDraft,
 	})
 
-	err = sh.Metadata.WriteMetadata("branch-a", meta)
+	err = sh.Metadata.WriteMetadata(t.Context(), "branch-a", meta)
 	require.NoError(t, err)
 
 	// 2. Verify it's a draft locally
@@ -269,7 +269,7 @@ func TestSyncCleanupDiamond(t *testing.T) {
 		State:  &state,
 		Base:   &base,
 	})
-	_ = sh.Metadata.WriteMetadata("a", metaA)
+	_ = sh.Metadata.WriteMetadata(t.Context(), "a", metaA)
 
 	// Mark 'b' as merged
 	metaB, _ := sh.Metadata.ReadMetadata(t.Context(), "b").One()
@@ -281,7 +281,7 @@ func TestSyncCleanupDiamond(t *testing.T) {
 		State:  &stateB,
 		Base:   &baseB,
 	})
-	_ = sh.Metadata.WriteMetadata("b", metaB)
+	_ = sh.Metadata.WriteMetadata(t.Context(), "b", metaB)
 
 	// Run sync
 	err := sync.Action(sh.Context, sync.Options{}, nil)
@@ -333,7 +333,7 @@ func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 		State:  &state,
 		Base:   &base,
 	})
-	err = sh.Metadata.WriteMetadata("branch-a", metaA)
+	err = sh.Metadata.WriteMetadata(t.Context(), "branch-a", metaA)
 	require.NoError(t, err)
 
 	// Run sync+restack from main.
@@ -386,7 +386,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			State:  &state,
 			Base:   &base,
 		})
-		err = sh.Metadata.WriteMetadata("feature", meta)
+		err = sh.Metadata.WriteMetadata(t.Context(), "feature", meta)
 		require.NoError(t, err)
 
 		// Detach HEAD at main
@@ -439,7 +439,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			State:  &state,
 			Base:   &base,
 		})
-		err = sh.Metadata.WriteMetadata("feature", metaF)
+		err = sh.Metadata.WriteMetadata(t.Context(), "feature", metaF)
 		require.NoError(t, err)
 
 		// 4. Stay on main and run sync
@@ -495,7 +495,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			State:  &state,
 			Base:   &base,
 		})
-		err = sh.Metadata.WriteMetadata("feature", meta)
+		err = sh.Metadata.WriteMetadata(t.Context(), "feature", meta)
 		require.NoError(t, err)
 
 		// Go back to main for sync
@@ -567,7 +567,7 @@ func markPrMerged(t *testing.T, sh *scenario.Scenario, branch string, prNumber g
 		State:  &state,
 		Base:   &b,
 	})
-	require.NoError(t, sh.Metadata.WriteMetadata(branch, meta))
+	require.NoError(t, sh.Metadata.WriteMetadata(t.Context(), branch, meta))
 }
 
 // TestSquashMergeMiddleOfStack covers the case where a middle PR (B) is
@@ -629,7 +629,7 @@ func TestSyncLinearStackDeletesMergedMiddleBranch(t *testing.T) {
 	require.NoError(t, sh.Scene.Repo.RunGitCommand("config", "--local", "stackit.stack.shape", config.StackShapeLinear))
 	cfg, err := config.LoadConfig(sh.Scene.Dir)
 	require.NoError(t, err)
-	linearEngine, err := engine.NewEngine(engine.Options{
+	linearEngine, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot:     sh.Scene.Dir,
 		Trunk:        cfg.Trunk(),
 		LinearStacks: cfg.StackShape() == config.StackShapeLinear,
@@ -886,7 +886,7 @@ func TestUserDeletedMergedBranchBeforeSync(t *testing.T) {
 
 	// Refresh the engine so it sees that branch-a is gone — equivalent to a
 	// fresh CLI invocation.
-	require.NoError(t, sh.Engine.Rebuild(mainName))
+	require.NoError(t, sh.Engine.Rebuild(t.Context(), mainName))
 
 	// Sync runs and shouldn't error.
 	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))

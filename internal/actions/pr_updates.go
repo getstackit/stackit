@@ -95,7 +95,7 @@ func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, current ma
 	updatedTitle := scope.ApplyToTitle(currentTitle)
 
 	navOpts := PRNavigationOptions(ctx)
-	updatedBody := pr.ComposeBody(currentBody, name, ctx.Engine, navOpts)
+	updatedBody := pr.ComposeBody(ctx.Context, currentBody, name, ctx.Engine, navOpts)
 
 	// Don't update body if:
 	// - It would become empty when adding navigation (preserve existing body instead)
@@ -129,7 +129,7 @@ func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, current ma
 	}
 
 	// Successfully updated (or already up to date), clear the PR body update flag and update local engine state
-	if err := ctx.Engine.ClearNeedsPRBodyUpdate(name); err != nil {
+	if err := ctx.Engine.ClearNeedsPRBodyUpdate(ctx.Context, name); err != nil {
 		ctx.Output.Debug("Failed to clear PR body update flag for %s: %v", name, err)
 	}
 	if err := ctx.Engine.UpsertPrInfo(ctx.Context, branch, prInfo.WithTitleAndBody(updatedTitle, updatedBody).WithLockReason(branch.GetLockReason())); err != nil {
@@ -159,14 +159,14 @@ func deleteNavigationComment(ctx *app.Context, branchName string, prNumber git.P
 	commentID, err := ctx.Engine.GetNavigationCommentID(branch)
 	if err == nil && commentID != 0 {
 		if err := ctx.GitHub().DeletePRComment(ctx.Context, commentID); err == nil {
-			if err := ctx.Engine.ClearNavigationCommentID(branch); err != nil {
+			if err := ctx.Engine.ClearNavigationCommentID(ctx.Context, branch); err != nil {
 				ctx.Output.Debug("Failed to clear navigation comment ID cache for %s: %v", branchName, err)
 			}
 			ctx.Output.Debug("Deleted navigation comment %d on PR #%d", commentID, prNumber)
 			return
 		}
 		// If delete failed (comment already deleted externally?), clear cache and search
-		if err := ctx.Engine.ClearNavigationCommentID(branch); err != nil {
+		if err := ctx.Engine.ClearNavigationCommentID(ctx.Context, branch); err != nil {
 			ctx.Output.Debug("Failed to clear navigation comment ID cache for %s: %v", branchName, err)
 		}
 	}
@@ -192,7 +192,7 @@ func deleteNavigationComment(ctx *app.Context, branchName string, prNumber git.P
 // Creates, updates, or deletes the comment as needed based on navigation options.
 // Uses cached comment ID when available to avoid API search.
 func updateNavigationComment(ctx *app.Context, branchName string, prNumber git.PRNumber, navOpts pr.NavigationOptions) {
-	commentBody := pr.CreateNavigationComment(branchName, ctx.Engine, navOpts)
+	commentBody := pr.CreateNavigationComment(ctx.Context, branchName, ctx.Engine, navOpts)
 	branch := ctx.Engine.GetBranch(branchName)
 
 	// If navigation should be hidden, delete existing comment
@@ -210,7 +210,7 @@ func updateNavigationComment(ctx *app.Context, branchName string, prNumber git.P
 			return
 		}
 		// If update failed (comment deleted externally?), clear cache and fall through
-		if err := ctx.Engine.ClearNavigationCommentID(branch); err != nil {
+		if err := ctx.Engine.ClearNavigationCommentID(ctx.Context, branch); err != nil {
 			ctx.Output.Debug("Failed to clear navigation comment ID cache for %s: %v", branchName, err)
 		}
 	}
@@ -226,7 +226,7 @@ func updateNavigationComment(ctx *app.Context, branchName string, prNumber git.P
 		if pr.IsStackitComment(c.Body) {
 			// Found existing - update it and cache ID
 			if err := ctx.GitHub().UpdatePRComment(ctx.Context, c.ID, commentBody); err == nil {
-				if err := ctx.Engine.SetNavigationCommentID(branch, c.ID); err != nil {
+				if err := ctx.Engine.SetNavigationCommentID(ctx.Context, branch, c.ID); err != nil {
 					ctx.Output.Debug("Failed to cache navigation comment ID for %s: %v", branchName, err)
 				}
 				ctx.Output.Debug("Updated navigation comment %d on PR #%d", c.ID, prNumber)
@@ -238,7 +238,7 @@ func updateNavigationComment(ctx *app.Context, branchName string, prNumber git.P
 	// No existing comment - create new one and cache ID
 	newID, err := ctx.GitHub().CreatePRComment(ctx.Context, prNumber, commentBody)
 	if err == nil {
-		if err := ctx.Engine.SetNavigationCommentID(branch, newID); err != nil {
+		if err := ctx.Engine.SetNavigationCommentID(ctx.Context, branch, newID); err != nil {
 			ctx.Output.Debug("Failed to cache navigation comment ID for %s: %v", branchName, err)
 		}
 		ctx.Output.Debug("Created navigation comment %d on PR #%d", newID, prNumber)

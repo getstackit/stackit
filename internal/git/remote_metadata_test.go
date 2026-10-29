@@ -131,7 +131,7 @@ func TestFetchRefSpecsFetchesBranchAndMetadataFromCustomRemote(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, remoteMetadataSHA)
 
-	err = runner.EnsureMetadataRefspecConfigured()
+	err = runner.EnsureMetadataRefspecConfigured(t.Context())
 	require.NoError(t, err)
 	upstreamRefspecs, err := runner.GetConfigAll("remote.upstream.fetch")
 	require.NoError(t, err)

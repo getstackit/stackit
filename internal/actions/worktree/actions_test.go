@@ -140,7 +140,7 @@ func TestRemoveAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify it's registered
-		wt, err := s.Engine.GetWorktreeForStack("feature-stack")
+		wt, err := s.Engine.GetWorktreeForStack(t.Context(), "feature-stack")
 		require.NoError(t, err)
 		require.NotNil(t, wt)
 
@@ -151,7 +151,7 @@ func TestRemoveAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify it's gone
-		wt, err = s.Engine.GetWorktreeForStack("feature-stack")
+		wt, err = s.Engine.GetWorktreeForStack(t.Context(), "feature-stack")
 		require.NoError(t, err)
 		require.Nil(t, wt)
 	})
@@ -169,7 +169,7 @@ func TestRemoveAction(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		wt, err := s.Engine.GetWorktreeForStack("feature-stack")
+		wt, err := s.Engine.GetWorktreeForStack(t.Context(), "feature-stack")
 		require.NoError(t, err)
 		require.Nil(t, wt)
 	})
@@ -385,11 +385,11 @@ func TestRepairAction(t *testing.T) {
 		require.NotEmpty(t, result.Repaired[0].AnchorBranch)
 		require.NotEqual(t, "feature", result.Repaired[0].AnchorBranch)
 
-		legacy, err := s.Engine.GetWorktreeForStack("feature")
+		legacy, err := s.Engine.GetWorktreeForStack(t.Context(), "feature")
 		require.NoError(t, err)
 		require.Nil(t, legacy)
 
-		repaired, err := s.Engine.GetWorktreeForStack(result.Repaired[0].AnchorBranch)
+		repaired, err := s.Engine.GetWorktreeForStack(t.Context(), result.Repaired[0].AnchorBranch)
 		require.NoError(t, err)
 		require.NotNil(t, repaired)
 		canonicalWorktreeDir, err := filepath.EvalSymlinks(worktreeDir)

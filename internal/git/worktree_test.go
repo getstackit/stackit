@@ -285,12 +285,12 @@ func TestWorktreeRegistry(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: "refs/stackit/worktrees/corrupt", NewSHA: garbage}}, ""))
 
-		_, readErr := runner.ReadWorktreeMeta("corrupt")
+		_, readErr := runner.ReadWorktreeMeta(t.Context(), "corrupt")
 		require.Error(t, readErr, "precondition: metadata must be unreadable")
 
 		require.NoError(t, runner.DeleteWorktreeMeta(t.Context(), "corrupt"))
 
-		meta, err := runner.ReadWorktreeMeta("corrupt")
+		meta, err := runner.ReadWorktreeMeta(t.Context(), "corrupt")
 		require.NoError(t, err)
 		require.Nil(t, meta)
 	})
@@ -310,7 +310,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		require.NoError(t, err)
 
 		// Read it back
-		readMeta, err := runner.ReadWorktreeMeta("feature-branch")
+		readMeta, err := runner.ReadWorktreeMeta(t.Context(), "feature-branch")
 		require.NoError(t, err)
 		require.NotNil(t, readMeta)
 		require.Equal(t, git.WorktreePath("/path/to/worktree"), readMeta.Path)
@@ -324,7 +324,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Read non-existent metadata
-		meta, err := runner.ReadWorktreeMeta("non-existent")
+		meta, err := runner.ReadWorktreeMeta(t.Context(), "non-existent")
 		require.NoError(t, err)
 		require.Nil(t, meta)
 	})
@@ -347,7 +347,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify it's gone
-		readMeta, err := runner.ReadWorktreeMeta("feature-branch")
+		readMeta, err := runner.ReadWorktreeMeta(t.Context(), "feature-branch")
 		require.NoError(t, err)
 		require.Nil(t, readMeta)
 	})
@@ -373,7 +373,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		require.NoError(t, err)
 
 		// List all
-		metas, err := runner.ListWorktreeMetas()
+		metas, err := runner.ListWorktreeMetas(t.Context())
 		require.NoError(t, err)
 		require.Len(t, metas, 2)
 		require.Contains(t, metas, "feature-1")
@@ -395,7 +395,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, scene.Repo.RunGitCommand("update-ref", git.WorktreeRefPrefix+"broken", blobs[0]))
 
-		entries, err := runner.ListWorktreeRegistrations()
+		entries, err := runner.ListWorktreeRegistrations(t.Context())
 		require.NoError(t, err)
 		require.Len(t, entries, 2)
 		require.NoError(t, entries["good"].Err)
@@ -403,7 +403,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		require.ErrorContains(t, entries["broken"].Err, "failed to unmarshal worktree metadata for broken")
 		require.Nil(t, entries["broken"].Meta)
 
-		metas, err := runner.ListWorktreeMetas()
+		metas, err := runner.ListWorktreeMetas(t.Context())
 		require.NoError(t, err)
 		require.Len(t, metas, 1)
 		require.Contains(t, metas, "good")

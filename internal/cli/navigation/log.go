@@ -76,7 +76,7 @@ field changes as breaking.`,
 				var content string
 				commitCount := len(res.Commits)
 				if req.From == "" {
-					stack, err := stacklog.Gather(ctx.Engine)
+					stack, err := stacklog.Gather(ctx.Context, ctx.Engine)
 					if err != nil {
 						return err
 					}

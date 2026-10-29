@@ -36,7 +36,7 @@ func TestDescribeAction(t *testing.T) {
 		}, nil)
 		require.NoError(t, err)
 
-		desc := s.Engine.GetStackDescription(s.Engine.GetBranch("feature"))
+		desc := s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("feature"))
 		require.NotNil(t, desc)
 		require.Equal(t, "Auth Feature", desc.Title)
 		require.Empty(t, desc.Description)
@@ -56,7 +56,7 @@ func TestDescribeAction(t *testing.T) {
 		}, nil)
 		require.NoError(t, err)
 
-		desc := s.Engine.GetStackDescription(s.Engine.GetBranch("feature"))
+		desc := s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("feature"))
 		require.NotNil(t, desc)
 		require.Equal(t, "Auth Feature", desc.Title)
 		require.Equal(t, "OAuth2 implementation with JWT tokens", desc.Description)
@@ -82,7 +82,7 @@ func TestDescribeAction(t *testing.T) {
 		}, nil)
 		require.NoError(t, err)
 
-		desc := s.Engine.GetStackDescription(s.Engine.GetBranch("feature"))
+		desc := s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("feature"))
 		require.True(t, desc == nil || desc.IsEmpty())
 	})
 
@@ -152,11 +152,11 @@ func TestDescribeAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Description should be retrievable from both child and root
-		childDesc := s.Engine.GetStackDescription(s.Engine.GetBranch("child"))
+		childDesc := s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("child"))
 		require.NotNil(t, childDesc)
 		require.Equal(t, "Stack Title", childDesc.Title)
 
-		rootDesc := s.Engine.GetStackDescription(s.Engine.GetBranch("root"))
+		rootDesc := s.Engine.GetStackDescription(t.Context(), s.Engine.GetBranch("root"))
 		require.NotNil(t, rootDesc)
 		require.Equal(t, "Stack Title", rootDesc.Title)
 	})

@@ -24,7 +24,7 @@ type Options struct {
 // because the adapter hands it to the TUI.
 type trackEngine interface {
 	engine.BranchLookup
-	CurrentBranch() *engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
 	Trunk() engine.Branch
 	AllBranches() engine.Branches
 	BranchNames() *engine.BranchSet
@@ -47,7 +47,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	var eng trackEngine = ctx.Engine
 	branchName := opts.BranchName
 	if branchName == "" {
-		currentBranch := eng.CurrentBranch()
+		currentBranch := eng.CurrentBranch(ctx.Context)
 		if currentBranch != nil {
 			branchName = currentBranch.GetName()
 		}

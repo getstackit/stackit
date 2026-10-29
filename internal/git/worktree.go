@@ -341,16 +341,16 @@ func (r *runner) PruneWorktrees(ctx context.Context) error {
 }
 
 // ReadWorktreeMeta reads worktree metadata for a stack root from local git refs
-func (r *runner) ReadWorktreeMeta(stackRoot string) (*WorktreeMeta, error) {
+func (r *runner) ReadWorktreeMeta(ctx context.Context, stackRoot string) (*WorktreeMeta, error) {
 	refName := fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot)
 
-	sha, err := r.ReadRevisions(context.Background(), refName).One()
+	sha, err := r.ReadRevisions(ctx, refName).One()
 	if err != nil {
 		// If ref doesn't exist, it's not an error, just means no worktree registered
 		return nil, nil //nolint:nilerr
 	}
 
-	content, err := ObjectContent(r.ReadObjects(context.Background(), sha))
+	content, err := ObjectContent(r.ReadObjects(ctx, sha))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read worktree metadata blob %s: %w", sha, err)
 	}
@@ -411,7 +411,7 @@ func (r *runner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error
 	// cleanup with no way to retire it short of a manual `git update-ref -d`.
 	// Drop the forward ref regardless; PruneOrphanedWorktreePathRefs sweeps the
 	// reverse claim once this ref is gone.
-	meta, err := r.ReadWorktreeMeta(stackRoot)
+	meta, err := r.ReadWorktreeMeta(ctx, stackRoot)
 	if err != nil {
 		meta = nil
 	}
@@ -583,8 +583,8 @@ type WorktreeRegistration struct {
 // ListWorktreeRegistrations lists every worktree registration keyed by stack
 // root, reporting unreadable entries instead of skipping them, so ownership
 // checks can refuse rather than treat a damaged registration as absent.
-func (r *runner) ListWorktreeRegistrations() (map[string]WorktreeRegistration, error) {
-	refs, err := r.ListRefs(WorktreeRefPrefix)
+func (r *runner) ListWorktreeRegistrations(ctx context.Context) (map[string]WorktreeRegistration, error) {
+	refs, err := r.ListRefs(ctx, WorktreeRefPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -593,7 +593,7 @@ func (r *runner) ListWorktreeRegistrations() (map[string]WorktreeRegistration, e
 	for refName, sha := range refs {
 		stackRoot := strings.TrimPrefix(refName, WorktreeRefPrefix)
 
-		content, err := ObjectContent(r.ReadObjects(context.Background(), sha))
+		content, err := ObjectContent(r.ReadObjects(ctx, sha))
 		if err != nil {
 			result[stackRoot] = WorktreeRegistration{Err: fmt.Errorf("failed to read worktree metadata blob %s: %w", sha, err)}
 			continue
@@ -616,8 +616,8 @@ func (r *runner) ListWorktreeRegistrations() (map[string]WorktreeRegistration, e
 // ListWorktreeMetas lists all readable worktree metadata, skipping entries
 // that cannot be read. Use ListWorktreeRegistrations where a damaged entry
 // must not read as "no worktree".
-func (r *runner) ListWorktreeMetas() (map[string]*WorktreeMeta, error) {
-	registrations, err := r.ListWorktreeRegistrations()
+func (r *runner) ListWorktreeMetas(ctx context.Context) (map[string]*WorktreeMeta, error) {
+	registrations, err := r.ListWorktreeRegistrations(ctx)
 	if err != nil {
 		return nil, err
 	}

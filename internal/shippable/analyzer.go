@@ -25,7 +25,7 @@ func NewAnalyzer(eng engine.StackView, client github.ChecksReader) *Analyzer {
 // AnalyzeAll discovers and analyzes all stacks for shippability.
 func (a *Analyzer) AnalyzeAll(ctx context.Context) (*AnalysisResult, error) {
 	// Discover all stacks
-	stacks := stackview.DiscoverStacks(a.eng)
+	stacks := stackview.DiscoverStacks(ctx, a.eng)
 	if len(stacks) == 0 {
 		return &AnalysisResult{Stacks: []Stack{}}, nil
 	}

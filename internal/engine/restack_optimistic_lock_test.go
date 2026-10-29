@@ -86,7 +86,7 @@ func TestRestackBranchPropagatesRevisionReadFailure(t *testing.T) {
 	// Track "feature" with the real runner first: TrackBranch's divergence
 	// computation reads revisions too, and we only want the fault to fire
 	// once restackBranch itself asks for the branch's current SHA.
-	trackingEngine, err := NewEngine(Options{RepoRoot: dir, Trunk: "main", Git: realGit})
+	trackingEngine, err := NewEngine(t.Context(), Options{RepoRoot: dir, Trunk: "main", Git: realGit})
 	require.NoError(t, err)
 	trackingImpl, ok := trackingEngine.(*engineImpl)
 	require.True(t, ok)
@@ -99,7 +99,7 @@ func TestRestackBranchPropagatesRevisionReadFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	flakyGit := &flakyRevisionRunner{Runner: realGit, failFor: "feature"}
-	eng, err := NewEngine(Options{RepoRoot: dir, Trunk: "main", Git: flakyGit})
+	eng, err := NewEngine(t.Context(), Options{RepoRoot: dir, Trunk: "main", Git: flakyGit})
 	require.NoError(t, err)
 	e, ok := eng.(*engineImpl)
 	require.True(t, ok)
@@ -134,7 +134,7 @@ func TestApplyBranchAndMetadataPropagatesRevisionReadFailure(t *testing.T) {
 	dir, realGit := newOptimisticLockTestRepo(t)
 	ctx := t.Context()
 
-	trackingEngine, err := NewEngine(Options{RepoRoot: dir, Trunk: "main", Git: realGit})
+	trackingEngine, err := NewEngine(t.Context(), Options{RepoRoot: dir, Trunk: "main", Git: realGit})
 	require.NoError(t, err)
 	trackingImpl, ok := trackingEngine.(*engineImpl)
 	require.True(t, ok)
@@ -149,7 +149,7 @@ func TestApplyBranchAndMetadataPropagatesRevisionReadFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	flakyGit := &flakyRevisionRunner{Runner: realGit, failFor: "feature"}
-	eng, err := NewEngine(Options{RepoRoot: dir, Trunk: "main", Git: flakyGit})
+	eng, err := NewEngine(t.Context(), Options{RepoRoot: dir, Trunk: "main", Git: flakyGit})
 	require.NoError(t, err)
 	e, ok := eng.(*engineImpl)
 	require.True(t, ok)

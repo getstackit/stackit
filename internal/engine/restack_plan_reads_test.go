@@ -39,7 +39,7 @@ func TestRestackPlanningSharesReadsOnlyWithinPlan(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithLinearStack3()
 	g := &planningReadsGit{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil), landingChecks: make(map[string]int)}
-	eng, err := engine.NewEngine(engine.Options{RepoRoot: s.Scene.Dir, Trunk: "main", Git: g})
+	eng, err := engine.NewEngine(t.Context(), engine.Options{RepoRoot: s.Scene.Dir, Trunk: "main", Git: g})
 	require.NoError(t, err)
 	branches := engine.BranchesFromNames(eng, []string{"a", "b", "c"})
 	plan, err := eng.PlanRestack(t.Context(), branches)

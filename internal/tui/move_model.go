@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -132,7 +133,7 @@ var defaultMoveKeys = moveKeyMap{
 }
 
 // NewMoveModel creates a new MoveModel for interactive branch selection
-func NewMoveModel(eng engine.Engine, config MoveModelConfig) *MoveModel {
+func NewMoveModel(ctx context.Context, eng engine.Engine, config MoveModelConfig) *MoveModel {
 	// Build non-selectable set from descendants
 	nonSelectable := make(map[string]bool)
 	for _, d := range config.Descendants {
@@ -149,7 +150,7 @@ func NewMoveModel(eng engine.Engine, config MoveModelConfig) *MoveModel {
 	trunk := eng.Trunk().GetName()
 
 	// Create tree renderer
-	renderer := NewStackTreeRenderer(eng)
+	renderer := NewStackTreeRenderer(ctx, eng)
 
 	// Add custom annotation for source branch
 	annotations := make(map[string]tree.BranchAnnotation)
@@ -563,12 +564,12 @@ func (m *MoveModel) Result() MoveResult {
 }
 
 // PromptMoveSelect runs the interactive move selection and returns the selection result.
-func PromptMoveSelect(eng engine.Engine, config MoveModelConfig) (MoveResult, error) {
+func PromptMoveSelect(ctx context.Context, eng engine.Engine, config MoveModelConfig) (MoveResult, error) {
 	if err := CheckInteractiveAllowed(); err != nil {
 		return MoveResult{}, err
 	}
 
-	model := NewMoveModel(eng, config)
+	model := NewMoveModel(ctx, eng, config)
 	// No tea.WithAltScreen() - run inline
 	p := tea.NewProgram(model)
 	finalModel, err := p.Run()

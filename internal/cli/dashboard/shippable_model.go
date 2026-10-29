@@ -383,7 +383,7 @@ func (m *shippableModel) rebuildCache() {
 	// Determine which stack contains the currently checked-out branch
 	m.cache.currentBranch = ""
 	m.cache.currentStackRoot = ""
-	if current := m.engine.CurrentBranch(); current != nil {
+	if current := m.engine.CurrentBranch(m.ctx.Context); current != nil {
 		m.cache.currentBranch = current.GetName()
 		for _, stack := range m.stacks {
 			if slices.Contains(stack.Stack.AllBranches, m.cache.currentBranch) {
@@ -424,7 +424,7 @@ func (m *shippableModel) rebuildCache() {
 
 		// Get stack description from metadata
 		if branch := m.engine.GetBranch(rootBranch); branch.GetName() != "" {
-			if desc := m.engine.GetStackDescription(branch); desc != nil && !desc.IsEmpty() {
+			if desc := m.engine.GetStackDescription(m.ctx.Context, branch); desc != nil && !desc.IsEmpty() {
 				m.cache.stackDescriptions[rootBranch] = desc
 			} else if stack.BranchCount() == 1 {
 				// For single-branch stacks without a description, use commit body
@@ -456,7 +456,7 @@ func (m *shippableModel) rebuildCache() {
 
 	// Build a single tree renderer that can be reused
 	// This avoids rebuilding the stack graph on every render
-	m.cache.treeRenderer = tui.NewStackTreeRenderer(m.engine)
+	m.cache.treeRenderer = tui.NewStackTreeRenderer(m.ctx.Context, m.engine)
 
 	// Update selection cache
 	m.updateSelectionCache()

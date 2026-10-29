@@ -47,7 +47,7 @@ func TestRestackFrozenBranch(t *testing.T) {
 		require.Equal(t, engine.RestackDone, batchRes.Results["child"].Result)
 
 		// Rebuild the engine to refresh its internal cache
-		require.NoError(t, s.Engine.Rebuild("main"))
+		require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 
 		// 6. Verify it was hard reset to remoteSha
 		newLocalSha, err := s.Scene.Repo.GetBranchSHA("child")

@@ -21,16 +21,16 @@ const (
 )
 
 // rebuildInternal is the internal rebuild logic without locking
-func (e *engineImpl) rebuildInternal(mode currentBranchRefreshMode) error {
+func (e *engineImpl) rebuildInternal(ctx context.Context, mode currentBranchRefreshMode) error {
 	// Get all branch names
-	branches, err := e.git.GetAllBranchNames(context.Background())
+	branches, err := e.git.GetAllBranchNames(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}
 
 	var currentBranch string
 	if mode == refreshCurrentBranchFromGit {
-		cb, err := e.git.GetCurrentBranch()
+		cb, err := e.git.GetCurrentBranch(ctx)
 		if err == nil {
 			currentBranch = cb
 		}
@@ -62,18 +62,18 @@ func (e *engineImpl) applyRebuild(branches []string, currentBranch string, allMe
 }
 
 // rebuild loads all branches and their metadata from Git
-func (e *engineImpl) rebuild() error {
+func (e *engineImpl) rebuild(ctx context.Context) error {
 	// Clear metadata cache to pick up external changes (e.g., branches created in another terminal)
 	e.metadata.ClearMetadataCache()
 
 	// 1. Get all branch names (slow)
-	branches, err := e.git.GetAllBranchNames(context.Background())
+	branches, err := e.git.GetAllBranchNames(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}
 
 	// 2. Get current branch (slow)
-	currentBranch, _ := e.git.GetCurrentBranch()
+	currentBranch, _ := e.git.GetCurrentBranch(ctx)
 
 	// 3. Load metadata for each branch in parallel (slow)
 	allMeta, _ := e.batchReadMetadata(branches)
@@ -230,7 +230,7 @@ func (e *engineImpl) findNearestValidAncestorWithLanded(branchName string, metaM
 
 // appendMergedDownstack captures the old parent information when a branch is reparented.
 // It also inherits any merged history from the old parent for multi-level reparenting.
-func (e *engineImpl) appendMergedDownstack(
+func (e *engineImpl) appendMergedDownstack(ctx context.Context,
 	branchName string,
 	oldParent string,
 	metaMap MetaMap,
@@ -249,7 +249,7 @@ func (e *engineImpl) appendMergedDownstack(
 	meta = e.withMergedDownstack(meta, oldParent, metaMap)
 
 	// Write and update cache
-	if err := e.writeMetadata(branchName, meta); err != nil {
+	if err := e.writeMetadata(ctx, branchName, meta); err != nil {
 		return err
 	}
 	if metaMap != nil {

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"testing"
@@ -18,7 +19,7 @@ type graphFixture struct {
 
 func (f *graphFixture) AllBranches() Branches { return f.branches }
 func (f *graphFixture) Trunk() Branch         { return NewBranch("main", f) }
-func (f *graphFixture) CurrentBranch() *Branch {
+func (f *graphFixture) CurrentBranch(_ context.Context) *Branch {
 	if f.current == "" {
 		return nil
 	}
@@ -60,7 +61,7 @@ func TestStackGraphSmartSortActivePath(t *testing.T) {
 			t.Parallel()
 			f := newGraphFixture(3, true)
 			f.current = current
-			g := BuildStackGraph(f, SortStrategySmart, nil)
+			g := BuildStackGraph(t.Context(), f, SortStrategySmart, nil)
 			parent := "main"
 			for i := range 3 {
 				branch := fmt.Sprintf("branch-%04d", i)
@@ -79,7 +80,7 @@ func TestStackGraphSmartSortActivePath(t *testing.T) {
 func TestStackGraphDeepGroups(t *testing.T) {
 	t.Parallel()
 	f := newGraphFixture(100, true)
-	g := BuildStackGraph(f, SortStrategyAlphabetical, nil)
+	g := BuildStackGraph(t.Context(), f, SortStrategyAlphabetical, nil)
 	groups := g.DepthGroups()
 	require.Len(t, groups, 101)
 	require.Equal(t, []string{"main"}, groups[0].Branches.Names())
@@ -98,7 +99,7 @@ func BenchmarkStackGraphSmartSort(b *testing.B) {
 			f := newGraphFixture(depth, true)
 			b.ReportAllocs()
 			for b.Loop() {
-				BuildStackGraph(f, SortStrategySmart, nil)
+				BuildStackGraph(b.Context(), f, SortStrategySmart, nil)
 			}
 		})
 	}
@@ -108,7 +109,7 @@ func BenchmarkStackGraphDepthGroups(b *testing.B) {
 	for _, depth := range []int{100, 1000} {
 		b.Run(strconv.Itoa(depth), func(b *testing.B) {
 			f := newGraphFixture(depth, false)
-			g := BuildStackGraph(f, SortStrategyAlphabetical, nil)
+			g := BuildStackGraph(b.Context(), f, SortStrategyAlphabetical, nil)
 			b.ReportAllocs()
 			for b.Loop() {
 				g.DepthGroups()

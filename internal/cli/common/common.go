@@ -46,7 +46,7 @@ func RunWithOptions(cmd *cobra.Command, opts app.GlobalOptions, fn func(ctx *app
 
 	// Populate worktree context
 	if ctx.Engine != nil && !opts.SkipManagedWorktreeCheck {
-		if isManaged, wtInfo, err := ctx.Engine.IsInManagedWorktree(); err == nil && isManaged {
+		if isManaged, wtInfo, err := ctx.Engine.IsInManagedWorktree(ctx.Context); err == nil && isManaged {
 			ctx.InManagedWorktree = true
 			ctx.WorktreeInfo = wtInfo
 		}
@@ -95,7 +95,7 @@ func ResolveBranchArg(ctx *app.Context, args []string, missingErr error) (string
 		return args[0], nil
 	}
 
-	currentBranch := ctx.Engine.CurrentBranch()
+	currentBranch := ctx.Engine.CurrentBranch(ctx.Context)
 	if currentBranch == nil {
 		return "", missingErr
 	}

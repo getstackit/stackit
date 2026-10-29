@@ -22,9 +22,9 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 		branchesToRestack = append(branchesToRestack, restackScope...)
 	} else if expandScope {
 		// Explicit --restack: expand from current branch position to full stack
-		graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+		graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
-		currentBranch := nav.CurrentBranch()
+		currentBranch := nav.CurrentBranch(ctx.Context)
 		if currentBranch != nil {
 			if currentBranch.IsTracked() {
 				// Get full stack (up to trunk)
@@ -64,7 +64,7 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 	}
 
 	// Sort branches topologically (parents before children) for correct restack order
-	sortedBranches := nav.SortBranchesTopologically(uniqueBranches.Build())
+	sortedBranches := nav.SortBranchesTopologically(ctx.Context, uniqueBranches.Build())
 
 	if len(sortedBranches) == 0 {
 		return actions.RestackOutcome{}, nil

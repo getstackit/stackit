@@ -331,7 +331,7 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 }
 
 func listEntries(ctx *app.Context, opts ListOptions) (*ListResult, error) {
-	worktrees, err := ctx.Engine.ListManagedWorktrees()
+	worktrees, err := ctx.Engine.ListManagedWorktrees(ctx.Context)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list managed worktrees: %w", err)
 	}
@@ -344,7 +344,7 @@ func listEntries(ctx *app.Context, opts ListOptions) (*ListResult, error) {
 		result.CurrentAnchor = ctx.WorktreeInfo.AnchorBranch
 	}
 
-	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+	graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	gitWorktrees, gitErr := ctx.Engine.ListWorktrees(ctx.Context)
 	branchesByPath := make(map[WorktreePath]string, len(gitWorktrees))
 	if gitErr == nil {
@@ -411,7 +411,7 @@ func ownershipWarnings(ctx *app.Context, gitWorktrees git.WorktreeList) []string
 			continue
 		}
 
-		owner, ownerErr := ctx.Engine.OwningWorktree(ctx.Engine.GetBranch(gitWorktree.Branch))
+		owner, ownerErr := ctx.Engine.OwningWorktree(ctx.Context, ctx.Engine.GetBranch(gitWorktree.Branch))
 		if ownerErr != nil {
 			warnings = append(warnings, fmt.Sprintf("could not determine owner for branch %s checked out at %s: %v", gitWorktree.Branch, gitWorktree.Path, ownerErr))
 			continue
@@ -445,7 +445,7 @@ func ListAction(ctx *app.Context, opts ListOptions) (*ListResult, error) {
 func findWorktreeByNameOrBranch(ctx *app.Context, selector WorktreeSelector) (*engine.WorktreeInfo, error) {
 	nameOrBranch := selector.String()
 	// First try by anchor branch (original behavior)
-	wtInfo, err := ctx.Engine.GetWorktreeForStack(nameOrBranch)
+	wtInfo, err := ctx.Engine.GetWorktreeForStack(ctx.Context, nameOrBranch)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get worktree info: %w", err)
 	}
@@ -454,7 +454,7 @@ func findWorktreeByNameOrBranch(ctx *app.Context, selector WorktreeSelector) (*e
 	}
 
 	// If not found, try to find by worktree name
-	worktrees, err := ctx.Engine.ListManagedWorktrees()
+	worktrees, err := ctx.Engine.ListManagedWorktrees(ctx.Context)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
 	}

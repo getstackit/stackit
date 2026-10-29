@@ -72,7 +72,7 @@ func TestBuildSurvivesDetachedHEAD(t *testing.T) {
 	head, err := s.Scene.Repo.GetRevision("HEAD")
 	require.NoError(t, err)
 	require.NoError(t, s.Scene.Repo.CheckoutDetached(head))
-	require.Nil(t, s.Engine.CurrentBranch(), "scenario must be in detached HEAD")
+	require.Nil(t, s.Engine.CurrentBranch(t.Context()), "scenario must be in detached HEAD")
 
 	// gh is nil: the anonymous public read path with no GitHub calls, mirroring
 	// the request that panicked.
@@ -113,7 +113,7 @@ func TestBuildReadsRemoteStatusOnceAcrossStacks(t *testing.T) {
 	}
 
 	counting := &countingFetchRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      counting,

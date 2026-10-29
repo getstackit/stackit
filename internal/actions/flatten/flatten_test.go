@@ -272,7 +272,7 @@ func TestFlattenAction(t *testing.T) {
 		meta, err := s.Metadata.ReadMetadata(t.Context(), "B").One()
 		require.NoError(t, err)
 		meta = meta.WithParentBranchRevision(nil)
-		err = s.Metadata.WriteMetadata("B", meta)
+		err = s.Metadata.WriteMetadata(t.Context(), "B", meta)
 		require.NoError(t, err)
 
 		s.Rebuild()

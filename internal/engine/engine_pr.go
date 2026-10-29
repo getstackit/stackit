@@ -288,7 +288,7 @@ func (e *engineImpl) GetNavigationCommentID(branch Branch) (int64, error) {
 }
 
 // SetNavigationCommentID caches a navigation comment ID for a branch.
-func (e *engineImpl) SetNavigationCommentID(branch Branch, commentID int64) error {
+func (e *engineImpl) SetNavigationCommentID(ctx context.Context, branch Branch, commentID int64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -298,11 +298,11 @@ func (e *engineImpl) SetNavigationCommentID(branch Branch, commentID int64) erro
 	}
 
 	localMeta.NavigationCommentID = &commentID
-	return e.writeLocalMetadata(branch.GetName(), localMeta)
+	return e.writeLocalMetadata(ctx, branch.GetName(), localMeta)
 }
 
 // ClearNavigationCommentID removes the cached navigation comment ID for a branch.
-func (e *engineImpl) ClearNavigationCommentID(branch Branch) error {
+func (e *engineImpl) ClearNavigationCommentID(ctx context.Context, branch Branch) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -316,5 +316,5 @@ func (e *engineImpl) ClearNavigationCommentID(branch Branch) error {
 	}
 
 	localMeta.NavigationCommentID = nil
-	return e.writeLocalMetadata(branch.GetName(), localMeta)
+	return e.writeLocalMetadata(ctx, branch.GetName(), localMeta)
 }

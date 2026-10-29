@@ -27,11 +27,11 @@ type Options struct {
 type describeEngine interface {
 	actions.MetadataPushEngine
 	engine.BranchLookup
-	CurrentBranch() *engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
 	IsTrunk(branch engine.Branch) bool
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
 	GetStackRootForBranch(branch engine.Branch) string
-	GetStackDescription(branch engine.Branch) *git.StackDescription
+	GetStackDescription(ctx context.Context, branch engine.Branch) *git.StackDescription
 	SetStackDescription(ctx context.Context, branch engine.Branch, desc *git.StackDescription) error
 	ClearStackDescription(ctx context.Context, branch engine.Branch) error
 	MarkBranchesForPRBodyUpdate(ctx context.Context, branchNames []string) error
@@ -48,7 +48,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	out := ctx.Output
 
 	// Get current branch
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	if currentBranch == nil {
 		return errors.ErrNotOnBranch
 	}
@@ -71,7 +71,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Handle --show
 	if opts.Show {
-		return showDescription(eng, out, *currentBranch, stackRoot)
+		return showDescription(ctx.Context, eng, out, *currentBranch, stackRoot)
 	}
 
 	// Handle --clear
@@ -108,7 +108,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return errors.New("nothing to set: pass --title/-m, --message-file/-F, pipe a description via stdin, or run in interactive mode")
 	}
 
-	existingDesc := eng.GetStackDescription(*currentBranch)
+	existingDesc := eng.GetStackDescription(ctx.Context, *currentBranch)
 	newDesc, err := openEditor(existingDesc)
 	if err != nil {
 		return err
@@ -150,7 +150,7 @@ func markStackAndPushMetadata(ctx *app.Context, eng describeEngine, stackRoot st
 	out := ctx.Output
 
 	// Mark all branches in the stack for PR body update
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	root := eng.GetBranch(stackRoot)
 	if root.IsTracked() {
 		if err := eng.MarkBranchesForPRBodyUpdate(ctx, graph.CollectBranches(root).Names()); err != nil {
@@ -162,8 +162,8 @@ func markStackAndPushMetadata(ctx *app.Context, eng describeEngine, stackRoot st
 	return actions.PushMetadataOnly(ctx, eng, []string{stackRoot})
 }
 
-func showDescription(eng describeEngine, out output.Output, branch engine.Branch, stackRoot string) error { //nolint:unparam // error return for API consistency
-	desc := eng.GetStackDescription(branch)
+func showDescription(ctx context.Context, eng describeEngine, out output.Output, branch engine.Branch, stackRoot string) error { //nolint:unparam // error return for API consistency
+	desc := eng.GetStackDescription(ctx, branch)
 
 	if desc == nil || desc.IsEmpty() {
 		out.Info("Stack rooted at %s has no description set.", output.BranchName(stackRoot))

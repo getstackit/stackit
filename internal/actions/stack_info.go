@@ -38,12 +38,12 @@ type StackInfoResult struct {
 
 // QueryStackInfo gathers structured information about the current stack.
 func QueryStackInfo(ctx context.Context, eng engine.Engine) (StackInfoResult, error) {
-	current := eng.CurrentBranch()
+	current := eng.CurrentBranch(ctx)
 	if current == nil {
 		return StackInfoResult{}, errors.ErrNotOnBranch
 	}
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	stackBranches := graph.Range(*current, engine.StackRange{
 		RecursiveParents:  true,
 		IncludeCurrent:    true,
@@ -110,7 +110,7 @@ func QueryStackInfo(ctx context.Context, eng engine.Engine) (StackInfoResult, er
 	// Trunk never needs a restack; mirror the tree renderer's own invariant.
 	result.UpToDate[trunk] = true
 
-	if stackDesc := eng.GetStackDescription(*current); stackDesc != nil && !stackDesc.IsEmpty() {
+	if stackDesc := eng.GetStackDescription(ctx, *current); stackDesc != nil && !stackDesc.IsEmpty() {
 		result.StackTitle = stackDesc.Title
 		result.StackDescription = stackDesc.Description
 	}

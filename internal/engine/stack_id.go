@@ -19,13 +19,13 @@ var timeNow = time.Now
 // GetStackDescription returns the stack description for a branch's stack.
 // It reads from the stack ref using the branch's StackID.
 // Returns nil for untracked branches or if the stack has no description.
-func (e *engineImpl) GetStackDescription(branch Branch) *git.StackDescription {
+func (e *engineImpl) GetStackDescription(ctx context.Context, branch Branch) *git.StackDescription {
 	stackID := e.GetStackID(branch)
 	if stackID == "" {
 		return nil
 	}
 
-	stackMeta, err := e.metadata.ReadStackMeta(stackID)
+	stackMeta, err := e.metadata.ReadStackMeta(ctx, stackID)
 	if err != nil || stackMeta == nil {
 		return nil
 	}
@@ -48,7 +48,7 @@ func (e *engineImpl) SetStackDescription(ctx context.Context, branch Branch, des
 	}
 
 	// Read existing stack meta or create new one
-	stackMeta, err := e.metadata.ReadStackMeta(stackID)
+	stackMeta, err := e.metadata.ReadStackMeta(ctx, stackID)
 	if err != nil {
 		return fmt.Errorf("failed to read stack metadata for %s: %w", stackID, err)
 	}
@@ -69,7 +69,7 @@ func (e *engineImpl) SetStackDescription(ctx context.Context, branch Branch, des
 		stackMeta.Description = ""
 	}
 
-	if err := e.metadata.WriteStackMeta(stackID, stackMeta); err != nil {
+	if err := e.metadata.WriteStackMeta(ctx, stackID, stackMeta); err != nil {
 		return fmt.Errorf("failed to write stack metadata for %s: %w", stackID, err)
 	}
 
@@ -251,7 +251,7 @@ func (e *engineImpl) writeNewStackMeta(ctx context.Context, stackID string) erro
 	if userName, err := e.git.GetUserName(ctx); err == nil {
 		stackMeta.CreatedBy = userName
 	}
-	return e.metadata.WriteStackMeta(stackID, stackMeta)
+	return e.metadata.WriteStackMeta(ctx, stackID, stackMeta)
 }
 
 // AssignBranchesToNewStack creates a new stack metadata ref and assigns its ID
@@ -283,19 +283,19 @@ func (e *engineImpl) SetStackID(ctx context.Context, branches Branches, stackID 
 }
 
 // CreateStackRef creates a new stack ref with the given metadata.
-func (e *engineImpl) CreateStackRef(stackID string, meta *git.StackMeta) error {
+func (e *engineImpl) CreateStackRef(ctx context.Context, stackID string, meta *git.StackMeta) error {
 	if meta == nil {
 		meta = &git.StackMeta{
 			ID:        stackID,
 			CreatedAt: timeNow(),
 		}
 	}
-	return e.metadata.WriteStackMeta(stackID, meta)
+	return e.metadata.WriteStackMeta(ctx, stackID, meta)
 }
 
 // GetStackMeta returns the stack metadata for a stack ID.
-func (e *engineImpl) GetStackMeta(stackID string) (*git.StackMeta, error) {
-	return e.metadata.ReadStackMeta(stackID)
+func (e *engineImpl) GetStackMeta(ctx context.Context, stackID string) (*git.StackMeta, error) {
+	return e.metadata.ReadStackMeta(ctx, stackID)
 }
 
 // syncStackIDFromParent updates a branch's stack ID to match its parent's and

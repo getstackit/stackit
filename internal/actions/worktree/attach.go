@@ -46,7 +46,7 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*WorktreeResult, error)
 	if eng.IsWorktreeAnchor(stackRoot) {
 		return nil, fmt.Errorf("branch %s is already a worktree anchor", output.BranchName(stackRootName))
 	}
-	if existingWt, err := eng.GetWorktreeForStack(stackRootName); err != nil {
+	if existingWt, err := eng.GetWorktreeForStack(ctx.Context, stackRootName); err != nil {
 		return nil, fmt.Errorf("failed to check existing worktree: %w", err)
 	} else if existingWt != nil {
 		return nil, fmt.Errorf("stack already has a worktree at %s", existingWt.Path)
@@ -56,7 +56,7 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*WorktreeResult, error)
 	if name == "" {
 		name = stackRootName
 	}
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	trunk := eng.Trunk()
 	needsCheckout := currentBranch != nil && eng.GetStackRootForBranch(*currentBranch) == stackRootName
 	if needsCheckout {

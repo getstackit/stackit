@@ -20,7 +20,7 @@ func (e *engineImpl) MarkBranchesForPRBodyUpdate(ctx context.Context, branchName
 }
 
 // ClearNeedsPRBodyUpdate clears the PR body update flag for a branch
-func (e *engineImpl) ClearNeedsPRBodyUpdate(branchName string) error {
+func (e *engineImpl) ClearNeedsPRBodyUpdate(ctx context.Context, branchName string) error {
 	localMeta, err := e.readLocalMetadata(branchName)
 	if err != nil {
 		// Best effort - if we can't read metadata, nothing to clear
@@ -30,7 +30,7 @@ func (e *engineImpl) ClearNeedsPRBodyUpdate(branchName string) error {
 		return nil // Nothing to clear
 	}
 	localMeta.NeedsPRBodyUpdate = false
-	return e.writeLocalMetadata(branchName, localMeta)
+	return e.writeLocalMetadata(ctx, branchName, localMeta)
 }
 
 // GetBranchesNeedingPRBodyUpdate returns all branches that need PR body updates

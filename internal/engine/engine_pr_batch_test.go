@@ -32,7 +32,7 @@ func (c *countingFetchRunner) FetchRemoteShas(ctx context.Context, remote string
 func newCountingEngine(t *testing.T, dir string) (engine.Engine, *countingFetchRunner) {
 	t.Helper()
 	counting := &countingFetchRunner{Runner: git.NewRunnerWithPath(dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: dir,
 		Trunk:    "main",
 		Git:      counting,

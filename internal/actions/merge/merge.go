@@ -71,7 +71,7 @@ func Action(ctx *app.Context, opts Options) error {
 	// If no target branch or scope specified, use current branch
 	targetBranch := opts.TargetBranch
 	if targetBranch == "" && opts.Scope == "" && opts.Plan == nil {
-		cb := eng.CurrentBranch()
+		cb := eng.CurrentBranch(ctx.Context)
 		if cb != nil {
 			targetBranch = cb.GetName()
 		}

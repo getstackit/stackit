@@ -98,7 +98,7 @@ func RunRestack(ctx *app.Context, req RestackRequest, handler RestackHandler) (R
 	if pauser == nil {
 		pauser, _ = handler.(rerere.Pauser)
 	}
-	if _, err := rerere.EnsureEnabled(ctx.Engine, req.PromptRerere, pauser); err != nil {
+	if _, err := rerere.EnsureEnabled(ctx.Context, ctx.Engine, req.PromptRerere, pauser); err != nil {
 		ctx.Output.Warn("Failed to enable git rerere: %v", err)
 	}
 
@@ -222,7 +222,7 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 		defer cleanup()
 
 		// Build a per-worktree engine from the snapshot.
-		wtEngine, err := newWorktreeEngine(engine.WorktreeEngineOptions{
+		wtEngine, err := newWorktreeEngine(ctx.Context, engine.WorktreeEngineOptions{
 			WorktreePath: wtPath,
 			Snapshot:     snapshot,
 		})
@@ -258,7 +258,7 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 
 	// Rebuild the main engine's cache so it sees the ref changes made by the
 	// worktree engines (they share the same .git directory).
-	if err := eng.Rebuild(eng.Trunk().GetName()); err != nil {
+	if err := eng.Rebuild(ctx.Context, eng.Trunk().GetName()); err != nil {
 		ctx.Logger.Warn("failed to rebuild engine after parallel restack: %v", err)
 	}
 

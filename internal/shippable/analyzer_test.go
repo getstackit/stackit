@@ -28,7 +28,7 @@ func newCountingAnalyzer(t *testing.T, dir string) (*Analyzer, engine.Engine, *c
 	t.Helper()
 
 	counting := &countingRemoteRunner{Runner: git.NewRunnerWithPath(dir, nil)}
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: dir,
 		Trunk:    "main",
 		Git:      counting,

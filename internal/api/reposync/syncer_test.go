@@ -41,7 +41,7 @@ func TestSyncOnceFetchesManagedOnly(t *testing.T) {
 		fetched[repoRoot] = token
 		return nil
 	}
-	s.refresh = func(e *registry.RepoEntry) {
+	s.refresh = func(e *registry.RepoEntry, _ context.Context) {
 		mu.Lock()
 		defer mu.Unlock()
 		refreshed[e.ID] = true
@@ -61,7 +61,7 @@ func TestSyncEntrySkipsRefreshOnFetchError(t *testing.T) {
 	refreshed := false
 	s := New(reg, fakeProvider{token: "t"}, time.Minute)
 	s.fetch = func(context.Context, string, string, string) error { return errors.New("boom") }
-	s.refresh = func(*registry.RepoEntry) { refreshed = true }
+	s.refresh = func(*registry.RepoEntry, context.Context) { refreshed = true }
 
 	s.syncOnce(t.Context())
 	require.False(t, refreshed, "a failed fetch must not refresh stale state")
@@ -75,7 +75,7 @@ func TestSyncEntrySkipsOnTokenError(t *testing.T) {
 	fetchCalled := false
 	s := New(reg, fakeProvider{err: errors.New("not installed")}, time.Minute)
 	s.fetch = func(context.Context, string, string, string) error { fetchCalled = true; return nil }
-	s.refresh = func(*registry.RepoEntry) {}
+	s.refresh = func(*registry.RepoEntry, context.Context) {}
 
 	s.syncOnce(t.Context())
 	require.False(t, fetchCalled, "no token means no fetch")
@@ -89,7 +89,7 @@ func TestSyncEntryNilProviderUsesEmptyToken(t *testing.T) {
 	var gotToken string
 	s := New(reg, nil, time.Minute)
 	s.fetch = func(_ context.Context, _, _, token string) error { gotToken = token; return nil }
-	s.refresh = func(*registry.RepoEntry) {}
+	s.refresh = func(*registry.RepoEntry, context.Context) {}
 
 	s.syncOnce(t.Context())
 	require.Empty(t, gotToken, "no provider means an unauthenticated (public) fetch")
@@ -104,7 +104,7 @@ func TestSyncRepoFetchesMatchingManagedEntry(t *testing.T) {
 	refreshed := false
 	s := New(reg, fakeProvider{token: "inst-token"}, time.Minute)
 	s.fetch = func(_ context.Context, _, _, token string) error { gotToken = token; return nil }
-	s.refresh = func(*registry.RepoEntry) { refreshed = true }
+	s.refresh = func(*registry.RepoEntry, context.Context) { refreshed = true }
 
 	// Casing differs from the entry to prove the lookup is case-insensitive,
 	// matching how a webhook payload may present the coordinates.
@@ -121,7 +121,7 @@ func TestSyncRepoUnknownRepoReturnsErrNotManaged(t *testing.T) {
 	fetchCalled := false
 	s := New(reg, fakeProvider{token: "t"}, time.Minute)
 	s.fetch = func(context.Context, string, string, string) error { fetchCalled = true; return nil }
-	s.refresh = func(*registry.RepoEntry) {}
+	s.refresh = func(*registry.RepoEntry, context.Context) {}
 
 	err := s.SyncRepo(t.Context(), registry.RepoRef{Owner: "other", Name: "repo"})
 	require.ErrorIs(t, err, ErrRepoNotManaged)
@@ -136,7 +136,7 @@ func TestSyncRepoPropagatesFetchError(t *testing.T) {
 	refreshed := false
 	s := New(reg, fakeProvider{token: "t"}, time.Minute)
 	s.fetch = func(context.Context, string, string, string) error { return errors.New("boom") }
-	s.refresh = func(*registry.RepoEntry) { refreshed = true }
+	s.refresh = func(*registry.RepoEntry, context.Context) { refreshed = true }
 
 	err := s.SyncRepo(t.Context(), registry.RepoRef{Owner: "o", Name: "n"})
 	require.Error(t, err)

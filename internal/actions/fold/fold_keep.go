@@ -12,7 +12,7 @@ import (
 
 func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentBranch engine.Branch, eng foldEngine, splog output.Output, _ Options) error {
 	// Build StackGraph for efficient traversals
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(gctx, engine.SortStrategyAlphabetical)
 
 	// Get all children of parent (siblings + current branch)
 	allChildren := graph.ChildBranches(parentBranch)
@@ -66,7 +66,7 @@ func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentB
 		output.BranchName(currentBranch.GetName()))
 
 	// Rebuild graph with fresh engine state after deletion
-	graph = eng.Graph(engine.SortStrategyAlphabetical)
+	graph = eng.Graph(gctx, engine.SortStrategyAlphabetical)
 
 	// Restack current branch and all its descendants
 	branchesToRestack := graph.Range(currentBranch, engine.StackRange{

@@ -45,9 +45,9 @@ func NewViewAssembler(eng ViewEngine, gh ViewGitHub, remote string, visibility V
 }
 
 func (a *ViewAssembler) Build(ctx context.Context) (httpcontract.ViewResponse, error) {
-	stacks := stackview.DiscoverStacksWithSort(a.eng, engine.SortStrategySmart)
+	stacks := stackview.DiscoverStacksWithSort(ctx, a.eng, engine.SortStrategySmart)
 
-	graph := a.eng.Graph(engine.SortStrategySmart)
+	graph := a.eng.Graph(ctx, engine.SortStrategySmart)
 	checksMap := a.fetchChecks(ctx, stacks)
 	details := a.mapStackDetails(ctx, graph, stacks, checksMap)
 
@@ -79,7 +79,7 @@ func (a *ViewAssembler) buildRepo(ctx context.Context) httpcontract.RepoResponse
 		Owner:         owner,
 		Repo:          repo,
 		Trunk:         a.eng.Trunk().GetName(),
-		CurrentBranch: a.eng.CurrentBranchName(),
+		CurrentBranch: a.eng.CurrentBranchName(ctx),
 		Remote:        a.remote,
 		CurrentUser:   currentUser,
 	}
@@ -112,7 +112,7 @@ func (a *ViewAssembler) mapStackDetails(
 
 	details := make([]httpcontract.StackDetail, 0, len(stacks))
 	for _, stack := range stacks {
-		detail := httpcontract.MapStackDetail(a.eng, graph, stackInput(stack), checksMap, data)
+		detail := httpcontract.MapStackDetail(ctx, a.eng, graph, stackInput(stack), checksMap, data)
 		details = append(details, detail)
 	}
 	return details

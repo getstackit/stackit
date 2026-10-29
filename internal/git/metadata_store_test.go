@@ -45,8 +45,8 @@ func TestMetadataStoreInvalidatesOnlyChangedRefs(t *testing.T) {
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	r := git.NewRunnerWithPath(scene.Dir, nil)
 	store := git.NewMetadataStore(r)
-	require.NoError(t, store.WriteMetadata("a", git.NewMeta()))
-	require.NoError(t, store.WriteMetadata("b", git.NewMeta()))
+	require.NoError(t, store.WriteMetadata(t.Context(), "a", git.NewMeta()))
+	require.NoError(t, store.WriteMetadata(t.Context(), "b", git.NewMeta()))
 	before := store.ReadMetadata(t.Context(), "a", "b")
 	require.Empty(t, before.Failures())
 	require.NoError(t, r.DeleteRefs(t.Context(), git.MetadataRefName("b")))
@@ -57,9 +57,9 @@ func TestMetadataStoreInvalidatesOnlyChangedRefs(t *testing.T) {
 
 	// An unrelated write must not discard a's optimistic-locking expectation.
 	other := git.NewMetadataStore(git.NewRunnerWithPath(scene.Dir, nil))
-	require.NoError(t, other.WriteMetadata("a", git.NewMeta().WithLockReason(git.LockReasonUser)))
-	require.NoError(t, store.WriteMetadata("b", git.NewMeta()))
-	require.Error(t, store.WriteMetadata("a", before.Values()["a"]))
+	require.NoError(t, other.WriteMetadata(t.Context(), "a", git.NewMeta().WithLockReason(git.LockReasonUser)))
+	require.NoError(t, store.WriteMetadata(t.Context(), "b", git.NewMeta()))
+	require.Error(t, store.WriteMetadata(t.Context(), "a", before.Values()["a"]))
 }
 
 // A ref rewritten through the backend by this process (the path transaction
@@ -77,12 +77,16 @@ func TestMetadataStoreDistrustsExpectationAfterInProcessRefUpdate(t *testing.T) 
 		{
 			name:    "shared",
 			refName: git.MetadataRefName("feature"),
-			write:   func(store *git.MetadataStore) error { return store.WriteMetadata("feature", git.NewMeta()) },
+			write: func(store *git.MetadataStore) error {
+				return store.WriteMetadata(t.Context(), "feature", git.NewMeta())
+			},
 		},
 		{
 			name:    "local",
 			refName: git.LocalMetadataRefName("feature"),
-			write:   func(store *git.MetadataStore) error { return store.WriteLocalMetadata("feature", &git.LocalMeta{}) },
+			write: func(store *git.MetadataStore) error {
+				return store.WriteLocalMetadata(t.Context(), "feature", &git.LocalMeta{})
+			},
 		},
 	}
 	for _, tc := range cases {
@@ -121,13 +125,17 @@ func TestMetadataStoreRecordCommitted(t *testing.T) {
 			name:    "shared",
 			tier:    git.MetadataTierShared,
 			refName: git.MetadataRefName("feature"),
-			write:   func(store *git.MetadataStore) error { return store.WriteMetadata("feature", git.NewMeta()) },
+			write: func(store *git.MetadataStore) error {
+				return store.WriteMetadata(t.Context(), "feature", git.NewMeta())
+			},
 		},
 		{
 			name:    "local",
 			tier:    git.MetadataTierLocal,
 			refName: git.LocalMetadataRefName("feature"),
-			write:   func(store *git.MetadataStore) error { return store.WriteLocalMetadata("feature", &git.LocalMeta{}) },
+			write: func(store *git.MetadataStore) error {
+				return store.WriteLocalMetadata(t.Context(), "feature", &git.LocalMeta{})
+			},
 		},
 	}
 	for _, tc := range tiers {

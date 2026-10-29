@@ -21,7 +21,7 @@ func TestInvalidOntoTargets(t *testing.T) {
 			"c": "b",
 		})
 
-	require.Equal(t, map[string]bool{"b": true, "c": true}, InvalidOntoTargets(s.Engine, "b"))
+	require.Equal(t, map[string]bool{"b": true, "c": true}, InvalidOntoTargets(t.Context(), s.Engine, "b"))
 }
 
 func TestPluckStackID(t *testing.T) {
@@ -464,7 +464,7 @@ func TestPluckAction(t *testing.T) {
 		require.Equal(t, "branch1", parent3.GetName())
 
 		// Verify branch2 has no children
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+		graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 		branch2Children := graph.Children(branch2)
 		require.Empty(t, branch2Children)
 	})
@@ -508,7 +508,7 @@ func TestPluckAction(t *testing.T) {
 
 		// Rebuild the engine with linear stacks, as the CLI does for
 		// stack.shape=linear.
-		linearEngine, err := engine.NewEngine(engine.Options{
+		linearEngine, err := engine.NewEngine(t.Context(), engine.Options{
 			RepoRoot:     s.Scene.Dir,
 			Trunk:        "main",
 			LinearStacks: true,

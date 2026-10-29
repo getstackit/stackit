@@ -144,8 +144,8 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 	// base must fall back to the parent tip rather than an empty base.
 	meta, err := s.Metadata.ReadMetadata(t.Context(), "b").One()
 	require.NoError(t, err)
-	require.NoError(t, s.Metadata.WriteMetadata("b", meta.WithParentBranchRevision(nil)))
-	require.NoError(t, s.Engine.Rebuild("main"))
+	require.NoError(t, s.Metadata.WriteMetadata(t.Context(), "b", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 
 	b := s.Engine.GetBranch("b")
 
@@ -173,7 +173,7 @@ func TestReadBranchCommitsRetainsErrorsAndEmptyBranches(t *testing.T) {
 	meta, err := s.Metadata.ReadMetadata(t.Context(), "b").One()
 	require.NoError(t, err)
 	missing := "missing-base"
-	require.NoError(t, s.Metadata.WriteMetadata("b", meta.WithParentBranchRevision(&missing)))
+	require.NoError(t, s.Metadata.WriteMetadata(t.Context(), "b", meta.WithParentBranchRevision(&missing)))
 	branches := engine.BranchesFromNames(s.Engine, []string{"a", "b", "empty", "missing-branch"})
 	data := s.Engine.ReadBranchCommits(t.Context(), branches)
 	valid, err := data.Get("a")
@@ -211,7 +211,7 @@ func TestBranchSnapshotStoredBaseSurvivesMissingParent(t *testing.T) {
 
 	meta, err := s.Metadata.ReadMetadata(t.Context(), "c").One()
 	require.NoError(t, err)
-	require.NoError(t, s.Metadata.WriteMetadata("c", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Metadata.WriteMetadata(t.Context(), "c", meta.WithParentBranchRevision(nil)))
 	_, err = s.Engine.ReadBranchCommits(t.Context(), branches).One()
 	require.Error(t, err, "without a stored base the missing parent must not become unbounded history")
 	_, err = s.Engine.ReadBranchCommitNodes(t.Context(), branches).One()

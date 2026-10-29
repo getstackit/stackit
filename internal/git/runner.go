@@ -360,19 +360,19 @@ func (r *runner) InitDefaultRepo() error {
 	return r.ensureRepo()
 }
 
-func (r *runner) GetRemote() string {
-	return r.getRemote()
+func (r *runner) GetRemote(ctx context.Context) string {
+	return r.getRemote(ctx)
 }
 
 func (r *runner) FetchRemoteShas(ctx context.Context, remote string) (RemoteBranchSHAs, error) {
 	return r.fetchRemoteShas(ctx, remote)
 }
 
-func (r *runner) GetConfig(key string) (string, error) {
+func (r *runner) GetConfig(ctx context.Context, key string) (string, error) {
 	if err := r.ensureRepo(); err != nil {
 		return "", err
 	}
-	return r.Run(context.Background(), "config", "--get", key)
+	return r.Run(ctx, "config", "--get", key)
 }
 
 func (r *runner) SetConfig(key, value string) error {
@@ -438,10 +438,10 @@ func (r *runner) GetUserName(ctx context.Context) (string, error) {
 	return NewConfigStore(r.getRepoRoot()).Get("user.name")
 }
 
-func (r *runner) EnsureMetadataRefspecConfigured() error {
+func (r *runner) EnsureMetadataRefspecConfigured(ctx context.Context) error {
 	const metadataRefspec = "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*"
 
-	fetchConfigKey := fmt.Sprintf("remote.%s.fetch", r.GetRemote())
+	fetchConfigKey := fmt.Sprintf("remote.%s.fetch", r.GetRemote(ctx))
 	refspecs, err := r.GetConfigAll(fetchConfigKey)
 	if err != nil {
 		return fmt.Errorf("failed to get fetch refspecs: %w", err)
@@ -456,10 +456,10 @@ func (r *runner) EnsureMetadataRefspecConfigured() error {
 	return r.AddConfigValue(fetchConfigKey, metadataRefspec)
 }
 
-func (r *runner) EnsureStackMetaRefspecConfigured() error {
+func (r *runner) EnsureStackMetaRefspecConfigured(ctx context.Context) error {
 	const stackMetaRefspec = "+refs/stackit/stacks/*:refs/stackit/remote-stacks/*"
 
-	fetchConfigKey := fmt.Sprintf("remote.%s.fetch", r.GetRemote())
+	fetchConfigKey := fmt.Sprintf("remote.%s.fetch", r.GetRemote(ctx))
 	refspecs, err := r.GetConfigAll(fetchConfigKey)
 	if err != nil {
 		return fmt.Errorf("failed to get fetch refspecs: %w", err)
@@ -656,12 +656,12 @@ func (r *runner) CreateBlobs(ctx context.Context, contents ...string) ([]string,
 	return shas, nil
 }
 
-func (r *runner) ListRefs(prefix string) (map[string]string, error) {
+func (r *runner) ListRefs(ctx context.Context, prefix string) (map[string]string, error) {
 	var patterns []string
 	if prefix != "" {
 		patterns = append(patterns, prefix)
 	}
-	refs, err := r.forEachRef(context.Background(), []string{atomRefName, atomObjectName}, patterns...)
+	refs, err := r.forEachRef(ctx, []string{atomRefName, atomObjectName}, patterns...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read refs: %w", err)
 	}
@@ -690,7 +690,7 @@ func (r *runner) PushMetadataRefs(ctx context.Context, branches []string) error 
 }
 
 func (r *runner) FetchMetadataRefs(ctx context.Context) error {
-	return r.fetchRemoteRefSpecs(ctx, r.GetRemote(), []string{
+	return r.fetchRemoteRefSpecs(ctx, r.GetRemote(ctx), []string{
 		"+refs/stackit/metadata/*:refs/stackit/remote-metadata/*",
 	})
 }
@@ -707,7 +707,7 @@ func (r *runner) PushStackMetaRefs(ctx context.Context, stackIDs []string) error
 }
 
 func (r *runner) FetchStackMetaRefs(ctx context.Context) error {
-	return r.fetchRemoteRefSpecs(ctx, r.GetRemote(), []string{
+	return r.fetchRemoteRefSpecs(ctx, r.GetRemote(ctx), []string{
 		"+refs/stackit/stacks/*:refs/stackit/remote-stacks/*",
 	})
 }
@@ -758,18 +758,10 @@ func (r *runner) TestRemoteRefCompatibility(ctx context.Context) error {
 	return nil
 }
 
-func ctxOrBackground(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
-}
-
 func (r *runner) fetchRemoteRefSpecs(ctx context.Context, remote string, refspecs []string) error {
 	if len(refspecs) == 0 {
 		return nil
 	}
-	ctx = ctxOrBackground(ctx)
 	args := append([]string{"fetch", remote}, refspecs...)
 	if _, err := r.Run(ctx, args...); err != nil {
 		return fmt.Errorf("git fetch failed: %w", err)
@@ -781,7 +773,6 @@ func (r *runner) pushOriginRefSpecs(ctx context.Context, refspecs []string) erro
 	if len(refspecs) == 0 {
 		return nil
 	}
-	ctx = ctxOrBackground(ctx)
 	args := append([]string{gitCmdPush, "origin"}, refspecs...)
 	if _, err := r.Run(ctx, args...); err != nil {
 		return fmt.Errorf("git push failed: %w", err)
@@ -789,8 +780,8 @@ func (r *runner) pushOriginRefSpecs(ctx context.Context, refspecs []string) erro
 	return nil
 }
 
-func (r *runner) CheckCommutation(hunk Hunk, commitSHA, parentSHA string) (bool, error) {
-	commitDiff, err := r.Run(context.Background(), gitCmdDiff, parentSHA, commitSHA)
+func (r *runner) CheckCommutation(ctx context.Context, hunk Hunk, commitSHA, parentSHA string) (bool, error) {
+	commitDiff, err := r.Run(ctx, gitCmdDiff, parentSHA, commitSHA)
 	if err != nil {
 		return false, fmt.Errorf("failed to get commit diff: %w", err)
 	}

@@ -48,7 +48,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if err := validation.AbsorbChain(ctx.Context, eng, "absorb into").Validate(); err != nil {
 		return err
 	}
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	if err := actions.EnsureCanModifyHere(ctx, *currentBranch); err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
 
 	// Build a StackGraph for efficient traversals
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	// Handle staging flags. Unlike create/modify, --all stages tracked changes
 	// only (git add -u): untracked files can never be absorbed. When combined
@@ -159,7 +159,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			continue
 		}
 
-		commitSHA, commitIndex, err := eng.FindTargetCommitForHunk(hunk, commitSHAs)
+		commitSHA, commitIndex, err := eng.FindTargetCommitForHunk(ctx.Context, hunk, commitSHAs)
 		if err != nil {
 			return fmt.Errorf("failed to find target commit for hunk: %w", err)
 		}
@@ -233,7 +233,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				out.Debug("Failed to get untracked files: %v", err)
 			}
 
-			planJSON, err := GeneratePlanJSON(
+			planJSON, err := GeneratePlanJSON(ctx.Context,
 				currentBranch.GetName(),
 				absorbedTargets,
 				unabsorbedHunks,
@@ -362,7 +362,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Get branches in topological order (bottom-up)
 	allBranches := eng.AllBranches()
-	sortedBranches := eng.SortBranchesTopologically(allBranches)
+	sortedBranches := eng.SortBranchesTopologically(ctx.Context, allBranches)
 
 	for _, branch := range sortedBranches {
 		branchHunks, ok := hunksByBranch[branch.GetName()]
@@ -417,7 +417,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Restack branches according to mode
 	if oldestModifiedBranch != "" {
 		// Rebuild graph with fresh engine state
-		graph = eng.Graph(engine.SortStrategyAlphabetical)
+		graph = eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 		upstackBranches := selectRestackBranches(graph, eng, opts.Restack, currentBranch.GetName(), oldestModifiedBranch, currentScope)
 
 		if len(upstackBranches) > 0 {
@@ -480,7 +480,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			out.Debug("Failed to get untracked files: %v", err)
 		}
 
-		jsonOutput, err := GeneratePlanJSON(
+		jsonOutput, err := GeneratePlanJSON(ctx.Context,
 			currentBranch.GetName(),
 			absorbedTargets,
 			unabsorbedHunks,

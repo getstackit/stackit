@@ -33,7 +33,7 @@ type Handler interface {
 	SelectTrunk(ctx context.Context, branchNames []string, inferredTrunk string) (string, error)
 
 	// OnSuccess is called when initialization finishes
-	OnSuccess(result Result)
+	OnSuccess(ctx context.Context, result Result)
 }
 
 // Result describes a completed initialization.
@@ -82,7 +82,7 @@ func Action(ctx context.Context, repoRoot string, cfg Config, opts Options, hand
 
 	maxUndoDepth := cfg.UndoStackDepth()
 
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(ctx, engine.Options{
 		RepoRoot:          repoRoot,
 		Trunk:             trunkName,
 		MaxUndoStackDepth: maxUndoDepth,
@@ -93,16 +93,16 @@ func Action(ctx context.Context, repoRoot string, cfg Config, opts Options, hand
 	}
 
 	if opts.Reset {
-		if err := eng.Reset(trunkName); err != nil {
+		if err := eng.Reset(ctx, trunkName); err != nil {
 			return fmt.Errorf("failed to reset branches: %w", err)
 		}
 	} else {
-		if err := eng.Rebuild(trunkName); err != nil {
+		if err := eng.Rebuild(ctx, trunkName); err != nil {
 			return fmt.Errorf("failed to rebuild engine: %w", err)
 		}
 	}
 
-	handler.OnSuccess(Result{Trunk: trunkName, WasInitialized: wasInitialized, Reset: opts.Reset})
+	handler.OnSuccess(ctx, Result{Trunk: trunkName, WasInitialized: wasInitialized, Reset: opts.Reset})
 
 	return nil
 }
@@ -121,7 +121,7 @@ func InferTrunk(ctx context.Context, runner git.Runner, branchNames []string) st
 	}
 
 	// Fallback to current branch
-	current, err := runner.GetCurrentBranch()
+	current, err := runner.GetCurrentBranch(ctx)
 	if err == nil && current != "" {
 		return current
 	}

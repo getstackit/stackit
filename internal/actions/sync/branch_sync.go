@@ -17,7 +17,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 	eng := ctx.Engine
 	nav := ctx.Navigator()
 	gctx := ctx.Context
-	remote := eng.GetRemote()
+	remote := eng.GetRemote(ctx.Context)
 
 	// Emit phase started event
 	handler.EmitEvent(Event{Phase: PhaseBranches, Type: EventStarted})

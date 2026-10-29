@@ -1,6 +1,8 @@
 package actions
 
 import (
+	"context"
+
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
@@ -9,16 +11,16 @@ import (
 // CurrentBranchReader is the minimal dependency needed to resolve an omitted
 // branch argument.
 type CurrentBranchReader interface {
-	CurrentBranch() *engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
 }
 
 // ResolveBranchName resolves a branch name, defaulting to current branch if empty.
 // Returns errors.ErrNotOnBranchNoBranchSpecified if no branch specified and not on a branch.
-func ResolveBranchName(eng CurrentBranchReader, branchName string) (string, error) {
+func ResolveBranchName(ctx context.Context, eng CurrentBranchReader, branchName string) (string, error) {
 	if branchName != "" {
 		return branchName, nil
 	}
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx)
 	if currentBranch == nil {
 		return "", errors.ErrNotOnBranchNoBranchSpecified
 	}

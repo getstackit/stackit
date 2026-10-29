@@ -1,6 +1,8 @@
 package merge
 
 import (
+	"context"
+
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/pr"
@@ -11,7 +13,7 @@ type PRContentGenerator struct {
 	engine interface {
 		GetBranch(name string) engine.Branch
 		GetScope(branch engine.Branch) engine.Scope
-		GetStackDescription(branch engine.Branch) *git.StackDescription
+		GetStackDescription(ctx context.Context, branch engine.Branch) *git.StackDescription
 		Trunk() engine.Branch
 	}
 }
@@ -20,7 +22,7 @@ type PRContentGenerator struct {
 func NewPRContentGenerator(engine interface {
 	GetBranch(name string) engine.Branch
 	GetScope(branch engine.Branch) engine.Scope
-	GetStackDescription(branch engine.Branch) *git.StackDescription
+	GetStackDescription(ctx context.Context, branch engine.Branch) *git.StackDescription
 	Trunk() engine.Branch
 }) *PRContentGenerator {
 	return &PRContentGenerator{engine: engine}
@@ -38,7 +40,7 @@ func (g *PRContentGenerator) GenerateMultiStackPR(included []MultiStackInfo, exc
 }
 
 // GenerateConsolidationPR generates PR content for stack consolidation.
-func (g *PRContentGenerator) GenerateConsolidationPR(branches []BranchMergeInfo) pr.Content {
+func (g *PRContentGenerator) GenerateConsolidationPR(ctx context.Context, branches []BranchMergeInfo) pr.Content {
 	mergeBranches := g.convertBranchMergeInfo(branches)
 	scopes := g.collectScopes(mergeBranches)
 
@@ -46,7 +48,7 @@ func (g *PRContentGenerator) GenerateConsolidationPR(branches []BranchMergeInfo)
 	var stackDesc *git.StackDescription
 	if len(branches) > 0 {
 		rootBranch := g.engine.GetBranch(branches[0].BranchName)
-		stackDesc = g.engine.GetStackDescription(rootBranch)
+		stackDesc = g.engine.GetStackDescription(ctx, rootBranch)
 	}
 
 	title := pr.FormatMergeTitleWithDescription(stackDesc, scopes, len(mergeBranches))

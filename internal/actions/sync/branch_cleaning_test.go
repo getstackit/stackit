@@ -21,7 +21,7 @@ func TestCleanBranchesNonInteractiveRespectsDirtyStackFilter(t *testing.T) {
 
 	// Mark branch as deletable.
 	s.Checkout("main").RunGit("merge", "branch1")
-	err := s.Engine.Rebuild("main")
+	err := s.Engine.Rebuild(t.Context(), "main")
 	require.NoError(t, err)
 	err = s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoMerged(1, "main"))
 	require.NoError(t, err)
@@ -78,7 +78,7 @@ func TestCleanBranchesInteractiveDoesNotAutoDeleteUnpushedUtilityBranch(t *testi
 		CommitChange("unpushed.txt", "local-only commit")
 
 	// Mark branch as utility and deletable (merged PR).
-	err = s.Engine.SetBranchType(s.Engine.GetBranch("util-branch"), git.BranchTypeUtility)
+	err = s.Engine.SetBranchType(t.Context(), s.Engine.GetBranch("util-branch"), git.BranchTypeUtility)
 	require.NoError(t, err)
 	err = s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("util-branch"), testhelpers.NewTestPrInfoMerged(1, "main"))
 	require.NoError(t, err)

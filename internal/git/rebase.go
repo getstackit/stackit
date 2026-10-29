@@ -230,7 +230,7 @@ func (r *runner) InteractiveRebase(ctx context.Context, onto string) error {
 	return r.RunInteractive(ctx, "rebase", "-i", onto)
 }
 
-func (r *runner) GetRebaseHead() (string, error) {
+func (r *runner) GetRebaseHead(ctx context.Context) (string, error) {
 	// Try standard rebase head refs in order:
 	// 1. REBASE_HEAD (standard)
 	// 2. refs/rebase-merge/head (interactive)
@@ -242,7 +242,7 @@ func (r *runner) GetRebaseHead() (string, error) {
 	}
 
 	for _, refName := range refs {
-		output, err := r.ReadRevisions(context.Background(), refName).One()
+		output, err := r.ReadRevisions(ctx, refName).One()
 		if err == nil && output != "" {
 			return strings.TrimSpace(output), nil
 		}

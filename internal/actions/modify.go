@@ -44,10 +44,10 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 	gctx := ctx.Context
 
 	// Validate preconditions
-	if err := validation.ModifyBranchChain(eng, "modify").Validate(); err != nil {
+	if err := validation.ModifyBranchChain(ctx.Context, eng, "modify").Validate(); err != nil {
 		return err
 	}
-	originalBranchName := eng.CurrentBranch().GetName()
+	originalBranchName := eng.CurrentBranch(ctx.Context).GetName()
 
 	if opts.Into != "" && opts.InteractiveRebase {
 		return errors.New("--into cannot be combined with --interactive-rebase")
@@ -55,7 +55,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 
 	targetBranchName := originalBranchName
 	if opts.Into != "" {
-		if err := validateModifyIntoTarget(eng, originalBranchName, opts.Into); err != nil {
+		if err := validateModifyIntoTarget(ctx.Context, eng, originalBranchName, opts.Into); err != nil {
 			return err
 		}
 		if err := ensureModifyTargetNotCheckedOutElsewhere(gctx, eng, opts.Into); err != nil {
@@ -209,7 +209,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 
 	// Restack upstack branches (rooted at the target so descendants of a
 	// downstack --into target, including the original current branch, are covered)
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	upstackBranches := graph.Range(targetBranchObj, engine.StackRange{RecursiveChildren: true})
 
 	if len(upstackBranches) > 0 {
@@ -248,7 +248,7 @@ func recordConflictReturnBranch(ctx *app.Context, branchName string) {
 
 // validateModifyIntoTarget ensures --into targets a genuine, modifiable
 // downstack ancestor of the current branch.
-func validateModifyIntoTarget(eng engine.Engine, currentBranchName, targetName string) error {
+func validateModifyIntoTarget(ctx context.Context, eng engine.Engine, currentBranchName, targetName string) error {
 	if !eng.BranchNames().Contains(targetName) {
 		return fmt.Errorf("branch %s does not exist", targetName)
 	}
@@ -264,7 +264,7 @@ func validateModifyIntoTarget(eng engine.Engine, currentBranchName, targetName s
 		return err
 	}
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	downstack := graph.Downstack(eng.GetBranch(currentBranchName), engine.ExcludeCurrentBranch)
 	if !downstack.Contains(targetName) {
 		return fmt.Errorf("branch %s is not a downstack ancestor of %s", targetName, currentBranchName)
@@ -292,7 +292,7 @@ func interactiveRebaseAction(ctx *app.Context) error {
 	out := ctx.Output
 	gctx := ctx.Context
 
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 
 	// Get the parent branch to determine rebase base
 	parent := currentBranch.GetParent()
@@ -320,7 +320,7 @@ func interactiveRebaseAction(ctx *app.Context) error {
 	out.Info("Interactive rebase completed.")
 
 	// Restack upstack branches
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	upstackBranches := graph.Range(*currentBranch, engine.StackRange{RecursiveChildren: true})
 
 	if len(upstackBranches) > 0 {

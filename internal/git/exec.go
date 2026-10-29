@@ -115,9 +115,6 @@ func (r *runner) exec(ctx context.Context, c command) (string, error) {
 	op := traceOp(c.name, c.args)
 	cmdAttr := slog.String("cmd", traceCmd(c.name, c.args))
 
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	// A terminal session runs as long as the user needs (an editor, a patch
 	// prompt), so it gets no default deadline.
 	if _, ok := ctx.Deadline(); !ok && c.output != outputTerminal {

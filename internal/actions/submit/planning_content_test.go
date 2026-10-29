@@ -37,11 +37,11 @@ type contentPlanRunner struct {
 func (*contentPlanRunner) RunGH(context.Context, ...string) (string, error) {
 	return "test-token", nil
 }
-func (r *contentPlanRunner) GetConfig(key string) (string, error) {
+func (r *contentPlanRunner) GetConfig(ctx context.Context, key string) (string, error) {
 	if key == "remote.origin.url" {
 		return "https://github.com/test/repo.git", nil
 	}
-	return r.GitCommandRunner.GetConfig(key)
+	return r.GitCommandRunner.GetConfig(ctx, key)
 }
 func (r *contentPlanRunner) RoundTrip(req *http.Request) (*http.Response, error) {
 	body, err := io.ReadAll(req.Body)

@@ -566,7 +566,7 @@ func TestRestackBranchesWithValidatedPlanAppliesAnchorBranch(t *testing.T) {
 		})
 
 	anchor := s.Engine.GetBranch("anchor")
-	require.NoError(t, s.Engine.SetBranchType(anchor, git.BranchTypeWorktreeAnchor))
+	require.NoError(t, s.Engine.SetBranchType(t.Context(), anchor, git.BranchTypeWorktreeAnchor))
 	oldSHA, err := anchor.GetRevision()
 	require.NoError(t, err)
 
@@ -611,8 +611,8 @@ func TestPlanRestackRefreshesMetadataWithoutRebaseWhenRecordedRevisionMissing(t 
 
 	meta, err := s.Metadata.ReadMetadata(t.Context(), "child").One()
 	require.NoError(t, err)
-	require.NoError(t, s.Metadata.WriteMetadata("child", meta.WithParentBranchRevision(nil)))
-	require.NoError(t, s.Engine.Rebuild("main"))
+	require.NoError(t, s.Metadata.WriteMetadata(t.Context(), "child", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 
 	child := s.Engine.GetBranch("child")
 	plan, err := s.Engine.PlanRestack(t.Context(), engine.BranchesOf(child))
@@ -671,7 +671,7 @@ func TestPlanRestackRefreshesMetadataAfterManualRebaseOutsideStackit(t *testing.
 	// stackit entirely -- "b" ends up correctly based on "a", but its
 	// recorded parent revision still names the pre-amend SHA.
 	s.RunGit("rebase", "--onto", "a", oldARev, "b")
-	require.NoError(t, s.Engine.Rebuild("main"))
+	require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 
 	bSHA, err := s.Scene.Repo.GetBranchSHA("b")
 	require.NoError(t, err)
@@ -708,7 +708,7 @@ func TestRestackBranchesWithValidatedPlanReparentsMergedParent(t *testing.T) {
 	s.Checkout("main").
 		RunGit("merge", "branch1", "--no-ff", "-m", "Merge branch1")
 	s.RunGit("branch", "-D", "branch1")
-	require.NoError(t, s.Engine.Rebuild("main"))
+	require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 
 	branch2 := s.Engine.GetBranch("branch2")
 	plan, err := s.Engine.PlanRestack(t.Context(), engine.BranchesOf(branch2))
@@ -730,7 +730,7 @@ func TestRestackBranchesWithValidatedPlanReparentsMergedParent(t *testing.T) {
 	require.Equal(t, "branch1", result.Results["branch2"].OldParent)
 	require.Equal(t, "main", result.Results["branch2"].NewParent)
 
-	require.NoError(t, s.Engine.Rebuild("main"))
+	require.NoError(t, s.Engine.Rebuild(t.Context(), "main"))
 	branch2 = s.Engine.GetBranch("branch2")
 	require.Equal(t, "main", branch2.GetParentOrTrunk())
 	history := branch2.GetMergedDownstack()
@@ -747,7 +747,7 @@ func TestRestackBranchesWithValidatedPlanRejectsForkInLinearMode(t *testing.T) {
 			"child":  "middle",
 		})
 
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot:     s.Scene.Dir,
 		Trunk:        "main",
 		LinearStacks: true,

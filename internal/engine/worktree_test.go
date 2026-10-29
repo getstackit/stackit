@@ -18,7 +18,7 @@ func TestIsInManagedWorktree_MainRepo(t *testing.T) {
 	s.WithInitialCommit()
 
 	// When running from the main repo, IsInManagedWorktree should return false
-	isManaged, info, err := s.Engine.IsInManagedWorktree()
+	isManaged, info, err := s.Engine.IsInManagedWorktree(t.Context())
 	require.NoError(t, err)
 	require.False(t, isManaged)
 	require.Nil(t, info)
@@ -66,13 +66,13 @@ func TestWorktreeRegistry_OwningWorktree(t *testing.T) {
 	require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: "/tmp/feature-worktree", Name: "feature"}))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
-	owner, err := s.Engine.OwningWorktree(s.Engine.GetBranch("feature-child"))
+	owner, err := s.Engine.OwningWorktree(t.Context(), s.Engine.GetBranch("feature-child"))
 	require.NoError(t, err)
 	require.NotNil(t, owner)
 	require.Equal(t, "feature", owner.AnchorBranch)
 	require.Equal(t, "/tmp/feature-worktree", owner.Path.String())
 
-	owner, err = s.Engine.OwningWorktree(s.Engine.Trunk())
+	owner, err = s.Engine.OwningWorktree(t.Context(), s.Engine.Trunk())
 	require.NoError(t, err)
 	require.Nil(t, owner)
 }
@@ -195,7 +195,7 @@ func TestWorktreeOwnershipByStackRoot_FailsClosedOnMalformedRegistrations(t *tes
 		s.RunGit("update-ref", "refs/stackit/worktrees/"+stackRoot, sha)
 	}
 
-	ownership, err := s.Engine.WorktreeOwnershipByStackRoot()
+	ownership, err := s.Engine.WorktreeOwnershipByStackRoot(t.Context())
 	require.NoError(t, err)
 	require.NoError(t, ownership["feature"].Err)
 	require.NotNil(t, ownership["feature"].Worktree)

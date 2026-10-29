@@ -10,11 +10,11 @@ import (
 	"strings"
 )
 
-func (r *runner) GetCurrentBranch() (string, error) {
-	if name, ok := r.readHeadBranch(); ok {
+func (r *runner) GetCurrentBranch(ctx context.Context) (string, error) {
+	if name, ok := r.readHeadBranch(ctx); ok {
 		return name, nil
 	}
-	out, err := r.Run(context.Background(), "symbolic-ref", "--short", "HEAD")
+	out, err := r.Run(ctx, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("HEAD is not on a branch: %w", err)
 	}
@@ -31,11 +31,11 @@ func (r *runner) GetCurrentBranch() (string, error) {
 // then runs the real command, so git stays the authority on every case except
 // the overwhelmingly common one. Note this reads the worktree's own git dir,
 // not the common dir: each worktree has its own HEAD.
-func (r *runner) readHeadBranch() (string, bool) {
+func (r *runner) readHeadBranch(ctx context.Context) (string, bool) {
 	if err := r.ensureRepo(); err != nil {
 		return "", false
 	}
-	gitDir := r.getGitDir(context.Background())
+	gitDir := r.getGitDir(ctx)
 	if gitDir == "" {
 		return "", false
 	}
@@ -61,11 +61,11 @@ func (r *runner) readHeadBranch() (string, bool) {
 // Reports ok=false for anything other than a raw SHA (HEAD on a branch, an
 // unreadable file, malformed content). The caller then runs the real
 // command, so git stays the authority on every case except detached HEAD.
-func (r *runner) readHeadRevision() (string, bool) {
+func (r *runner) readHeadRevision(ctx context.Context) (string, bool) {
 	if err := r.ensureRepo(); err != nil {
 		return "", false
 	}
-	gitDir := r.getGitDir(context.Background())
+	gitDir := r.getGitDir(ctx)
 	if gitDir == "" {
 		return "", false
 	}
@@ -232,7 +232,7 @@ func (r *runner) CreateBranch(ctx context.Context, branchName, startPoint string
 		return fmt.Errorf("failed to create branch %s from %s: branch already exists", branchName, startPoint)
 	}
 
-	sha, err := r.resolveRefSHA(startPoint)
+	sha, err := r.resolveRefSHA(ctx, startPoint)
 	if err != nil {
 		return fmt.Errorf("failed to create branch %s from %s: %w", branchName, startPoint, err)
 	}
@@ -247,7 +247,7 @@ func (r *runner) CreateBranch(ctx context.Context, branchName, startPoint string
 }
 
 func (r *runner) CreateBranchForce(ctx context.Context, branchName, revision string) error {
-	sha, err := r.resolveRefSHA(revision)
+	sha, err := r.resolveRefSHA(ctx, revision)
 	if err != nil {
 		return err
 	}
@@ -266,7 +266,7 @@ func (r *runner) CheckoutDetached(ctx context.Context, revision string) error {
 }
 
 func (r *runner) UpdateBranchRef(ctx context.Context, branchName, revision string) error {
-	sha, err := r.resolveRefSHA(revision)
+	sha, err := r.resolveRefSHA(ctx, revision)
 	if err != nil {
 		return fmt.Errorf("failed to resolve revision %s: %w", revision, err)
 	}
@@ -291,7 +291,7 @@ type BranchRefUpdate struct {
 
 func (r *runner) UpdateBranchRefCAS(ctx context.Context, update BranchRefUpdate) error {
 	branchName, revision, expectedOld := update.Branch, update.NewRevision, update.ExpectedOld
-	sha, err := r.resolveRefSHA(revision)
+	sha, err := r.resolveRefSHA(ctx, revision)
 	if err != nil {
 		return fmt.Errorf("failed to resolve revision %s: %w", revision, err)
 	}
@@ -309,7 +309,7 @@ func (r *runner) UpdateBranchRefCAS(ctx context.Context, update BranchRefUpdate)
 }
 
 func (r *runner) GetCurrentBranchOrSHA(ctx context.Context) (string, error) {
-	branch, err := r.GetCurrentBranch()
+	branch, err := r.GetCurrentBranch(ctx)
 	if err == nil {
 		return branch, nil
 	}

@@ -7,6 +7,7 @@ package registry
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -116,7 +117,7 @@ type RepoEntry struct {
 // NewEntry constructs a ready-to-use entry with a broadcaster, a ref
 // watcher (when RepoRoot is set), and closers that cleanly tear down both
 // when registry.Close is called. The watcher goroutine starts immediately.
-func NewEntry(cfg EntryConfig) *RepoEntry {
+func NewEntry(ctx context.Context, cfg EntryConfig) *RepoEntry {
 	entry := &RepoEntry{
 		ID:          cfg.ID,
 		DisplayName: cfg.DisplayName,
@@ -134,10 +135,14 @@ func NewEntry(cfg EntryConfig) *RepoEntry {
 
 	if cfg.RepoRoot != "" && cfg.Engine != nil {
 		entry.trunkName = cfg.Engine.Trunk().GetName()
-		if cb := cfg.Engine.CurrentBranch(); cb != nil {
+		if cb := cfg.Engine.CurrentBranch(ctx); cb != nil {
 			entry.lastCurrentBranch = cb.GetName()
 		}
-		entry.Watcher = watcher.NewRefWatcher(cfg.RepoRoot, watcherDebounce, entry.Refresh)
+		// Watcher-driven refreshes run for the entry's lifetime, not the
+		// caller's, so they get a context that closing the entry cancels.
+		watchCtx, cancelWatch := context.WithCancel(context.WithoutCancel(ctx))
+		entry.AddCloser(func() error { cancelWatch(); return nil })
+		entry.Watcher = watcher.NewRefWatcher(cfg.RepoRoot, watcherDebounce, func() { entry.Refresh(watchCtx) })
 		watcherDone := make(chan error, 1)
 		go func() {
 			watcherDone <- entry.Watcher.Start()
@@ -180,19 +185,19 @@ func (e *RepoEntry) close() error {
 // clients refetch. It is the shared post-change path invoked by both the ref
 // watcher (local changes) and the sync loop (remote changes); refreshMu
 // serializes the two so the engine isn't rebuilt concurrently.
-func (e *RepoEntry) Refresh() {
+func (e *RepoEntry) Refresh(ctx context.Context) {
 	if e.Engine == nil {
 		return
 	}
 	e.refreshMu.Lock()
 	defer e.refreshMu.Unlock()
 
-	if err := e.Engine.Rebuild(e.trunkName); err != nil {
+	if err := e.Engine.Rebuild(ctx, e.trunkName); err != nil {
 		slog.Error("engine rebuild failed", "repo", e.ID, "error", err)
 		return
 	}
 
-	if cb := e.Engine.CurrentBranch(); cb != nil {
+	if cb := e.Engine.CurrentBranch(ctx); cb != nil {
 		newBranch := cb.GetName()
 		if e.lastCurrentBranch != "" && newBranch != e.lastCurrentBranch {
 			data, _ := json.Marshal(map[string]string{

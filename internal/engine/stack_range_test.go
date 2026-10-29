@@ -67,7 +67,7 @@ func TestStackGraphTraversal(t *testing.T) { //nolint:tparallel // subtests shar
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithLinearStack3()
 
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 
 	t.Run("Upstack returns children with include current", func(t *testing.T) {
 		names := graph.Upstack(s.Engine.GetBranch("a"), engine.IncludeCurrentBranch).Names()

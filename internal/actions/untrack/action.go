@@ -18,7 +18,7 @@ type Options struct {
 // untrackEngine lists exactly the engine methods untrack calls.
 type untrackEngine interface {
 	engine.BranchLookup
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
 	UntrackBranches(ctx context.Context, branchNames []string) error
 }
 
@@ -39,7 +39,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Find descendants
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	descendants := graph.Range(branch, engine.StackRange{RecursiveChildren: true})
 
 	// If there are descendants and not forced, prompt for confirmation

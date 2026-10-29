@@ -52,14 +52,14 @@ func HasForeachWork(ctx *app.Context, opts Options) (bool, error) {
 	var eng foreachEngine = ctx.Engine
 	multiStack := opts.AllStacks || len(opts.StackRoots) > 0
 
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	if !multiStack && currentBranch == nil && opts.BranchName == "" {
 		return false, errors.ErrNotOnBranch
 	}
 
 	var branches engine.Branches
 	if multiStack {
-		multiStackBranches, err := collectMultiStackBranches(eng, opts)
+		multiStackBranches, err := collectMultiStackBranches(ctx.Context, eng, opts)
 		if err != nil {
 			return false, err
 		}
@@ -74,7 +74,7 @@ func HasForeachWork(ctx *app.Context, opts Options) (bool, error) {
 		} else if currentBranch != nil {
 			targetBranch = *currentBranch
 		}
-		graph := eng.Graph(engine.SortStrategyAlphabetical)
+		graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 		branches = graph.Range(targetBranch, opts.Scope)
 	}
 
@@ -92,17 +92,17 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	multiStack := opts.AllStacks || len(opts.StackRoots) > 0
 
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	if !multiStack && currentBranch == nil && opts.BranchName == "" {
 		return errors.ErrNotOnBranch
 	}
 
 	// Build graph once — needed for scope range and for find-first-failure depth grouping.
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 	var branches engine.Branches
 	if multiStack {
-		multiStackBranches, err := collectMultiStackBranches(eng, opts)
+		multiStackBranches, err := collectMultiStackBranches(ctx.Context, eng, opts)
 		if err != nil {
 			return err
 		}
@@ -178,7 +178,7 @@ func foreachSequential(ctx *app.Context, opts Options, branches engine.Branches,
 	var eng foreachEngine = ctx.Engine
 	out := ctx.Output
 
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	originalBranchName := ""
 	if currentBranch != nil {
 		originalBranchName = currentBranch.GetName()
@@ -546,8 +546,8 @@ func executeCommandOnBranch(ctx context.Context, appCtx *app.Context, branch eng
 
 // collectMultiStackBranches expands --all-stacks / --stacks into a flat branch list,
 // preserving independent-stack ordering and excluding trunk and untracked branches.
-func collectMultiStackBranches(eng engine.StackView, opts Options) (engine.Branches, error) {
-	stacks := engine.DiscoverIndependentStacks(eng)
+func collectMultiStackBranches(ctx context.Context, eng engine.StackView, opts Options) (engine.Branches, error) {
+	stacks := engine.DiscoverIndependentStacks(ctx, eng)
 	if len(opts.StackRoots) > 0 {
 		stackByRoot := make(map[string]engine.IndependentStack, len(stacks))
 		for _, stack := range stacks {

@@ -145,7 +145,7 @@ func TestSession_ResetToRef(t *testing.T) {
 	s.Scene.Repo.CheckoutBranch("main")
 
 	// Rebuild engine to pick up the new branch
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 	})
@@ -193,7 +193,7 @@ func TestSession_PullTrunk_StaysDetached(t *testing.T) {
 	require.NoError(t, err)
 
 	// Rebuild engine while on feature branch
-	eng, err := engine.NewEngine(engine.Options{
+	eng, err := engine.NewEngine(t.Context(), engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 	})

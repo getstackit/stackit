@@ -41,7 +41,7 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 	for _, branch := range branches {
 		name := branch.GetName()
 		if branch.IsFrozen() {
-			remoteRefs = append(remoteRefs, e.git.GetRemote()+"/"+name)
+			remoteRefs = append(remoteRefs, e.git.GetRemote(ctx)+"/"+name)
 			continue
 		}
 		if branch.IsWorktreeAnchor() || branch.IsLocked() {
@@ -59,11 +59,11 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 	remoteRevs := e.git.ReadRevisions(ctx, remoteRefs...)
 
 	planner := restackPlanner{
-		engine: e, ctx: ctx, plan: plan, metadata: metaMap, revisions: revMap,
+		engine: e, plan: plan, metadata: metaMap, revisions: revMap,
 		ancestry: ancestry, remoteRevisions: remoteRevs, landed: landed,
 	}
 	for _, branch := range branches {
-		item, ok := planner.branch(branch)
+		item, ok := planner.branch(ctx, branch)
 		if !ok {
 			continue
 		}
@@ -77,7 +77,6 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 // It is discarded before application, which must recheck mutable repository state.
 type restackPlanner struct {
 	engine          *engineImpl
-	ctx             context.Context
 	plan            *RestackPlan
 	metadata        MetaMap
 	revisions       RevisionMap
@@ -139,8 +138,8 @@ func frozenRestack(branch, parent, parentRevision, remoteRevision string) Restac
 }
 
 // branch derives one decision without mutating the plan's indexes.
-func (p *restackPlanner) branch(branch Branch) (RestackPlanItem, bool) {
-	e, ctx := p.engine, p.ctx
+func (p *restackPlanner) branch(ctx context.Context, branch Branch) (RestackPlanItem, bool) {
+	e := p.engine
 	branchName := branch.GetName()
 	item := RestackPlanItem{Branch: branchName, Action: RestackPlanApplyValidated}
 
@@ -206,7 +205,7 @@ func (p *restackPlanner) branch(branch Branch) (RestackPlanItem, bool) {
 		if !ok {
 			return item, false
 		}
-		remoteSha, err := p.remoteRevisions.Get(e.git.GetRemote() + "/" + branchName)
+		remoteSha, err := p.remoteRevisions.Get(e.git.GetRemote(ctx) + "/" + branchName)
 		if err != nil || remoteSha == "" {
 			return skippedRestack(branchName, RestackBranchResult{Result: RestackUnneeded, Frozen: true}), true
 		}

@@ -126,10 +126,10 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 	}
 
 	trunk := eng.Trunk()
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx.Context)
 	allBranches := eng.AllBranches()
 
-	metadataRefs, err := eng.ListMetadataRefs()
+	metadataRefs, err := eng.ListMetadataRefs(ctx.Context)
 	if err != nil {
 		metadataRefs = make(map[string]string)
 	}
@@ -139,7 +139,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 	revisions := eng.BatchRevisions(allBranches)
 	statuses := eng.ReadBranchStatuses(allBranches)
 
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	branchInfos := make([]BranchInfo, 0, len(allBranches))
 	for _, branch := range allBranches {
 		branchName := branch.GetName()
@@ -237,7 +237,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 		})
 
 		remoteMetadataState = &RemoteMetadataStateInfo{
-			RemoteStateAvailable: eng.IsRemoteSyncEnabled(),
+			RemoteStateAvailable: eng.IsRemoteSyncEnabled(ctx.Context),
 			RemoteRefs:           remoteRefs,
 		}
 	}

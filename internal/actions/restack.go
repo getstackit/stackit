@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -88,7 +89,7 @@ func (p *RestackPlan) BranchCount() int {
 // state.
 func PlanRestack(ctx *app.Context, opts RestackOptions) (*RestackPlan, error) {
 	eng := ctx.Engine
-	rawGroups, err := planRestackBranchGroups(eng, opts)
+	rawGroups, err := planRestackBranchGroups(ctx.Context, eng, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +101,7 @@ func PlanRestack(ctx *app.Context, opts RestackOptions) (*RestackPlan, error) {
 	}
 	plan := &RestackPlan{opts: opts}
 	for _, g := range rawGroups {
-		sorted := eng.SortBranchesTopologically(g.branches)
+		sorted := eng.SortBranchesTopologically(ctx.Context, g.branches)
 		var enginePlan *engine.RestackPlan
 		if len(sorted) > 0 {
 			enginePlan, err = eng.PlanRestack(ctx.Context, sorted)
@@ -230,9 +231,9 @@ type restackBranchGroup struct {
 // process for the given options. Extracted so callers can detect "no work"
 // before starting an interactive TUI (which would otherwise leak terminal
 // codes when the action returns immediately).
-func planRestackBranchGroups(eng engine.BranchReader, opts RestackOptions) ([]restackBranchGroup, error) {
+func planRestackBranchGroups(ctx context.Context, eng engine.BranchReader, opts RestackOptions) ([]restackBranchGroup, error) {
 	if opts.AllStacks || len(opts.StackRoots) > 0 {
-		return branchGroupsForIndependentStacks(eng, opts)
+		return branchGroupsForIndependentStacks(ctx, eng, opts)
 	}
 	// A typo'd --branch would otherwise produce an empty range and a silent
 	// "No branches to restack." success.
@@ -240,7 +241,7 @@ func planRestackBranchGroups(eng engine.BranchReader, opts RestackOptions) ([]re
 		return nil, fmt.Errorf("branch %s does not exist", opts.BranchName)
 	}
 	branch := eng.GetBranch(opts.BranchName)
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	branches := graph.Range(branch, opts.Scope).WithoutTrunk()
 	return []restackBranchGroup{{
 		branches: branches,
@@ -282,8 +283,8 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 	return kept
 }
 
-func branchGroupsForIndependentStacks(eng engine.BranchReader, opts RestackOptions) ([]restackBranchGroup, error) {
-	stacks := engine.DiscoverIndependentStacks(eng)
+func branchGroupsForIndependentStacks(ctx context.Context, eng engine.BranchReader, opts RestackOptions) ([]restackBranchGroup, error) {
+	stacks := engine.DiscoverIndependentStacks(ctx, eng)
 	if len(opts.StackRoots) > 0 {
 		stackByRoot := make(map[string]engine.IndependentStack, len(stacks))
 		for _, stack := range stacks {

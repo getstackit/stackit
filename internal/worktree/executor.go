@@ -84,7 +84,7 @@ func (e *Executor) CreateSession(ctx context.Context, opts CreateSessionOptions)
 	e.output.Debug("Created worktree at %s", worktreePath)
 
 	// Create engine for worktree using parent's snapshot to skip rebuildInternal
-	worktreeEng, err := engine.NewEngineForWorktree(engine.WorktreeEngineOptions{
+	worktreeEng, err := engine.NewEngineForWorktree(ctx, engine.WorktreeEngineOptions{
 		WorktreePath: worktreePath,
 		Snapshot:     e.eng.SnapshotForWorktree(),
 	})

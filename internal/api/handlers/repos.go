@@ -41,7 +41,7 @@ func (h *ReposListHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if entry.Engine != nil {
 			summary.Trunk = entry.Engine.Trunk().GetName()
-			if current := entry.Engine.CurrentBranch(); current != nil {
+			if current := entry.Engine.CurrentBranch(r.Context()); current != nil {
 				summary.CurrentBranch = current.GetName()
 			}
 		}

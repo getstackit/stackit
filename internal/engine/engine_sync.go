@@ -83,13 +83,13 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 				moves = append(moves, BranchParentMove{Branch: item.Branch, NewParent: item.NewParent})
 			}
 		}
-		if err := e.validateLinearParentMoves(moves); err != nil {
+		if err := e.validateLinearParentMoves(ctx, moves); err != nil {
 			return RestackBatchResult{}, err
 		}
 	}
 
 	// Save current branch to restore after restacking
-	originalBranch := e.CurrentBranch()
+	originalBranch := e.CurrentBranch(ctx)
 	var originalRev string
 	if originalBranch == nil {
 		originalRev, _ = e.git.ReadRevisions(ctx, "HEAD").One()
@@ -192,7 +192,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	// own SHA for optimistic locking on the metadata ref UpdateRefs, so a
 	// pre-loop snapshot is stable.
 	metaRefSHAs := make(MetadataSHAMap)
-	if refs, listErr := e.git.ListRefs(git.MetadataRefPrefix); listErr == nil {
+	if refs, listErr := e.git.ListRefs(ctx, git.MetadataRefPrefix); listErr == nil {
 		for refName, sha := range refs {
 			metaRefSHAs[strings.TrimPrefix(refName, git.MetadataRefPrefix)] = sha
 		}
@@ -243,7 +243,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 				remainingBranchNames[j] = b.GetName()
 			}
 			if needsRebuild {
-				if rebuildErr := e.rebuild(); rebuildErr != nil {
+				if rebuildErr := e.rebuild(ctx); rebuildErr != nil {
 					return RestackBatchResult{
 						ConflictBranch:    branchName,
 						RebasedBranchBase: result.RebasedBranchBase,
@@ -267,7 +267,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 				remainingBranchNames[j] = b.GetName()
 			}
 			if needsRebuild {
-				if rebuildErr := e.rebuild(); rebuildErr != nil {
+				if rebuildErr := e.rebuild(ctx); rebuildErr != nil {
 					return RestackBatchResult{
 						ConflictBranch:    branchName,
 						RebasedBranchBase: result.RebasedBranchBase,
@@ -294,7 +294,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 
 	// Single rebuild at the end if any branches were restacked
 	if needsRebuild {
-		if err := e.rebuild(); err != nil {
+		if err := e.rebuild(ctx); err != nil {
 			return RestackBatchResult{
 				Results: results,
 			}, fmt.Errorf("failed to rebuild after batch restack: %w", err)
@@ -361,7 +361,7 @@ func (e *engineImpl) ContinueRebase(ctx context.Context, spec ContinueRebaseSpec
 	}
 
 	// Rebuild to refresh cache
-	if err := e.rebuild(); err != nil {
+	if err := e.rebuild(ctx); err != nil {
 		return ContinueRebaseResult{}, fmt.Errorf("failed to rebuild after continue: %w", err)
 	}
 

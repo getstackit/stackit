@@ -269,7 +269,7 @@ func TestStackRefMeta(t *testing.T) { //nolint:tparallel // subtests share one f
 	s.WithInitialCommit()
 
 	t.Run("GetStackMeta returns nil for non-existent stack ID", func(t *testing.T) {
-		meta, err := engine.Impl(s.Engine).GetStackMeta("non-existent-stack-id")
+		meta, err := engine.Impl(s.Engine).GetStackMeta(t.Context(), "non-existent-stack-id")
 		require.NoError(t, err)
 		require.Nil(t, meta)
 	})
@@ -285,11 +285,11 @@ func TestStackRefMeta(t *testing.T) { //nolint:tparallel // subtests share one f
 			CreatedBy:   "test-user",
 		}
 
-		err := engine.Impl(s.Engine).CreateStackRef(stackID, meta)
+		err := engine.Impl(s.Engine).CreateStackRef(t.Context(), stackID, meta)
 		require.NoError(t, err)
 
 		// Verify GetStackMeta returns the correct metadata
-		retrieved, err := engine.Impl(s.Engine).GetStackMeta(stackID)
+		retrieved, err := engine.Impl(s.Engine).GetStackMeta(t.Context(), stackID)
 		require.NoError(t, err)
 		require.NotNil(t, retrieved)
 		require.Equal(t, stackID, retrieved.ID)
@@ -302,11 +302,11 @@ func TestStackRefMeta(t *testing.T) { //nolint:tparallel // subtests share one f
 	t.Run("CreateStackRef creates stack ref with nil metadata using defaults", func(t *testing.T) {
 		stackID := "default-meta-stack"
 
-		err := engine.Impl(s.Engine).CreateStackRef(stackID, nil)
+		err := engine.Impl(s.Engine).CreateStackRef(t.Context(), stackID, nil)
 		require.NoError(t, err)
 
 		// Verify GetStackMeta returns metadata with defaults
-		retrieved, err := engine.Impl(s.Engine).GetStackMeta(stackID)
+		retrieved, err := engine.Impl(s.Engine).GetStackMeta(t.Context(), stackID)
 		require.NoError(t, err)
 		require.NotNil(t, retrieved)
 		require.Equal(t, stackID, retrieved.ID)
@@ -328,16 +328,16 @@ func TestStackRefMeta(t *testing.T) { //nolint:tparallel // subtests share one f
 			CreatedAt: time.Now().Truncate(time.Second),
 		}
 
-		err := engine.Impl(s.Engine).CreateStackRef(stack1ID, meta1)
+		err := engine.Impl(s.Engine).CreateStackRef(t.Context(), stack1ID, meta1)
 		require.NoError(t, err)
-		err = engine.Impl(s.Engine).CreateStackRef(stack2ID, meta2)
+		err = engine.Impl(s.Engine).CreateStackRef(t.Context(), stack2ID, meta2)
 		require.NoError(t, err)
 
-		retrieved1, err := engine.Impl(s.Engine).GetStackMeta(stack1ID)
+		retrieved1, err := engine.Impl(s.Engine).GetStackMeta(t.Context(), stack1ID)
 		require.NoError(t, err)
 		require.Equal(t, "Stack One", retrieved1.Title)
 
-		retrieved2, err := engine.Impl(s.Engine).GetStackMeta(stack2ID)
+		retrieved2, err := engine.Impl(s.Engine).GetStackMeta(t.Context(), stack2ID)
 		require.NoError(t, err)
 		require.Equal(t, "Stack Two", retrieved2.Title)
 	})

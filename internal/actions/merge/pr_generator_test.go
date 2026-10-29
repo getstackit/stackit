@@ -22,7 +22,7 @@ func TestPRContentGenerator_GenerateConsolidationPR(t *testing.T) {
 		})
 
 		gen := NewPRContentGenerator(s.Engine)
-		content := gen.GenerateConsolidationPR([]BranchMergeInfo{
+		content := gen.GenerateConsolidationPR(t.Context(), []BranchMergeInfo{
 			{BranchName: "feature-a", PRNumber: 0},
 		})
 
@@ -39,7 +39,7 @@ func TestPRContentGenerator_GenerateConsolidationPR(t *testing.T) {
 		})
 
 		gen := NewPRContentGenerator(s.Engine)
-		content := gen.GenerateConsolidationPR([]BranchMergeInfo{
+		content := gen.GenerateConsolidationPR(t.Context(), []BranchMergeInfo{
 			{BranchName: "feature-a", PRNumber: 1},
 			{BranchName: "feature-a-1", PRNumber: 2},
 		})
@@ -58,7 +58,7 @@ func TestPRContentGenerator_GenerateConsolidationPR(t *testing.T) {
 		_ = s.Engine.SetScope(t.Context(), s.Engine.GetBranch("feature-a"), engine.NewScope("PROJ-123"))
 
 		gen := NewPRContentGenerator(s.Engine)
-		content := gen.GenerateConsolidationPR([]BranchMergeInfo{
+		content := gen.GenerateConsolidationPR(t.Context(), []BranchMergeInfo{
 			{BranchName: "feature-a", PRNumber: 1},
 		})
 
@@ -83,7 +83,7 @@ func TestPRContentGenerator_GenerateConsolidationPR_WithStackDescription(t *test
 		})
 
 		gen := NewPRContentGenerator(s.Engine)
-		content := gen.GenerateConsolidationPR([]BranchMergeInfo{
+		content := gen.GenerateConsolidationPR(t.Context(), []BranchMergeInfo{
 			{BranchName: "feature-a", PRNumber: 1},
 		})
 
@@ -106,7 +106,7 @@ func TestPRContentGenerator_GenerateConsolidationPR_WithStackDescription(t *test
 		})
 
 		gen := NewPRContentGenerator(s.Engine)
-		content := gen.GenerateConsolidationPR([]BranchMergeInfo{
+		content := gen.GenerateConsolidationPR(t.Context(), []BranchMergeInfo{
 			{BranchName: "feature-a", PRNumber: 1},
 			{BranchName: "feature-a-1", PRNumber: 2},
 		})
@@ -125,7 +125,7 @@ func TestPRContentGenerator_GenerateConsolidationPR_WithStackDescription(t *test
 		// No stack description set
 
 		gen := NewPRContentGenerator(s.Engine)
-		content := gen.GenerateConsolidationPR([]BranchMergeInfo{
+		content := gen.GenerateConsolidationPR(t.Context(), []BranchMergeInfo{
 			{BranchName: "feature-a", PRNumber: 1},
 		})
 

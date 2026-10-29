@@ -24,13 +24,13 @@ branches depend on the current branch.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
 				// Get current branch
-				currentBranch := ctx.Engine.CurrentBranch()
+				currentBranch := ctx.Engine.CurrentBranch(ctx.Context)
 				if currentBranch == nil {
 					return errors.ErrNotOnBranch
 				}
 
 				// Get children
-				graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+				graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 				children := graph.ChildBranches(*currentBranch)
 				if len(children) == 0 {
 					ctx.Output.Info("%s has no children.", style.ColorCurrentBranch(currentBranch.GetName()))

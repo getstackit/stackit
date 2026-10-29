@@ -121,7 +121,7 @@ func hookEnv(ctx *app.Context, cmd *cobra.Command, phaseKey string) []string {
 		"STACKIT_COMMAND_PATH=" + commandPath(cmd),
 	}
 	if ctx.Engine != nil {
-		if cur := ctx.Engine.CurrentBranch(); cur != nil {
+		if cur := ctx.Engine.CurrentBranch(ctx.Context); cur != nil {
 			env = append(env, "STACKIT_BRANCH="+cur.GetName())
 			if parent := cur.GetParent(); parent != nil {
 				env = append(env, "STACKIT_PARENT="+parent.GetName())

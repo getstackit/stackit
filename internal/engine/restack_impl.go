@@ -341,7 +341,7 @@ func (e *engineImpl) restackWorktreeAnchor(
 	e.recordRestackMetadata(branchName, metadataSHA, meta)
 
 	// If the anchor branch is currently checked out in this context, reset the working tree
-	current := e.CurrentBranch()
+	current := e.CurrentBranch(ctx)
 	if current != nil && current.GetName() == branchName {
 		if err := e.git.HardReset(ctx, "HEAD"); err != nil {
 			return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to reset working tree for anchor %s: %w", branchName, err)
@@ -439,7 +439,7 @@ func (e *engineImpl) restackBranch(
 
 	if e.IsFrozen(branch) {
 		// For frozen branches, we update via hard reset to remote instead of rebase
-		remoteSha, err := e.git.ReadRevisions(ctx, e.git.GetRemote()+"/"+branchName).One()
+		remoteSha, err := e.git.ReadRevisions(ctx, e.git.GetRemote(ctx)+"/"+branchName).One()
 		if err != nil {
 			// If remote branch is not found, just skip restack
 			return RestackBranchResult{Result: RestackUnneeded, Frozen: true}, nil //nolint:nilerr
@@ -491,7 +491,7 @@ func (e *engineImpl) restackBranch(
 			e.recordRestackMetadata(branchName, metadataSHA, meta)
 
 			// If the branch is currently checked out in this context, reset the working tree
-			current := e.CurrentBranch()
+			current := e.CurrentBranch(ctx)
 			if current != nil && current.GetName() == branchName {
 				if err := e.git.HardReset(ctx, "HEAD"); err != nil {
 					return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to reset working tree for frozen branch %s: %w", branchName, err)
@@ -544,7 +544,7 @@ func (e *engineImpl) restackBranch(
 
 		// Capture the old parent in merged history (best-effort, don't fail on error).
 		// appendMergedDownstack reads fresh from disk and updates metaMap.
-		_ = e.appendMergedDownstack(branchName, oldParent, snap.meta)
+		_ = e.appendMergedDownstack(ctx, branchName, oldParent, snap.meta)
 
 		// SetParent + appendMergedDownstack bumped the metadata ref. Refresh
 		// the cached SHA so the later optimistic-locking UpdateRefs

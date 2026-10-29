@@ -271,7 +271,7 @@ func BenchmarkGetConfig(b *testing.B) {
 	br := newBenchRepo(b, 1, 0)
 	br.runGit(b, "config", "stackit.bench.key", "bench-value")
 	for b.Loop() {
-		if _, err := br.runner.GetConfig("stackit.bench.key"); err != nil {
+		if _, err := br.runner.GetConfig(b.Context(), "stackit.bench.key"); err != nil {
 			b.Fatalf("GetConfig: %v", err)
 		}
 	}

@@ -67,7 +67,7 @@ func (e *engineImpl) MergeMultiple(ctx context.Context, branches []string, opts 
 func (e *engineImpl) FetchRemote(ctx context.Context, req RemoteFetchRequest) error {
 	remote := req.Remote
 	if remote == "" {
-		remote = e.GetRemote()
+		remote = e.GetRemote(ctx)
 	}
 
 	refspecs := make([]string, 0, len(req.Branches)+2)
@@ -118,7 +118,7 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	// move the main worktree off the target branch. The git layer refuses to
 	// raw-delete any checked-out branch, so relying on stale cached state here
 	// would turn a recoverable current-branch delete into an error.
-	e.CurrentBranch()
+	e.CurrentBranch(ctx)
 
 	// Get children and parent info under lock, then release for SetParent calls
 	e.mu.Lock()
@@ -149,7 +149,7 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	for i, child := range children {
 		moves[i] = BranchParentMove{Branch: child, NewParent: parent}
 	}
-	if err := e.validateLinearParentMovesAfterRemovals(moves, []string{branchName}); err != nil {
+	if err := e.validateLinearParentMovesAfterRemovals(ctx, moves, []string{branchName}); err != nil {
 		return err
 	}
 
@@ -181,7 +181,7 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	// Rebuild engine state from disk so callers don't need to track when to call
 	// eng.Rebuild() themselves. After this returns, GetBranch/GetParent/children
 	// reflect the post-deletion state across all cached relationships.
-	if err := e.rebuild(); err != nil {
+	if err := e.rebuild(ctx); err != nil {
 		return fmt.Errorf("deleted branch %s but failed to rebuild engine state: %w", branchName, err)
 	}
 
@@ -237,7 +237,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 
 	// Keep e.currentBranch aligned with the real repository before deciding
 	// whether the batch includes HEAD.
-	e.CurrentBranch()
+	e.CurrentBranch(ctx)
 
 	e.mu.Lock()
 	trunkName := e.trunk
@@ -272,7 +272,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 			allSurvivingChildren[child] = true
 		}
 	}
-	if err := e.validateLinearParentMovesAfterRemovals(moves, branches.Names()); err != nil {
+	if err := e.validateLinearParentMovesAfterRemovals(ctx, moves, branches.Names()); err != nil {
 		return nil, err
 	}
 
@@ -325,7 +325,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 
 	// Rebuild engine state from disk so callers don't need to track when to
 	// call eng.Rebuild() themselves. One rebuild covers the entire batch.
-	if rebuildErr := e.rebuild(); rebuildErr != nil {
+	if rebuildErr := e.rebuild(ctx); rebuildErr != nil {
 		return childrenToRestack, fmt.Errorf("deleted branches but failed to rebuild engine state: %w", rebuildErr)
 	}
 
@@ -398,7 +398,7 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 
 	// Best-effort metadata-ref rename. The branch rename already succeeded;
 	// orphaned refs are reconciled by `sync`.
-	_ = e.metadata.RenameMetadata(oldName, newName)
+	_ = e.metadata.RenameMetadata(ctx, oldName, newName)
 
 	oldLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, oldName)
 	newLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, newName)
@@ -430,5 +430,5 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 	}
 
 	// Rebuild in-memory state to be safe
-	return e.rebuild()
+	return e.rebuild(ctx)
 }

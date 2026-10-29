@@ -128,9 +128,9 @@ func createGitHubClient(ctx context.Context, hostname, token string) (*github.Cl
 // getRemoteRepository gets the hosted repository identity from the default
 // Git remote. GitHub-specific callers retain their established error messages
 // while sharing the canonical parser in the git package.
-func getRemoteRepository(_ context.Context, runner GitCommandRunner) (git.RemoteRepository, error) {
+func getRemoteRepository(ctx context.Context, runner GitCommandRunner) (git.RemoteRepository, error) {
 	// Get remote URL
-	remoteURL, err := runner.GetConfig("remote.origin.url")
+	remoteURL, err := runner.GetConfig(ctx, "remote.origin.url")
 	if err != nil {
 		return git.RemoteRepository{}, fmt.Errorf("failed to get remote URL: %w", err)
 	}

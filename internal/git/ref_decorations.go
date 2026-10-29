@@ -24,10 +24,10 @@ type RefDecoration struct {
 // than lean on for-each-ref's refname order (which only happens to put "heads"
 // before "tags" lexically) so the grouping survives reordered ref args or a new
 // namespace like refs/remotes.
-func (r *runner) RefDecorations() (map[string][]RefDecoration, error) {
+func (r *runner) RefDecorations(ctx context.Context) (map[string][]RefDecoration, error) {
 	// %(*objectname) is empty for lightweight tags and branch heads, and the
 	// wrapped commit SHA for annotated tags. Prefer it when present.
-	refs, err := r.forEachRef(context.Background(),
+	refs, err := r.forEachRef(ctx,
 		[]string{atomRefName, atomObjectName, "*" + atomObjectName},
 		"refs/heads", "refs/tags",
 	)

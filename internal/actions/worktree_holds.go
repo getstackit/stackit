@@ -88,14 +88,14 @@ func CollectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
 // ManagedWorktreeSource is the engine surface ManagedWorktreeHolds needs.
 type ManagedWorktreeSource interface {
 	ManagedWorktreeInspector
-	ListManagedWorktrees() ([]engine.WorktreeInfo, error)
+	ListManagedWorktrees(ctx context.Context) ([]engine.WorktreeInfo, error)
 }
 
 // ManagedWorktreeHolds returns a stack-scoped hold for every managed worktree
 // whose checkout cannot be safely reset, in registry order. sync's --dry-run
 // preview calls it directly so the preview cannot promise work the run skips.
 func ManagedWorktreeHolds(ctx context.Context, eng ManagedWorktreeSource) ([]RestackWorktreeHold, error) {
-	managed, err := eng.ListManagedWorktrees()
+	managed, err := eng.ListManagedWorktrees(ctx)
 	if err != nil {
 		return nil, err
 	}

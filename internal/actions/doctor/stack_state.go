@@ -19,7 +19,7 @@ type stackStateEngine interface {
 	AllBranches() engine.Branches
 	GetAllBranchNames(ctx context.Context) ([]string, error)
 	BatchIsBranchEmpty(branchNames []string) engine.BranchNameSet
-	ListMetadataRefs() (map[string]string, error)
+	ListMetadataRefs(ctx context.Context) (map[string]string, error)
 	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
 	DeleteMetadataRefsBatch(ctx context.Context, branchNames []string) error
 }
@@ -35,7 +35,7 @@ func checkStackState(ctx context.Context, eng stackStateEngine, handler Handler,
 	}
 
 	// Get all metadata refs
-	metadataRefs, err := eng.ListMetadataRefs()
+	metadataRefs, err := eng.ListMetadataRefs(ctx)
 	if err != nil {
 		errors++
 		handler.OnCheck("metadata_list", CheckError, fmt.Sprintf("failed to get metadata refs: %v", err))

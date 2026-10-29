@@ -27,7 +27,7 @@ type Options struct {
 type foldEngine interface {
 	validation.GitOperationEngine
 	Trunk() engine.Branch
-	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
 	GetRevision(branch engine.Branch) (string, error)
 	GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error)
 	ShowDiff(ctx context.Context, rr git.RevRange, format git.DiffFormat) (string, error)
@@ -116,7 +116,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if err := validation.GitOperationChain(gctx, eng, "fold").Validate(); err != nil {
 		return err
 	}
-	currentBranch := eng.CurrentBranch().GetName()
+	currentBranch := eng.CurrentBranch(ctx.Context).GetName()
 	currentBranchObj := eng.GetBranch(currentBranch)
 
 	// Get parent branch

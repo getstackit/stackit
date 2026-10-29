@@ -62,6 +62,6 @@ func (h *SyncHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Unmanaged (local) repo: re-read on-disk refs without fetching, so the
 	// operator's working tree HEAD is never touched.
-	entry.Refresh()
+	entry.Refresh(r.Context())
 	w.WriteHeader(http.StatusNoContent)
 }

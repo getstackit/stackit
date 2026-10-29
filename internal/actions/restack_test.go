@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -108,7 +109,7 @@ func TestRestackAction(t *testing.T) {
 			})
 
 		originalNewWorktreeEngine := newWorktreeEngine
-		newWorktreeEngine = func(engine.WorktreeEngineOptions) (engine.Engine, error) {
+		newWorktreeEngine = func(context.Context, engine.WorktreeEngineOptions) (engine.Engine, error) {
 			return nil, errors.New("boom")
 		}
 		t.Cleanup(func() {
@@ -288,7 +289,7 @@ func TestConflictedStack(t *testing.T) {
 		})
 
 	eng := s.Context.Engine
-	group := restackPlannedGroup{sortedBranches: eng.SortBranchesTopologically(
+	group := restackPlannedGroup{sortedBranches: eng.SortBranchesTopologically(t.Context(),
 		engine.BranchesFromNames(eng, []string{"a", "a-child", "b"}),
 	)}
 

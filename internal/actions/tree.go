@@ -108,14 +108,14 @@ type TreeJSONRequest struct {
 // gh may be nil when GitHub is unavailable. Short views never use it, so
 // callers should not construct a client for them.
 func BuildTreeJSON(ctx context.Context, eng engine.Engine, gh github.Client, req TreeJSONRequest) TreeJSONResult {
-	currentBranch := eng.CurrentBranch()
+	currentBranch := eng.CurrentBranch(ctx)
 	currentBranchName := ""
 	if currentBranch != nil {
 		currentBranchName = currentBranch.GetName()
 	}
 
 	// Build stack graph
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	// Scoped views (--stack, --steps) arrive with the branch set already
 	// resolved by the adapter; everything else reports every tracked branch.

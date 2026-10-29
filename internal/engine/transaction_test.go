@@ -438,7 +438,7 @@ func TestTransaction_ConcurrentModification(t *testing.T) {
 	meta2 := git.NewMetaFrom(git.MetaFields{
 		LockReason: git.LockReasonConsolidating,
 	})
-	err = s.Metadata.WriteMetadata("feature-1", meta2)
+	err = s.Metadata.WriteMetadata(t.Context(), "feature-1", meta2)
 	require.NoError(t, err)
 
 	// Now try to commit - should fail due to CAS mismatch
@@ -467,7 +467,7 @@ func TestTransaction_ConcurrentModificationLocalMeta(t *testing.T) {
 
 	// First, write initial local metadata so there's a ref to capture
 	initialMeta := &git.LocalMeta{Frozen: false}
-	err = s.Metadata.WriteLocalMetadata("feature-1", initialMeta)
+	err = s.Metadata.WriteLocalMetadata(t.Context(), "feature-1", initialMeta)
 	require.NoError(t, err)
 
 	// Begin transaction and stage a local metadata update (captures initial SHA)
@@ -479,7 +479,7 @@ func TestTransaction_ConcurrentModificationLocalMeta(t *testing.T) {
 
 	// Simulate another process modifying the local metadata with DIFFERENT content
 	localMeta2 := &git.LocalMeta{Frozen: false, NeedsPRBodyUpdate: true}
-	err = s.Metadata.WriteLocalMetadata("feature-1", localMeta2)
+	err = s.Metadata.WriteLocalMetadata(t.Context(), "feature-1", localMeta2)
 	require.NoError(t, err)
 
 	// Now try to commit - should fail due to CAS mismatch
@@ -519,12 +519,12 @@ func TestRestackKeepsMetadataWritesCompareAndSwap(t *testing.T) {
 			scope := "blind"
 			blind := restacked.WithScope(&scope)
 			if !otherProcessWrites {
-				require.NoError(t, s.Metadata.WriteMetadata("feature", blind))
+				require.NoError(t, s.Metadata.WriteMetadata(t.Context(), "feature", blind))
 				return
 			}
 			theirs := "theirs"
-			require.NoError(t, other.WriteMetadata("feature", restacked.WithScope(&theirs)))
-			require.ErrorContains(t, s.Metadata.WriteMetadata("feature", blind), "another process changed it")
+			require.NoError(t, other.WriteMetadata(t.Context(), "feature", restacked.WithScope(&theirs)))
+			require.ErrorContains(t, s.Metadata.WriteMetadata(t.Context(), "feature", blind), "another process changed it")
 		})
 	}
 }
@@ -564,7 +564,7 @@ func TestWithRetry_RetriesOnConcurrentModification(t *testing.T) {
 			if attemptCount <= maxFailures {
 				scope := fmt.Sprintf("conflict-%d", attemptCount)
 				otherMeta := git.NewMetaFrom(git.MetaFields{Scope: &scope})
-				if writeErr := s.Metadata.WriteMetadata("feature-1", otherMeta); writeErr != nil {
+				if writeErr := s.Metadata.WriteMetadata(t.Context(), "feature-1", otherMeta); writeErr != nil {
 					return writeErr
 				}
 			}
@@ -609,7 +609,7 @@ func TestWithRetry_ExhaustsRetries(t *testing.T) {
 			// Always cause concurrent modification with unique content - never succeed
 			scope := fmt.Sprintf("conflict-%d", attemptCount)
 			otherMeta := git.NewMetaFrom(git.MetaFields{Scope: &scope})
-			if writeErr := s.Metadata.WriteMetadata("feature-1", otherMeta); writeErr != nil {
+			if writeErr := s.Metadata.WriteMetadata(t.Context(), "feature-1", otherMeta); writeErr != nil {
 				return writeErr
 			}
 
@@ -804,7 +804,7 @@ func TestTransaction_DeleteLocalMeta(t *testing.T) {
 
 	// Write local metadata first
 	localMeta := &git.LocalMeta{Frozen: true}
-	require.NoError(t, s.Metadata.WriteLocalMetadata("feature-1", localMeta))
+	require.NoError(t, s.Metadata.WriteLocalMetadata(t.Context(), "feature-1", localMeta))
 
 	// Verify it exists
 	readMeta, err := s.Metadata.ReadLocalMetadata(t.Context(), "feature-1").One()

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getstackit/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/term"
 )
 
 // parsedOutputConfig overrides user config that injects extra text into output
@@ -83,7 +83,7 @@ func (r *runner) RunGH(ctx context.Context, args ...string) (string, error) {
 // RunInteractive runs git attached to the terminal, for commands that open an
 // editor or prompt (rebase -i, add -p). It refuses in non-interactive mode.
 func (r *runner) RunInteractive(ctx context.Context, args ...string) error {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return fmt.Errorf("interactive git command %q not allowed in non-interactive mode", strings.Join(args, " "))
 	}
 	c := gitCommand(args...)
@@ -163,7 +163,7 @@ func (r *runner) exec(ctx context.Context, c command) (string, error) {
 	case outputStream:
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
-		if utils.IsInteractive() {
+		if term.IsInteractive() {
 			cmd.Stdout = io.MultiWriter(os.Stdout, &stdout)
 			cmd.Stderr = io.MultiWriter(os.Stderr, &stderr)
 		}

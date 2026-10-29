@@ -5,11 +5,12 @@ import (
 	stdruntime "runtime"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/rerere"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // RestackConflictPolicy controls what RunRestack does when a branch conflicts.
@@ -210,7 +211,7 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 		return err
 	}
 
-	err := utils.RunAll(groups, numJobs, func(group restackPlannedGroup) error {
+	err := workpool.RunAll(groups, numJobs, func(group restackPlannedGroup) error {
 		// Create a temporary worktree for this group. PruneSkip because we
 		// pruned once above and don't want N workers racing on prune.
 		wtPath, cleanup, err := eng.CreateTemporaryWorktree(ctx.Context, eng.Trunk().GetName(), "stackit-restack-*", engine.WorktreePruneSkip)

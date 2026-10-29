@@ -7,9 +7,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/term"
+
+	"github.com/getstackit/stackit/internal/xslices"
+
 	stackiterrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/tui"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 var (
@@ -45,7 +48,7 @@ func selectInstallTargets(baseDir string, formats []string) ([]agentInstallTarge
 		},
 		preSelected,
 	)
-	if errors.Is(err, tui.ErrInteractiveDisabled) {
+	if errors.Is(err, term.ErrInteractiveDisabled) {
 		fallback := make([]agentSkillFormat, 0, 2)
 		if hasClaudeDir {
 			fallback = append(fallback, agentSkillFormatClaude)
@@ -83,7 +86,7 @@ func confirmOverwriteIfNeeded(baseDir string, targets []agentInstallTarget, forc
 	}
 
 	confirmed, err := promptOverwriteExistingInstallations(existing, version)
-	if errors.Is(err, tui.ErrInteractiveDisabled) {
+	if errors.Is(err, term.ErrInteractiveDisabled) {
 		var hasConflict bool
 		for _, target := range targets {
 			if err := checkExistingInstallation(baseDir, target.format, version, out); err != nil {
@@ -170,7 +173,7 @@ func parseSelectedFormatLabels(selected []string) ([]agentSkillFormat, error) {
 			return nil, fmt.Errorf("unsupported selected format label %q", label)
 		}
 	}
-	return utils.Unique(formats), nil
+	return xslices.Unique(formats), nil
 }
 
 func parseAgentSkillFormats(rawValues []string) ([]agentSkillFormat, error) {
@@ -192,7 +195,7 @@ func parseAgentSkillFormats(rawValues []string) ([]agentSkillFormat, error) {
 	if len(formats) == 0 {
 		return nil, errors.New("at least one format must be provided")
 	}
-	return utils.Unique(formats), nil
+	return xslices.Unique(formats), nil
 }
 
 func parseAgentSkillFormat(raw string) (agentSkillFormat, error) {
@@ -257,7 +260,7 @@ func promptAndInstallWorkflowBlock(repoRoot string, force bool) (bool, string, e
 			},
 			0,
 		)
-		if errors.Is(err, stackiterrors.ErrCanceled) || errors.Is(err, tui.ErrInteractiveDisabled) {
+		if errors.Is(err, stackiterrors.ErrCanceled) || errors.Is(err, term.ErrInteractiveDisabled) {
 			// User canceled or non-interactive mode - skip silently
 			return false, "", nil
 		}
@@ -275,7 +278,7 @@ func promptAndInstallWorkflowBlock(repoRoot string, force bool) (bool, string, e
 			fmt.Sprintf("Add stacking workflow block to %s?", claude.name),
 			false,
 		)
-		if errors.Is(err, stackiterrors.ErrCanceled) || errors.Is(err, tui.ErrInteractiveDisabled) {
+		if errors.Is(err, stackiterrors.ErrCanceled) || errors.Is(err, term.ErrInteractiveDisabled) {
 			return false, "", nil
 		}
 		if err != nil {
@@ -292,7 +295,7 @@ func promptAndInstallWorkflowBlock(repoRoot string, force bool) (bool, string, e
 			fmt.Sprintf("Add stacking workflow block to %s?", agents.name),
 			false,
 		)
-		if errors.Is(err, stackiterrors.ErrCanceled) || errors.Is(err, tui.ErrInteractiveDisabled) {
+		if errors.Is(err, stackiterrors.ErrCanceled) || errors.Is(err, term.ErrInteractiveDisabled) {
 			return false, "", nil
 		}
 		if err != nil {
@@ -309,7 +312,7 @@ func promptAndInstallWorkflowBlock(repoRoot string, force bool) (bool, string, e
 			"No CLAUDE.md or AGENTS.md found. Create CLAUDE.md with stacking workflow block?",
 			false,
 		)
-		if errors.Is(err, stackiterrors.ErrCanceled) || errors.Is(err, tui.ErrInteractiveDisabled) {
+		if errors.Is(err, stackiterrors.ErrCanceled) || errors.Is(err, term.ErrInteractiveDisabled) {
 			return false, "", nil
 		}
 		if err != nil {

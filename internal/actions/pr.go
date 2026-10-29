@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/getstackit/stackit/internal/browser"
+
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // OpenPROptions configures which pull request to open.
@@ -25,13 +26,13 @@ type OpenPROptions struct {
 // openBrowser is the function OpenPRAction uses to open a URL in the user's
 // default browser. Overridable via SetBrowserOpener so tests don't launch
 // real browser windows.
-var openBrowser = utils.OpenBrowser
+var openBrowser = browser.Open
 
 // SetBrowserOpener overrides the function OpenPRAction uses to open a URL in
 // the browser. Intended for tests; pass nil to restore the default.
 func SetBrowserOpener(fn func(url string) error) {
 	if fn == nil {
-		fn = utils.OpenBrowser
+		fn = browser.Open
 	}
 	openBrowser = fn
 }

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -408,7 +410,7 @@ func (m *DirectionSelectModel) Back() bool {
 
 // PromptDirectionSelect shows an interactive direction selector and returns the chosen direction
 func PromptDirectionSelect(ctx context.Context, eng engine.StackView, currentBranch, parentBranch string, children []string) (Direction, error) {
-	if err := CheckInteractiveAllowed(); err != nil {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return "", err
 	}
 

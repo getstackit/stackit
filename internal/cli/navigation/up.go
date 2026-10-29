@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -14,7 +16,6 @@ import (
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/tui/style"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewUpCmd creates the up command
@@ -131,7 +132,7 @@ the --to flag is used to specify a target branch to navigate towards.`,
 }
 
 func promptForChild(children []string, parent string) (string, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return "", fmt.Errorf("multiple children found for %s; use --to or move in interactive mode", parent)
 	}
 

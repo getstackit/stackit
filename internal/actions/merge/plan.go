@@ -7,13 +7,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Strategy defines how PRs in the stack should be merged
@@ -330,7 +331,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 		indices[i] = i
 	}
 
-	utils.RunWithWorkers(indices, github.MaxGitHubConcurrency, func(idx int) {
+	workpool.RunN(indices, github.MaxGitHubConcurrency, func(idx int) {
 		name := allBranches[idx]
 
 		// Get PR info from batch-loaded metadata
@@ -476,7 +477,7 @@ func formatBranchRemoteDifference(status engine.BranchRemoteStatus) string {
 		return "(branch not found locally)"
 	}
 
-	localShort := utils.ShortRevision(status.LocalSha, 0)
+	localShort := git.ShortRevision(status.LocalSha, 0)
 	if status.RemoteSha == "" {
 		return fmt.Sprintf("local: %s (branch not found on remote)", localShort)
 	}
@@ -484,7 +485,7 @@ func formatBranchRemoteDifference(status engine.BranchRemoteStatus) string {
 		return ""
 	}
 
-	remoteShort := utils.ShortRevision(status.RemoteSha, 0)
+	remoteShort := git.ShortRevision(status.RemoteSha, 0)
 	switch {
 	case status.Behind():
 		return fmt.Sprintf("local is behind remote (local: %s, remote: %s)", localShort, remoteShort)

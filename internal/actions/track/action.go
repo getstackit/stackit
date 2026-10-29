@@ -5,11 +5,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Options contains options for the track command
@@ -222,7 +223,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 		}
 
 		isChild := make([]bool, len(candidates))
-		utils.Run(candidates, func(item indexedCandidate) {
+		workpool.Run(candidates, func(item indexedCandidate) {
 			mergeBase, err := eng.GetMergeBase(ctx.Context, item.candidate.GetName(), branchName)
 			if err != nil {
 				return

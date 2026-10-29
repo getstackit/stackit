@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/demo"
 
 	"github.com/getstackit/stackit/internal/actions/handler"
@@ -23,7 +25,6 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // DefaultRemoteOperationTimeout bounds explicit remote operations launched by
@@ -164,7 +165,7 @@ func (c *Context) RequireGitHub() (github.Client, error) {
 }
 
 // Prompts returns the adapter-supplied prompter, or a non-interactive one
-// whose prompts fail with utils.ErrInteractiveDisabled when none was set.
+// whose prompts fail with term.ErrInteractiveDisabled when none was set.
 func (c *Context) Prompts() handler.Prompter {
 	if c.Prompter == nil {
 		return handler.NonInteractivePrompter{}
@@ -300,7 +301,7 @@ func NewContext(eng engine.Engine, opts ...ContextOption) *Context {
 	}
 
 	// Update global TUI interactivity
-	utils.SetInteractive(options.global.Interactive)
+	term.SetInteractive(options.global.Interactive)
 
 	// Create console output
 	consoleOutput := output.NewConsoleOutput(options.writer, options.global.Debug)
@@ -341,7 +342,7 @@ func NewContext(eng engine.Engine, opts ...ContextOption) *Context {
 
 // NewContextAutoWithWriter is like NewContextAuto but allows specifying the output writer.
 func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalOptions, writer io.Writer) (*Context, error) {
-	if utils.IsDemoMode() {
+	if demo.Enabled() {
 		eng, ghRunner, err := demo.NewDemoEngine(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("demo engine: %w", err)
@@ -432,7 +433,7 @@ func GetContext(ctx context.Context, opts GlobalOptions) (*Context, error) {
 // GetContextWithWriter is like GetContext but allows specifying the output writer.
 func GetContextWithWriter(ctx context.Context, opts GlobalOptions, writer io.Writer) (*Context, error) {
 	// Check for demo mode first
-	if utils.IsDemoMode() {
+	if demo.Enabled() {
 		return NewContextAutoWithWriter(ctx, "", opts, writer)
 	}
 

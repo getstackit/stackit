@@ -7,6 +7,9 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/branchname"
+	"github.com/getstackit/stackit/internal/term"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/getstackit/stackit/internal/actions/handler"
@@ -20,14 +23,13 @@ import (
 	"github.com/getstackit/stackit/internal/tui"
 	splitcomp "github.com/getstackit/stackit/internal/tui/components/split"
 	"github.com/getstackit/stackit/internal/tui/style"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewSplitUI creates a runner and handler pair for split operations.
 // The runner manages terminal state; the handler processes events.
 // Caller must defer runner.Cleanup() to restore terminal on exit.
 func NewSplitUI(out output.Output, logger output.Logger) (*tui.Runner, split.Handler) {
-	if utils.IsInteractive() {
+	if term.IsInteractive() {
 		handler := NewTUISplitHandler(out, logger)
 		return nil, handler
 	}
@@ -121,7 +123,7 @@ func (h *TUISplitHandler) IsInteractive() bool {
 // PromptSplitType asks the user to choose between available split types.
 // Uses the unified split model's type selection state.
 func (h *TUISplitHandler) PromptSplitType(ctx context.Context, availableTypes []split.TypeChoice) (split.Style, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return "", errors.ErrCanceled
 	}
 
@@ -166,7 +168,7 @@ func (h *TUISplitHandler) PromptSplitType(ctx context.Context, availableTypes []
 // PromptDirection asks the user where to place the new branch using an interactive tree view.
 // Uses the unified split model's direction selection state.
 func (h *TUISplitHandler) PromptDirection(ctx context.Context, dirCtx split.DirectionContext) (split.Direction, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return "", errors.ErrCanceled
 	}
 
@@ -191,7 +193,7 @@ func (h *TUISplitHandler) ShowHunkSummary(diff string) {
 // PromptCommitMessage asks the user to enter or edit a commit message.
 // Uses Pause/Resume if a runner is active to release the terminal for the editor.
 func (h *TUISplitHandler) PromptCommitMessage(defaultMsg string) (string, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return defaultMsg, nil
 	}
 
@@ -205,13 +207,13 @@ func (h *TUISplitHandler) PromptCommitMessage(defaultMsg string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	return utils.CleanCommitMessage(msg), nil
+	return editor.CleanMessage(msg), nil
 }
 
 // PromptCommitMessageWithContext prompts for commit message with full context displayed.
 // Uses an inline textarea editor that shows the split context (files, direction, etc.).
 func (h *TUISplitHandler) PromptCommitMessageWithContext(ctx split.CommitMessageContext) (string, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		// In non-interactive mode, generate a sensible default
 		return splitcomp.GenerateDefaultCommitMessage(ctx.Files, ctx.OriginalCommitMessage), nil
 	}
@@ -251,7 +253,7 @@ func (h *TUISplitHandler) PromptCommitMessageWithContext(ctx split.CommitMessage
 
 // PromptBranchName asks the user to enter a branch name
 func (h *TUISplitHandler) PromptBranchName(defaultName string, sessionNames []string, allBranchNames *engine.BranchSet, originalBranchName string) (string, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return defaultName, nil
 	}
 
@@ -279,7 +281,7 @@ func (h *TUISplitHandler) PromptBranchName(defaultName string, sessionNames []st
 	}
 
 	// Validate: check for invalid characters and Git branch name rules
-	if err := utils.ValidateBranchName(branchName); err != nil {
+	if err := branchname.Validate(branchName); err != nil {
 		return "", err
 	}
 
@@ -298,7 +300,7 @@ func (h *TUISplitHandler) PromptBranchName(defaultName string, sessionNames []st
 
 // PromptContinueOrCancel asks user whether to continue after no changes were staged
 func (h *TUISplitHandler) PromptContinueOrCancel() (bool, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return false, nil
 	}
 
@@ -323,7 +325,7 @@ func (h *TUISplitHandler) PromptContinueOrCancel() (bool, error) {
 
 // PromptEditCommitMessage asks whether the user wants to edit the commit message
 func (h *TUISplitHandler) PromptEditCommitMessage() (bool, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return false, nil
 	}
 
@@ -339,7 +341,7 @@ func (h *TUISplitHandler) PromptEditCommitMessage() (bool, error) {
 // PromptSelectHunks displays the hunk selector TUI and returns selected hunks.
 // This uses a separate full-screen tea.Program for the hunk selection.
 func (h *TUISplitHandler) PromptSelectHunks(hunks []git.Hunk) ([]git.Hunk, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return nil, errors.ErrCanceled
 	}
 

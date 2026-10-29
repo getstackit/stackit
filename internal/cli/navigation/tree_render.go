@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/term"
+	"github.com/getstackit/stackit/internal/workpool"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -16,7 +20,6 @@ import (
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/tui/components/tree"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // RunTree displays the branch tree: JSON, the interactive TUI, or the static
@@ -27,7 +30,7 @@ func RunTree(ctx *app.Context, opts actions.TreeOptions) error {
 		return printTreeJSON(ctx, opts)
 	}
 
-	if opts.Interactive || (utils.IsInteractive() && opts.Steps == nil) {
+	if opts.Interactive || (term.IsInteractive() && opts.Steps == nil) {
 		m := tui.NewTreeModel(ctx.Context, ctx.Engine, ctx.GitHub(), tui.TreeOptions{
 			Style:         string(opts.Style),
 			ShowUntracked: opts.ShowUntracked,
@@ -161,7 +164,7 @@ func buildTreeAnnotations(ctx *app.Context, opts actions.TreeOptions, visibleBra
 		items[i] = indexedBranch{index: i, branch: b}
 	}
 	built := make([]tree.BranchAnnotation, len(visibleBranches))
-	utils.Run(items, func(item indexedBranch) {
+	workpool.Run(items, func(item indexedBranch) {
 		name := item.branch.GetName()
 		if opts.Style != actions.TreeStyleShort {
 			built[item.index] = tui.TreeAnnotation(stackview.FullAnnotation(eng, item.branch, stats[name], enrichment, stackview.AnnotationOptions{
@@ -172,7 +175,7 @@ func buildTreeAnnotations(ctx *app.Context, opts actions.TreeOptions, visibleBra
 		// The short style has no stats; its SHA comes from the batched revisions.
 		annotation := tui.TreeAnnotation(stackview.MinimalAnnotation(eng, item.branch, worktrees))
 		if opts.ShowSHAs && revisions[name] != "" {
-			annotation.LocalSHA = utils.ShortRevision(revisions[name], 0)
+			annotation.LocalSHA = git.ShortRevision(revisions[name], 0)
 		}
 		built[item.index] = annotation
 	})

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"charm.land/lipgloss/v2"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -47,7 +49,7 @@ const skipReasonNoChanges = "no changes"
 // The runner manages terminal state; the handler processes events.
 // Caller must defer runner.Cleanup() to restore terminal on exit.
 func NewSubmitUI(out output.Output, logger output.Logger, verbosity SubmitVerbosity) (*tui.Runner, submit.Handler) {
-	if tui.IsTTY() {
+	if term.IsInteractive() {
 		model := submitComponent.NewModel(nil)
 		model.Verbose = verbosity.verbose()
 		runner := tui.NewRunner(model, out, logger)

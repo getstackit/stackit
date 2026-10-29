@@ -7,9 +7,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 var newWorktreeEngine = engine.NewEngineForWorktree
@@ -179,7 +180,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler RestackHandler) 
 		groups:         plan.groups,
 		ConflictPolicy: policy,
 		Prompter:       prompter,
-		PromptRerere:   ctx.Interactive && !ctx.Quiet && utils.IsTTY() && !opts.NonInteractive,
+		PromptRerere:   ctx.Interactive && !ctx.Quiet && term.IsInteractive() && !opts.NonInteractive,
 		Parallel:       parallelDispatch,
 		Jobs:           opts.Jobs,
 	}, handler)

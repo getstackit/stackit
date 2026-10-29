@@ -1,6 +1,7 @@
 package navigation
 
 import (
+	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -9,7 +10,6 @@ import (
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/cli/stack"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewBottomCmd creates the bottom command
@@ -34,7 +34,7 @@ it reaches the first branch that has trunk as its parent (or trunk itself).`,
 				opts.EngineLoadMode = &loadMode
 			}
 			return common.RunWithOptions(cmd, opts, func(ctx *app.Context) error {
-				handler := stack.NewNavigationUI(ctx.Output, utils.IsInteractive())
+				handler := stack.NewNavigationUI(ctx.Output, term.IsInteractive())
 				result, err := navigation.SwitchBranchAction(navigation.DirectionBottom, ctx, handler)
 				if err != nil {
 					return err

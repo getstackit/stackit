@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/actions"
 	handlerBase "github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // splitByFileEngine is a minimal interface needed for splitting by file
@@ -572,7 +573,7 @@ func filterHunksByFiles(hunks []git.Hunk, files []string) []git.Hunk {
 
 // promptForFiles shows an interactive file selector for split --by-file
 func promptForFiles(ctx context.Context, prompter handlerBase.MultiSelector, branchToSplit engine.Branch, eng splitByFileEngine, splog output.Output, asSibling bool, direction Direction) ([]string, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return nil, errors.New("file selection must be specified via pathspecs in non-interactive mode")
 	}
 	// Get the parent branch to compare against

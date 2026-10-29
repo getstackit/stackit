@@ -3,13 +3,14 @@ package branch
 import (
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/actions/create"
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/tui/style"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewCreateUI creates a runner and handler pair for create operations.
@@ -17,7 +18,7 @@ import (
 // Caller must defer runner.Cleanup() to restore terminal on exit.
 // Currently returns nil runner as there's no TUI component yet.
 func NewCreateUI(out output.Output, _ output.Logger) (*tui.Runner, create.Handler) {
-	if utils.IsInteractive() {
+	if term.IsInteractive() {
 		return nil, NewInteractiveCreateHandler(out)
 	}
 	return nil, NewSimpleCreateHandler(out)

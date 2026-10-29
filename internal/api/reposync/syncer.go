@@ -11,9 +11,10 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/api/provision"
 	"github.com/getstackit/stackit/internal/api/registry"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // ErrRepoNotManaged is returned by SyncRepo when no managed registry entry
@@ -85,7 +86,7 @@ func (s *Syncer) syncOnce(ctx context.Context) {
 	if len(managed) == 0 {
 		return
 	}
-	utils.RunWithWorkers(managed, s.workers, func(e *registry.RepoEntry) {
+	workpool.RunN(managed, s.workers, func(e *registry.RepoEntry) {
 		if ctx.Err() != nil {
 			return
 		}

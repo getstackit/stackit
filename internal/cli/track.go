@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions/track"
@@ -8,7 +9,6 @@ import (
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/cli/stack"
 	"github.com/getstackit/stackit/internal/errors"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // newTrackCmd creates the track command
@@ -34,7 +34,7 @@ This command can also be used to fix corrupted stackit metadata.`,
 				}
 
 				// Execute track action
-				handler := stack.NewTrackUI(ctx.Output, utils.IsInteractive())
+				handler := stack.NewTrackUI(ctx.Output, term.IsInteractive())
 				return track.Action(ctx, track.Options{
 					BranchName: branchName,
 					Force:      force,

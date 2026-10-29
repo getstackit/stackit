@@ -8,8 +8,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/branchname"
+
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // BranchPattern represents a branch name pattern with validation
@@ -76,7 +77,7 @@ func (p BranchPattern) GetBranchName(ctx GitContext, commitMessage string, scope
 	pattern := p.String()
 	if pattern == "" {
 		// If pattern is empty, just use the message (backward compatibility)
-		branchName := utils.GenerateBranchNameFromMessage(commitMessage)
+		branchName := branchname.FromMessage(commitMessage)
 		if branchName == "" {
 			return "", errors.New("failed to generate branch name from commit message")
 		}
@@ -91,14 +92,14 @@ func (p BranchPattern) GetBranchName(ctx GitContext, commitMessage string, scope
 				// If we can't get username, use empty string (will be sanitized)
 				return ""
 			}
-			return utils.SanitizeBranchName(username)
+			return branchname.Sanitize(username)
 		},
 		"{date}": git.GetCurrentDate,
 		"{message}": func() string {
-			return utils.GenerateBranchNameFromMessage(commitMessage)
+			return branchname.FromMessage(commitMessage)
 		},
 		"{scope}": func() string {
-			return utils.SanitizeBranchName(scope)
+			return branchname.Sanitize(scope)
 		},
 	}
 
@@ -112,7 +113,7 @@ func (p BranchPattern) GetBranchName(ctx GitContext, commitMessage string, scope
 	// Validate that pattern contains {message} placeholder
 	if !foundPlaceholders["{message}"] {
 		// Fallback to just the message if pattern doesn't contain {message}
-		branchName := utils.GenerateBranchNameFromMessage(commitMessage)
+		branchName := branchname.FromMessage(commitMessage)
 		if branchName == "" {
 			return "", errors.New("failed to generate branch name from commit message")
 		}
@@ -134,7 +135,7 @@ func (p BranchPattern) GetBranchName(ctx GitContext, commitMessage string, scope
 	}
 
 	// Sanitize the final result
-	branchName := utils.SanitizeBranchName(result)
+	branchName := branchname.Sanitize(result)
 	if branchName == "" {
 		return "", errors.New("failed to generate branch name from commit message")
 	}

@@ -99,7 +99,8 @@ internal/
 ├── git/           Low-level git operations
 ├── tui/           Terminal UI components (see docs/tui.md)
 ├── config/        Configuration system (see docs/config.md)
-└── utils/         Shared utilities
+├── term/          Terminal detection and interactive mode
+└── workpool/      Bounded worker pools (Run, RunN, RunAll)
 api/openapi/       API contract source of truth
 ```
 

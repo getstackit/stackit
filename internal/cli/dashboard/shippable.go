@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
-	"github.com/getstackit/stackit/internal/tui"
 )
 
 // RunShippable starts the shippable work dashboard.
 func RunShippable(ctx *app.Context, opts ShippableOptions) error {
-	if !tui.IsTTY() {
+	if !term.IsInteractive() {
 		return errors.New("dashboard requires an interactive terminal")
 	}
 

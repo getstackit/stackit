@@ -11,7 +11,6 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // MapperReader is the engine surface the mappers read beyond their batched
@@ -300,7 +299,7 @@ func MapTrunkCommits(commits []git.RecentCommit, prTitles map[git.PRNumber]strin
 		// Message substitution and constituent-title selection are shared with
 		// the `stackit log` command via internal/git.
 		resp := TrunkCommitResponse{
-			SHA:           utils.ShortRevision(c.SHA, 0),
+			SHA:           git.ShortRevision(c.SHA, 0),
 			Message:       c.DisplayMessage(prTitles),
 			Author:        c.Author,
 			Date:          c.Date.Format(time.RFC3339),

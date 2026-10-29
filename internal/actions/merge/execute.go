@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
@@ -13,7 +15,6 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // MergeMethodConfig reads and persists the repository's merge.method setting.
@@ -74,7 +75,7 @@ func GetMergeMethod(ctx *app.Context, cfg MergeMethodConfig, githubClient github
 	}
 
 	// Check if interactive mode is available
-	if err := utils.CheckInteractiveAllowed(); err != nil {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		// Non-interactive mode: use the first allowed option
 		method := github.MergeMethod(options[0].Value)
 		return persistMergeMethod(ctx, cfg, method, "Using merge method: %s (auto-selected in non-interactive mode)")
@@ -330,7 +331,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		switch pullResult {
 		case engine.PullDone:
 			rev, _ := trunk.GetRevision()
-			revShort := utils.ShortRevision(rev, 0)
+			revShort := git.ShortRevision(rev, 0)
 			out.Debug("Trunk fast-forwarded to %s", revShort)
 		case engine.PullUnneeded:
 			out.Debug("Trunk is up to date")

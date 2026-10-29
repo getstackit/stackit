@@ -10,11 +10,12 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 const executionCompleteMsg = "Execution complete"
@@ -430,7 +431,7 @@ func runBranchesInWorktrees(ctx *app.Context, opts Options, branches engine.Bran
 	runCtx, cancel := context.WithCancel(ctx.Context)
 	defer cancel()
 
-	utils.RunWithWorkers(branches.All(), numJobs, func(branch engine.Branch) {
+	workpool.RunN(branches.All(), numJobs, func(branch engine.Branch) {
 		select {
 		case <-runCtx.Done():
 			return

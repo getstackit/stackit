@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getstackit/stackit/internal/timeutil"
+
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 const (
@@ -263,7 +264,7 @@ func getMergeableStateWithRetry(ctx context.Context, runner github.GitCommandRun
 			return state, nil
 		}
 		if attempt < maxAttempts-1 {
-			if err := utils.SleepContext(ctx, retryDelay); err != nil {
+			if err := timeutil.Sleep(ctx, retryDelay); err != nil {
 				return nil, err
 			}
 		}

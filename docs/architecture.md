@@ -52,7 +52,7 @@ on the narrow interfaces in `internal/actions/handler` (`Confirmer`,
 `Selector`, `TextInputPrompter`, `MultiSelector`). Actions that take
 `*app.Context` reach the adapter's implementation through `ctx.Prompts()`,
 which falls back to a non-interactive prompter (every prompt returns
-`utils.ErrInteractiveDisabled`) when no adapter set `ctx.Prompter`; the CLI
+`term.ErrInteractiveDisabled`) when no adapter set `ctx.Prompter`; the CLI
 sets `common.TUIPrompter`. Whole-screen interactive flows (e.g. the move
 target picker, the reorder editor) live in the adapter and hand the action
 its result or implement an action-defined interface such as

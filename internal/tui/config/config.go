@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/config"
 	sterrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/github"
@@ -15,7 +17,7 @@ import (
 
 // TUIAction provides an interactive TUI for editing configuration
 func TUIAction(repoRoot string) error {
-	if err := tui.CheckInteractiveAllowed(); err != nil {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return err
 	}
 	out := output.NewDefaultOutput()
@@ -230,7 +232,7 @@ func TUIAction(repoRoot string) error {
 // canceled, or prompts are disabled), which returns to the menu rather than
 // failing the whole config session.
 func promptSkipped(err error) bool {
-	return errors.Is(err, tui.ErrInteractiveDisabled) ||
+	return errors.Is(err, term.ErrInteractiveDisabled) ||
 		errors.Is(err, sterrors.ErrCanceled) ||
 		errors.Is(err, context.Canceled)
 }

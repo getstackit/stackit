@@ -8,7 +8,6 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 func syncFetchedTrunk(ctx *app.Context, opts *Options, handler Handler, summary *Summary) error {
@@ -51,7 +50,7 @@ func handleTrunkPullResult(ctx *app.Context, opts *Options, handler Handler, sum
 	case engine.PullDone:
 		trunk := nav.Trunk()
 		rev, _ := trunk.GetRevision()
-		revShort := utils.ShortRevision(rev, 0)
+		revShort := git.ShortRevision(rev, 0)
 		summary.TrunkUpdated = true
 		summary.TrunkRevision = revShort
 		handler.EmitEvent(Event{
@@ -83,7 +82,7 @@ func handleTrunkPullResult(ctx *app.Context, opts *Options, handler Handler, sum
 			ctx.Logger.Info("reset trunk to remote completed durationMs=%d", time.Since(resetStart).Milliseconds())
 			trunk := nav.Trunk()
 			rev, _ := trunk.GetRevision()
-			revShort := utils.ShortRevision(rev, 0)
+			revShort := git.ShortRevision(rev, 0)
 			summary.TrunkUpdated = true
 			summary.TrunkRevision = revShort
 			handler.EmitEvent(Event{

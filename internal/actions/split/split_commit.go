@@ -7,13 +7,14 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	handlerBase "github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // splitByCommitEngine is a minimal interface needed for splitting by commit
@@ -133,7 +134,7 @@ func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngi
 // Returns the index of the first commit to split off (commits 0..index-1 stay in current branch).
 // Returns len(commits) if user wants to keep all commits (no split).
 func selectSplitPoint(prompter handlerBase.Selector, readableCommits []string, branchToSplit string) (int, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return 0, errors.New("split point must be specified in non-interactive mode")
 	}
 
@@ -285,7 +286,7 @@ func groupRemainingCommits(
 // selectGroupSize prompts user to select how many commits to include in the next branch.
 // Returns the number of commits (1 to len(commits)).
 func selectGroupSize(prompter handlerBase.Selector, readableCommits []string) (int, error) {
-	if !utils.IsInteractive() {
+	if !term.IsInteractive() {
 		return len(readableCommits), nil // In non-interactive mode, group all remaining
 	}
 

@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // DiffStat is a branch's additions/deletions relative to its divergence point.
@@ -215,7 +214,7 @@ func (e *engineImpl) BatchBranchStats(branches Branches) map[string]BranchStat {
 	result := make(map[string]BranchStat, len(branches))
 	for _, branch := range branches {
 		rr := ranges[branch.GetName()]
-		stat := BranchStat{ShortSHA: utils.ShortRevision(rr.Head, 0)}
+		stat := BranchStat{ShortSHA: git.ShortRevision(rr.Head, 0)}
 		if count, ok := e.commitCountCache.Load(rr); ok {
 			stat.CommitCount = count.(int)
 		}

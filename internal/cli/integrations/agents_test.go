@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
@@ -602,7 +604,7 @@ func TestConfirmOverwriteIfNeeded(t *testing.T) {
 			promptConfirm = originalPromptConfirm
 		})
 		promptConfirm = func(_ string, _ bool) (bool, error) {
-			return false, tui.ErrInteractiveDisabled
+			return false, term.ErrInteractiveDisabled
 		}
 
 		var out bytes.Buffer
@@ -634,7 +636,7 @@ func TestConfirmOverwriteIfNeeded(t *testing.T) {
 			promptConfirm = originalPromptConfirm
 		})
 		promptConfirm = func(_ string, _ bool) (bool, error) {
-			return false, tui.ErrInteractiveDisabled
+			return false, term.ErrInteractiveDisabled
 		}
 
 		var out bytes.Buffer

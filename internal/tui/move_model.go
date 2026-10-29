@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
@@ -565,7 +567,7 @@ func (m *MoveModel) Result() MoveResult {
 
 // PromptMoveSelect runs the interactive move selection and returns the selection result.
 func PromptMoveSelect(ctx context.Context, eng engine.Engine, config MoveModelConfig) (MoveResult, error) {
-	if err := CheckInteractiveAllowed(); err != nil {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return MoveResult{}, err
 	}
 

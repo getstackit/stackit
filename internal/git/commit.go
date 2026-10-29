@@ -3,7 +3,7 @@ package git
 import (
 	"context"
 
-	"github.com/getstackit/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/term"
 )
 
 // CommitOptions contains options for creating a commit
@@ -48,7 +48,7 @@ func (r *runner) CommitWithOptions(ctx context.Context, opts CommitOptions) erro
 	}
 	// If we're in non-interactive mode, or if we have a message and aren't explicitly editing,
 	// use the streaming runner to show hook output while capturing for error handling.
-	if !utils.IsInteractive() || (opts.Message != "" && !opts.Edit) || (opts.Amend && opts.NoEdit) {
+	if !term.IsInteractive() || (opts.Message != "" && !opts.Edit) || (opts.Amend && opts.NoEdit) {
 		c := gitCommand(args...)
 		c.output = outputStream
 		_, err := r.exec(ctx, c)

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
@@ -18,7 +20,6 @@ import (
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/testhelpers"
 )
 
@@ -95,7 +96,7 @@ func newScenarioWithScene(t *testing.T, scene *testhelpers.Scene) *Scenario {
 	t.Helper()
 
 	// Force non-interactive mode for tests in the current process
-	tui.SetInteractive(false)
+	term.SetInteractive(false)
 
 	cfg, cfgErr := config.LoadConfig(scene.Dir)
 	trunk := cfg.Trunk()

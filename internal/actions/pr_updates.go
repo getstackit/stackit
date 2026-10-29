@@ -6,7 +6,7 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/pr"
-	"github.com/getstackit/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/workpool"
 )
 
 // UpdateStackPRMetadata updates PR titles and body footers for a list of branches
@@ -19,7 +19,7 @@ func UpdateStackPRMetadata(ctx *app.Context, branches []string) {
 	// GetPullRequest per branch, then update each in parallel.
 	current := FetchPRContentForBranches(ctx, branches)
 
-	utils.Run(branches, func(name string) {
+	workpool.Run(branches, func(name string) {
 		UpdateBranchPRMetadataWithContent(ctx, name, current)
 	})
 }

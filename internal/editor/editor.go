@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/getstackit/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/term"
 )
 
 // Resolve returns the user's preferred editor command.
@@ -30,7 +30,7 @@ func Resolve() (string, error) {
 	// non-interactive environments (like CI) while allowing tests to provide a
 	// non-interactive editor script via the environment.
 	if editor == "" {
-		if err := utils.CheckInteractiveAllowed(); err != nil {
+		if err := term.CheckInteractiveAllowed(); err != nil {
 			return "", err
 		}
 
@@ -72,7 +72,7 @@ func Open(initialContent, filenamePattern string) (string, error) {
 	}
 
 	// Open editor.
-	cmd, err := utils.BuildEditorCommand(editor, tmpFile.Name())
+	cmd, err := Command(editor, tmpFile.Name())
 	if err != nil {
 		return "", fmt.Errorf("failed to build editor command: %w", err)
 	}

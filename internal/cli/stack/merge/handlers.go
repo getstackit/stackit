@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	mergeAction "github.com/getstackit/stackit/internal/actions/merge"
 	sterrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
@@ -21,7 +23,7 @@ import (
 // The runner manages terminal state; the handler processes events.
 // Caller must defer runner.Cleanup() to restore terminal on exit.
 func NewMergeUI(out output.Output, logger output.Logger) (*tui.Runner, mergeAction.EventHandler) {
-	if tui.IsTTY() {
+	if term.IsInteractive() {
 		model := mergeComponent.NewModel()
 		runner := tui.NewRunner(model, out, logger)
 		runner.Start()

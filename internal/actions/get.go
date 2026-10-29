@@ -9,12 +9,13 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // GetPhase represents the current phase of the get operation
@@ -457,7 +458,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		}
 
 		var mu sync.Mutex
-		utils.Run(branchesToFetch, func(branchName string) {
+		workpool.Run(branchesToFetch, func(branchName string) {
 			if pr, err := ctx.GitHub().GetPullRequestByBranch(remoteCtx, branchName); err == nil && pr != nil {
 				prNum := pr.Number
 				// Keep the whole record, not just the number: get already paid

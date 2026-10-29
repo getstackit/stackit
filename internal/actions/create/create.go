@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/branchname"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/actions/validation"
@@ -15,7 +17,6 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Options contains options for the create command
@@ -389,7 +390,7 @@ func determineBranch(ctx *app.Context, opts *Options, commitMessage string, scop
 		}
 	} else {
 		// Sanitize provided branch name
-		branchName = utils.SanitizeBranchName(branchName)
+		branchName = branchname.Sanitize(branchName)
 	}
 
 	return ctx.Engine.GetBranch(branchName), nil

@@ -1,40 +1,8 @@
-package utils
+package term
 
 import (
-	"context"
-	"errors"
 	"testing"
-	"time"
 )
-
-func TestSleepContext(t *testing.T) {
-	t.Parallel()
-
-	t.Run("returns nil after the duration elapses", func(t *testing.T) {
-		t.Parallel()
-		if err := SleepContext(t.Context(), time.Millisecond); err != nil {
-			t.Fatalf("SleepContext() = %v, want nil", err)
-		}
-	})
-
-	t.Run("returns promptly when the context is already canceled", func(t *testing.T) {
-		t.Parallel()
-		ctx, cancel := context.WithCancel(t.Context())
-		cancel()
-
-		done := make(chan error, 1)
-		go func() { done <- SleepContext(ctx, time.Hour) }()
-
-		select {
-		case err := <-done:
-			if !errors.Is(err, context.Canceled) {
-				t.Fatalf("SleepContext() = %v, want context.Canceled", err)
-			}
-		case <-time.After(time.Second):
-			t.Fatal("SleepContext did not return promptly after cancellation")
-		}
-	})
-}
 
 func TestSupportsTerminalControl(t *testing.T) {
 	tests := []struct {

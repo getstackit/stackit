@@ -3,6 +3,8 @@
 package demo
 
 import (
+	"os"
+
 	"github.com/getstackit/stackit/internal/git"
 )
 
@@ -149,4 +151,9 @@ var demoTrunk = demoTrunkBranch
 // GetDemoTrunk returns the simulated trunk branch
 func GetDemoTrunk() string {
 	return demoTrunk
+}
+
+// Enabled reports whether demo mode was requested via STACKIT_DEMO.
+func Enabled() bool {
+	return os.Getenv("STACKIT_DEMO") != ""
 }

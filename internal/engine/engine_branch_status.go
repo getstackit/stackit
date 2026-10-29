@@ -6,8 +6,9 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // IsTrunk checks if a branch is the trunk
@@ -282,7 +283,7 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 		indexed[i] = indexedBranch{index: i, branch: b}
 	}
 
-	utils.Run(indexed, func(item indexedBranch) {
+	workpool.Run(indexed, func(item indexedBranch) {
 		branchName := item.branch.GetName()
 		localSha := localShas[branchName]
 		remoteSha := remoteShas[branchName]

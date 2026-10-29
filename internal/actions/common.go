@@ -21,12 +21,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/git"
+
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // FormatRerereResolved renders the standard message describing how many
@@ -414,7 +415,7 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 		if rev == "" {
 			rev, _ = branch.GetRevision()
 		}
-		newRev = utils.ShortRevision(rev, 0)
+		newRev = git.ShortRevision(rev, 0)
 	}
 
 	// Report via callback if provided.
@@ -796,7 +797,7 @@ func PrintConflictStatus(ctx *app.Context, branchName string) error {
 	// Get rebase head
 	rebaseHead, err := reader.GetRebaseHead(ctx.Context)
 	if err == nil && rebaseHead != "" {
-		rebaseHeadShort := utils.ShortRevision(rebaseHead, 0)
+		rebaseHeadShort := git.ShortRevision(rebaseHead, 0)
 		msg := output.Yellow(fmt.Sprintf("You are here (resolving %s):", rebaseHeadShort))
 		out.Info("%s", msg)
 		// Could show log here if needed

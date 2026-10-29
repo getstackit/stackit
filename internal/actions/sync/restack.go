@@ -3,11 +3,12 @@ package sync
 import (
 	"time"
 
+	"github.com/getstackit/stackit/internal/xslices"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/rerere"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // restackBranches restacks branches after sync operations through the shared
@@ -53,7 +54,7 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 
 	// Remove duplicates and filter out non-existent/untracked branches and dirty stacks
 	uniqueBranches := engine.NewBranchesBuilder(len(branchesToRestack))
-	for _, branchName := range utils.Unique(branchesToRestack) {
+	for _, branchName := range xslices.Unique(branchesToRestack) {
 		if dirtyAnchors.includes(ctx, branchName) {
 			continue
 		}

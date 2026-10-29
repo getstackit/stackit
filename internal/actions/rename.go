@@ -4,10 +4,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/branchname"
+
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // RenameOptions contains options for the rename command
@@ -46,7 +47,7 @@ func RenameAction(ctx *app.Context, opts RenameOptions, handler RenameHandler) e
 		}
 	}
 
-	newName = utils.SanitizeBranchName(newName)
+	newName = branchname.Sanitize(newName)
 	if newName == "" {
 		return errors.New("invalid branch name")
 	}

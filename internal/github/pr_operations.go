@@ -3,7 +3,7 @@ package github
 
 import (
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/timeutil"
 
 	"bytes"
 	"context"
@@ -683,7 +683,7 @@ func WaitForPRMerge(ctx context.Context, runner GitCommandRunner, prNodeID strin
 			return errors.New("auto-merge was disabled. This may indicate a problem with the PR")
 		}
 
-		if err := utils.SleepContext(ctx, pollInterval); err != nil {
+		if err := timeutil.Sleep(ctx, pollInterval); err != nil {
 			return err
 		}
 	}
@@ -725,7 +725,7 @@ func WaitForMergeable(ctx context.Context, runner GitCommandRunner, prNodeID str
 		}
 
 		// BLOCKED, BEHIND, UNKNOWN, or empty — keep polling
-		if err := utils.SleepContext(ctx, pollInterval); err != nil {
+		if err := timeutil.Sleep(ctx, pollInterval); err != nil {
 			return nil, err
 		}
 	}

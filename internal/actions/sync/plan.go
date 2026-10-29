@@ -5,9 +5,10 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/git"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // PlanRequest configures a dry-run sync plan.
@@ -102,7 +103,7 @@ func PlanDryRun(ctx context.Context, eng PlanEngine, req PlanRequest) DryRunPlan
 		plan.TrunkStateUnknown = true
 	case remoteStatus.Behind():
 		plan.PullBranch = trunk.GetName()
-		plan.PullRevision = utils.ShortRevision(remoteStatus.RemoteSha, 0)
+		plan.PullRevision = git.ShortRevision(remoteStatus.RemoteSha, 0)
 	}
 
 	// Collect candidate branches for deletion and restack checks

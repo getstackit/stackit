@@ -6,13 +6,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // GitHubSyncResult holds the results from GitHub PR info sync (network operation)
@@ -224,7 +225,7 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 		mu      sync.Mutex
 		updated []string
 	)
-	utils.Run(pending, func(u baseUpdate) {
+	workpool.Run(pending, func(u baseUpdate) {
 		out.Debug("PR for %s has base %s, but local parent is %s. Updating GitHub PR base...",
 			u.branchName, u.oldBase, u.localParentName)
 

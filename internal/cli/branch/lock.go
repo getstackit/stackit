@@ -1,13 +1,13 @@
 package branch
 
 import (
+	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions/lock"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/errors"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewLockCmd creates the lock command
@@ -35,7 +35,7 @@ This operation can be undone with 'st unlock'.`,
 					return err
 				}
 
-				handler := NewLockUI(ctx.Output, utils.IsInteractive())
+				handler := NewLockUI(ctx.Output, term.IsInteractive())
 				return lock.Action(ctx, branchName, handler)
 			})
 		},
@@ -65,7 +65,7 @@ to enable modifications.`,
 					return err
 				}
 
-				handler := NewLockUI(ctx.Output, utils.IsInteractive())
+				handler := NewLockUI(ctx.Output, term.IsInteractive())
 				return lock.Unlock(ctx, branchName, handler)
 			})
 		},

@@ -3,12 +3,13 @@ package cli
 import (
 	"errors"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions/describe"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // newDescribeCmd creates the describe command
@@ -79,7 +80,7 @@ Examples:
 				}
 
 				handler := &describeHandler{
-					interactive: utils.IsInteractive(),
+					interactive: term.IsInteractive(),
 				}
 				return describe.Action(ctx.Context, describe.Deps{Engine: ctx.Engine, Out: ctx.Output}, opts, handler)
 			})

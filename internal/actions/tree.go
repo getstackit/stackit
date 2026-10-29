@@ -5,10 +5,11 @@ import (
 	"context"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // TreeStyle defines the output style for the tree command
@@ -179,7 +180,7 @@ func BuildTreeJSON(ctx context.Context, eng engine.Engine, gh github.Client, req
 	statuses := eng.ReadBranchStatuses(processableBranches)
 
 	if len(processableBranches) > 0 {
-		utils.Run(processableBranches.All(), func(branch engine.Branch) {
+		workpool.Run(processableBranches.All(), func(branch engine.Branch) {
 			branchName := branch.GetName()
 
 			info := TreeBranchInfo{

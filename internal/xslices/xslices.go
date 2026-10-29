@@ -1,4 +1,5 @@
-package utils
+// Package xslices holds slice helpers the standard slices package lacks.
+package xslices
 
 // Unique returns items with duplicates removed, keeping the first occurrence of
 // each value in its original order. The input is not modified.

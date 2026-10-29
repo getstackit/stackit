@@ -6,6 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getstackit/stackit/internal/term"
+
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -19,7 +23,6 @@ import (
 	"github.com/getstackit/stackit/internal/tui/components/tree"
 	"github.com/getstackit/stackit/internal/tui/keys"
 	"github.com/getstackit/stackit/internal/tui/style"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 const (
@@ -327,7 +330,7 @@ func (m *TreeModel) enrichData() tea.Cmd {
 		// Build into a positional slice so concurrent workers don't race on a
 		// shared map, then assemble the map serially.
 		built := make([]tree.BranchAnnotation, len(allBranches))
-		utils.Run(indexedBranches(allBranches), func(item indexedBranch) {
+		workpool.Run(indexedBranches(allBranches), func(item indexedBranch) {
 			built[item.index] = TreeAnnotation(stackview.FullAnnotation(eng, item.branch, stats[item.branch.GetName()], enrichment, stackview.AnnotationOptions{
 				SkipCommitMessages: true,
 			}))
@@ -797,7 +800,7 @@ func (m *TreeModel) renderValidationFooter() string {
 
 // PromptTreeSelect runs the interactive log in selection mode and returns the selected branch name
 func PromptTreeSelect(ctx context.Context, eng TreeEngine, ghClient github.Client, opts TreeOptions) (string, error) {
-	if err := CheckInteractiveAllowed(); err != nil {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return "", err
 	}
 

@@ -10,6 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getstackit/stackit/internal/browser"
+	"github.com/getstackit/stackit/internal/workpool"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
@@ -17,7 +20,6 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/pr"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // msgSubmitFailed is the completion message for a failed submit.
@@ -476,7 +478,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if allCreates {
 		workers = 1
 	}
-	submitErr := utils.RunAll(submissionInfos, workers, func(info Info) error {
+	submitErr := workpool.RunAll(submissionInfos, workers, func(info Info) error {
 		if err := submitBranch(ctx, info, opts, handler, pushResults); err != nil {
 			return err
 		}
@@ -503,7 +505,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if opts.regenerate() {
 			overlaySentContent(prContent, submissionInfos)
 		}
-		utils.Run(branches, func(name string) {
+		workpool.Run(branches, func(name string) {
 			handler.OnEvent(BranchProgressEvent{
 				BranchName: name,
 				Status:     StatusSyncing,
@@ -820,7 +822,7 @@ func submitBranch(ctx *app.Context, info Info, opts Options, handler Handler, pu
 	}
 
 	if shouldOpenBrowser {
-		if err := utils.OpenBrowser(prURL); err != nil {
+		if err := browser.Open(prURL); err != nil {
 			ctx.Output.Debug("Failed to open browser: %v", err)
 		}
 	}

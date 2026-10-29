@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/getstackit/stackit/internal/timeutil"
+
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // CIWaiterClient is the GitHub surface CIWaiter needs: polling checks and
@@ -104,7 +105,7 @@ func (w *CIWaiter) WaitForChecks(ctx context.Context, branchName string, prNumbe
 	if w.output != nil {
 		w.output.Info("   Waiting for CI checks to register...")
 	}
-	if err := utils.SleepContext(ctx, w.registrationDelay); err != nil {
+	if err := timeutil.Sleep(ctx, w.registrationDelay); err != nil {
 		return nil, err
 	}
 
@@ -172,7 +173,7 @@ func (w *CIWaiter) WaitForChecks(ctx context.Context, branchName string, prNumbe
 			}
 		}
 
-		if err := utils.SleepContext(ctx, w.pollInterval); err != nil {
+		if err := timeutil.Sleep(ctx, w.pollInterval); err != nil {
 			return nil, err
 		}
 	}

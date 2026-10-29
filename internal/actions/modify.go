@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
@@ -11,7 +13,6 @@ import (
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // ModifyOptions contains options for the modify command
@@ -158,8 +159,8 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 	}
 
 	commitMessage := opts.Message
-	if commitMessage == "" && !utils.IsInteractive() && !opts.NoEdit {
-		stdinMsg, err := utils.ReadFromStdin()
+	if commitMessage == "" && !term.IsInteractive() && !opts.NoEdit {
+		stdinMsg, err := term.ReadStdin()
 		if err == nil && stdinMsg != "" {
 			commitMessage = stdinMsg
 			opts.NoEdit = true

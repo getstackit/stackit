@@ -1,6 +1,7 @@
 package navigation
 
 import (
+	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -8,7 +9,6 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/cli/stack"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewTopCmd creates the top command
@@ -25,7 +25,7 @@ to follow.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				handler := stack.NewNavigationUI(ctx.Output, utils.IsInteractive())
+				handler := stack.NewNavigationUI(ctx.Output, term.IsInteractive())
 				result, err := navigation.SwitchBranchAction(navigation.DirectionTop, ctx, handler)
 				if err != nil {
 					return err

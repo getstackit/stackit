@@ -9,11 +9,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/utils"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/inprocess"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -91,7 +92,7 @@ func NewTestShellInProcess(t *testing.T, opts ...TestShellOption) *TestShell {
 	if options.withRemote {
 		sh := newTestShellWithRemote(t, "", inprocess.NewInProcessCLI())
 		// Force non-interactive mode for in-process execution
-		utils.SetInteractive(false)
+		term.SetInteractive(false)
 		return sh
 	}
 
@@ -103,7 +104,7 @@ func NewTestShellInProcess(t *testing.T, opts ...TestShellOption) *TestShell {
 	}
 	// Force non-interactive mode for in-process execution to match behavior
 	// of spawning binary with --no-interactive
-	utils.SetInteractive(false)
+	term.SetInteractive(false)
 	return sh
 }
 

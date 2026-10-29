@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Options contains options for the describe command
@@ -104,7 +105,7 @@ func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error
 
 	// Try reading from stdin when not interactive
 	if !handler.IsInteractive() {
-		stdinContent, err := utils.ReadFromStdin()
+		stdinContent, err := term.ReadStdin()
 		if err == nil && stdinContent != "" {
 			if desc := ParseEditorContent(stdinContent); desc != nil {
 				return applyStackDescription(ctx, eng, out, *currentBranch, stackRoot, desc, TruncateDescription(desc.Description, 60))

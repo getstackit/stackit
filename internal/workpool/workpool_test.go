@@ -1,4 +1,4 @@
-package utils
+package workpool
 
 import (
 	"errors"
@@ -35,13 +35,13 @@ func TestRunEmpty(t *testing.T) {
 	})
 }
 
-func TestRunWithWorkers(t *testing.T) {
+func TestRunN(t *testing.T) {
 	t.Parallel()
 
 	items := []int{1, 2, 3, 4, 5, 6, 7, 8}
 	var calls atomic.Int64
 
-	RunWithWorkers(items, 3, func(int) {
+	RunN(items, 3, func(int) {
 		calls.Add(1)
 	})
 
@@ -50,13 +50,13 @@ func TestRunWithWorkers(t *testing.T) {
 	}
 }
 
-func TestRunWithWorkersMoreWorkersThanItems(t *testing.T) {
+func TestRunNMoreWorkersThanItems(t *testing.T) {
 	t.Parallel()
 
 	items := []int{1, 2}
 	var calls atomic.Int64
 
-	RunWithWorkers(items, 10, func(int) {
+	RunN(items, 10, func(int) {
 		calls.Add(1)
 	})
 

@@ -1,13 +1,13 @@
 package cli
 
 import (
+	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions/scope"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/cli/stack"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // newScopeCmd creates the scope command
@@ -48,7 +48,7 @@ Use 'none' or 'clear' as the scope name to explicitly break the inheritance chai
 					Show:  effectiveShow,
 				}
 
-				handler := stack.NewScopeUI(ctx.Output, utils.IsInteractive())
+				handler := stack.NewScopeUI(ctx.Output, term.IsInteractive())
 				return scope.Action(ctx.Context, scope.Deps{Engine: ctx.Engine, Out: ctx.Output}, opts, handler)
 			})
 		},

@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/term"
+
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
@@ -14,7 +16,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/tui/style"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 type promptKeyMap struct {
@@ -112,17 +113,6 @@ var defaultSelectionKeys = selectionKeys{
 		key.WithKeys("ctrl+c", "esc"),
 		key.WithHelp("ctrl+c/esc", "cancel"),
 	),
-}
-
-// ErrInteractiveDisabled is returned when interactive prompts are disabled.
-// Re-exported from utils so existing tui callers (and errors.Is checks) keep
-// working while the canonical definition lives in the lower layer.
-var ErrInteractiveDisabled = utils.ErrInteractiveDisabled
-
-// CheckInteractiveAllowed returns an error if interactive mode is disabled.
-// Delegates to utils.CheckInteractiveAllowed.
-func CheckInteractiveAllowed() error {
-	return utils.CheckInteractiveAllowed()
 }
 
 // textInputModel is a simple text input prompt model
@@ -249,7 +239,7 @@ func NewConfirmModel(prompt string, defaultValue bool) tea.Model {
 // PromptTextInput prompts the user for text input. It is a var so tests can
 // stub it, mirroring PromptConfirm.
 var PromptTextInput = func(prompt, defaultValue string) (string, error) {
-	if err := CheckInteractiveAllowed(); err != nil {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return "", err
 	}
 
@@ -273,7 +263,7 @@ var PromptTextInput = func(prompt, defaultValue string) (string, error) {
 
 // PromptConfirm prompts the user for yes/no confirmation
 var PromptConfirm = func(prompt string, defaultValue bool) (bool, error) {
-	if err := CheckInteractiveAllowed(); err != nil {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return false, err
 	}
 
@@ -466,7 +456,7 @@ func NewBranchSelectModel(message string, choices []BranchChoice, initialIndex i
 
 // PromptSelect prompts the user to select from a list of options
 func PromptSelect(title string, options []SelectOption, defaultIndex int) (string, error) {
-	if err := CheckInteractiveAllowed(); err != nil {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return "", err
 	}
 
@@ -622,7 +612,7 @@ func PromptMultiSelect(title string, options []string) ([]string, error) {
 // PromptMultiSelectWithDefaults prompts the user to select multiple items from a list
 // with optional pre-selected items. If preSelected is nil, nothing is selected by default.
 func PromptMultiSelectWithDefaults(title string, options []string, preSelected []bool) ([]string, error) {
-	if err := CheckInteractiveAllowed(); err != nil {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return nil, err
 	}
 
@@ -676,7 +666,7 @@ type BranchChoice struct {
 
 // PromptBranchSelection prompts the user to select a branch
 func PromptBranchSelection(message string, choices []BranchChoice, initialIndex int) (string, error) {
-	if err := CheckInteractiveAllowed(); err != nil {
+	if err := term.CheckInteractiveAllowed(); err != nil {
 		return "", err
 	}
 

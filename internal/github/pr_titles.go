@@ -3,8 +3,9 @@ package github
 import (
 	"context"
 
+	"github.com/getstackit/stackit/internal/xslices"
+
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // BatchGetPRTitlesGraphQL fetches PR titles for multiple PR numbers using a single GraphQL query.
@@ -13,7 +14,7 @@ func BatchGetPRTitlesGraphQL(ctx context.Context, runner GitCommandRunner, repo 
 		return make(map[git.PRNumber]string), nil
 	}
 
-	unique := utils.Unique(prNumbers)
+	unique := xslices.Unique(prNumbers)
 
 	query := buildPRTitlesQuery(unique)
 	variables := map[string]any{

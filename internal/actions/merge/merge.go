@@ -2,7 +2,8 @@
 package merge
 
 import (
-	"github.com/getstackit/stackit/internal/app"
+	"context"
+
 	"github.com/getstackit/stackit/internal/github"
 )
 
@@ -23,8 +24,8 @@ type Options struct {
 }
 
 // Action performs the merge operation using the plan/execute pattern
-func Action(ctx *app.Context, opts Options) error {
-	eng := ctx.Engine
+func Action(ctx context.Context, deps Deps, opts Options) error {
+	eng := deps.Engine
 
 	// If dry-run, create plan and display it
 	if opts.DryRun {
@@ -32,7 +33,7 @@ func Action(ctx *app.Context, opts Options) error {
 		var validation *PlanValidation
 		if plan == nil {
 			var err error
-			plan, validation, err = CreateMergePlan(ctx.Context, eng, ctx.Output, ctx.GitHub(), CreatePlanOptions{
+			plan, validation, err = CreateMergePlan(ctx, eng, deps.Out, deps.GitHub(), CreatePlanOptions{
 				Strategy:     opts.Strategy,
 				Force:        opts.Force,
 				Scope:        opts.Scope,
@@ -49,8 +50,8 @@ func Action(ctx *app.Context, opts Options) error {
 		}
 
 		planText := FormatMergePlan(plan, validation)
-		ctx.Output.Print(planText)
-		ctx.Output.Info("Dry-run mode: plan displayed above. No changes were made.")
+		deps.Out.Print(planText)
+		deps.Out.Info("Dry-run mode: plan displayed above. No changes were made.")
 		return nil
 	}
 
@@ -71,13 +72,13 @@ func Action(ctx *app.Context, opts Options) error {
 	// If no target branch or scope specified, use current branch
 	targetBranch := opts.TargetBranch
 	if targetBranch == "" && opts.Scope == "" && opts.Plan == nil {
-		cb := eng.CurrentBranch(ctx.Context)
+		cb := eng.CurrentBranch(ctx)
 		if cb != nil {
 			targetBranch = cb.Name()
 		}
 	}
 
-	if err := ExecuteInWorktree(ctx, eng, executeOpts, opts.Scope, targetBranch); err != nil {
+	if err := ExecuteInWorktree(ctx, deps, executeOpts, opts.Scope, targetBranch); err != nil {
 		return err
 	}
 

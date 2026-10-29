@@ -37,7 +37,7 @@ func handlePostMergeAction(ctx *app.Context, action mergeAction.PostMergeAction)
 		// invariant that merge next must never leave the user in detached HEAD
 		// state. Conflicts are reported in the sync summary with instructions
 		// to run 'stackit restack' manually.
-		_, err := mergeAction.PostMergeSync(ctx, mergeAction.PostMergeSyncOptions{
+		_, err := mergeAction.PostMergeSync(ctx.Context, common.MergeDeps(ctx), mergeAction.PostMergeSyncOptions{
 			OnTrunkCheckedOut: func(result checkout.Result) {
 				if result.WorktreeSwitchPath != "" {
 					common.HandleCheckoutResult(ctx.Output, result)

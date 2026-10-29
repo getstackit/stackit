@@ -102,7 +102,7 @@ Examples:
 					wizardOpts.UndoStackDepth = ctx.Config.UndoStackDepth()
 					wizardOpts.LinearStacks = ctx.Config.LinearStacks()
 				}
-				err := mergeAction.RunWizard(ctx, interactiveHandler, wizardOpts)
+				err := mergeAction.RunWizard(ctx.Context, common.MergeDeps(ctx), interactiveHandler, wizardOpts)
 
 				// Handle post-merge follow-up action
 				if postMerge, ok := errors.AsType[*mergeAction.PostMergeActionRequiredError](err); ok {

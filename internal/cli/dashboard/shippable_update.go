@@ -389,8 +389,8 @@ func (m *shippableModel) executeShip() (tea.Model, tea.Cmd) {
 
 	return m, func() tea.Msg {
 		quietCtx := m.quietCtx()
-		shipper := shippable.NewShipper(quietCtx)
-		result, err := shipper.Ship(selected, shippable.ShipOptions{
+		shipper := shippable.NewShipper(common.MergeDeps(quietCtx))
+		result, err := shipper.Ship(quietCtx.Context, selected, shippable.ShipOptions{
 			SkipLocalCI: !m.options.RunLocalCI,
 			Wait:        false, // Don't wait in UI, user can monitor PR
 		})

@@ -1,21 +1,22 @@
 package merge
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 )
 
 // ExecuteInWorktree executes the merge plan in a temporary worktree
-func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions, scope string, targetBranch string) (err error) {
-	out := ctx.Output
+func ExecuteInWorktree(ctx context.Context, deps Deps, opts ExecuteOptions, scope string, targetBranch string) (err error) {
+	eng := deps.Engine
+	out := deps.Out
 
 	// Create temporary worktree via engine
 	// We use detached HEAD at the current revision to avoid "already used by worktree" errors
 	// and to ensure we don't accidentally move any main workspace branch refs.
-	worktreePath, cleanup, err := eng.CreateTemporaryWorktree(ctx.Context, "HEAD", "stackit-merge-*", engine.WorktreePruneAuto)
+	worktreePath, cleanup, err := eng.CreateTemporaryWorktree(ctx, "HEAD", "stackit-merge-*", engine.WorktreePruneAuto)
 	if err != nil {
 		return err
 	}
@@ -41,7 +42,7 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	// Since we are currently in the main engine, we can get it from there.
 	trunk := eng.Trunk()
 	worktreeGit := git.NewRunnerWithPath(worktreePath.String(), nil)
-	worktreeEng, err := engine.NewEngine(ctx.Context, engine.Options{
+	worktreeEng, err := engine.NewEngine(ctx, engine.Options{
 		RepoRoot:          worktreePath.String(),
 		Git:               worktreeGit,
 		Trunk:             trunk.Name(),
@@ -52,21 +53,26 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 		return fmt.Errorf("failed to initialize engine in worktree: %w", err)
 	}
 
-	// Create a sub-context for the worktree.
-	worktreeCtx := *ctx //nolint:govet // Copying Context by value is intentional when overriding engine/repo output fields.
-	worktreeCtx.Engine = worktreeEng
-	worktreeCtx.RepoRoot = worktreePath.String()
-	worktreeCtx.GHRunner = worktreeGit
+	// Create sub-deps for the worktree. PRSync pushes metadata through the
+	// engine and queries GitHub through the runner, so both follow the
+	// worktree too. Plan execution never runs the post-merge sync, drain
+	// submit or trunk checkout, so their deps stay as they are.
+	worktreeDeps := deps
+	worktreeDeps.Engine = worktreeEng
+	worktreeDeps.RepoRoot = worktreePath.String()
+	worktreeDeps.GHRunner = worktreeGit
+	worktreeDeps.PRSync.Engine = worktreeEng
+	worktreeDeps.PRSync.GHRunner = worktreeGit
 
 	// 4. Pre-flight operations in the worktree
 	// Pull trunk in the worktree to ensure we have latest changes
-	pullResult, err := worktreeEng.PullTrunk(ctx.Context)
+	pullResult, err := worktreeEng.PullTrunk(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to update trunk in merge worktree: %w", err)
 	} else if pullResult == engine.PullConflict {
 		if opts.Force {
 			out.Info("Trunk diverged from remote. Force-resetting trunk to match remote...")
-			if err := worktreeEng.ResetTrunkToRemote(ctx.Context); err != nil {
+			if err := worktreeEng.ResetTrunkToRemote(ctx); err != nil {
 				return fmt.Errorf("failed to auto-reset diverged trunk: %w", err)
 			}
 		} else {
@@ -79,7 +85,7 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	if plan == nil {
 		// Create plan in worktree
 		var err error
-		plan, _, err = CreateMergePlan(ctx.Context, worktreeEng, out, ctx.GitHub(), CreatePlanOptions{
+		plan, _, err = CreateMergePlan(ctx, worktreeEng, out, deps.GitHub(), CreatePlanOptions{
 			Strategy:     opts.Strategy,
 			Force:        opts.Force,
 			Scope:        scope,
@@ -94,7 +100,7 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	}
 
 	// 6. Execute the plan in the worktree
-	err = Execute(&worktreeCtx, worktreeEng, opts)
+	err = Execute(ctx, worktreeDeps, opts)
 
 	if err != nil {
 		// If it's a conflict, don't clean up so the user can resolve it

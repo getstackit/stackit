@@ -1,10 +1,10 @@
 package merge
 
 import (
-	"github.com/getstackit/stackit/internal/actions"
+	"context"
+
 	"github.com/getstackit/stackit/internal/actions/checkout"
 	"github.com/getstackit/stackit/internal/actions/sync"
-	"github.com/getstackit/stackit/internal/app"
 )
 
 // PostMergeSyncOptions configures PostMergeSync.
@@ -45,14 +45,8 @@ func (e *PostMergeCheckoutError) Unwrap() error { return e.Err }
 // that workflow detaches HEAD, and a merge command must never leave the user
 // in detached HEAD. Restack conflicts are left in the returned summary for the
 // caller to report or fail on.
-func PostMergeSync(ctx *app.Context, opts PostMergeSyncOptions, newSyncHandler func() sync.Handler) (PostMergeSyncResult, error) {
-	checkoutResult, err := checkout.Action(ctx.Context, checkout.Deps{
-		Engine: ctx.Engine,
-		Out:    ctx.Output,
-		Log:    ctx.Logger,
-		Quiet:  ctx.Quiet,
-		Here:   actions.HereFrom(ctx),
-	}, checkout.Options{
+func PostMergeSync(ctx context.Context, deps Deps, opts PostMergeSyncOptions, newSyncHandler func() sync.Handler) (PostMergeSyncResult, error) {
+	checkoutResult, err := checkout.Action(ctx, deps.Checkout, checkout.Options{
 		CheckoutTrunk: true,
 	}, nil)
 	if err != nil {
@@ -63,7 +57,7 @@ func PostMergeSync(ctx *app.Context, opts PostMergeSyncOptions, newSyncHandler f
 	}
 
 	wrapped := &postMergeSyncHandler{Handler: newSyncHandler()}
-	err = sync.Action(ctx.Context, syncDeps(ctx), sync.Options{
+	err = sync.Action(ctx, deps.Sync, sync.Options{
 		Restack:      true,
 		RestackScope: opts.RestackScope,
 	}, wrapped)
@@ -90,22 +84,4 @@ func (h *postMergeSyncHandler) PromptResolveConflicts(_ []string) (bool, error) 
 func (h *postMergeSyncHandler) Complete(summary sync.Summary) {
 	h.summary = summary
 	h.Handler.Complete(summary)
-}
-
-// syncDeps builds sync's collaborators from merge's runtime context. Actions
-// cannot reach the CLI's builder, so merge assembles them here.
-func syncDeps(ctx *app.Context) sync.Deps {
-	return sync.Deps{
-		Engine:    ctx.Engine,
-		Out:       ctx.Output,
-		Log:       ctx.Logger,
-		GitHub:    ctx.GitHub,
-		GHRunner:  ctx.GHRunner,
-		PRSync:    actions.PRSyncFrom(ctx),
-		Restack:   actions.RestackDepsFrom(ctx),
-		Cleanup:   actions.CleanBranchesDepsFrom(ctx),
-		Snapshots: actions.SnapshotsFrom(ctx),
-		Here:      actions.HereFrom(ctx),
-		Config:    ctx.Config,
-	}
 }

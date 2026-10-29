@@ -40,7 +40,7 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		executor := merge.NewConsolidateMergeExecutor(plan, s.Engine, s.Context)
+		executor := merge.NewConsolidateMergeExecutor(plan, s.Engine, merge.DepsFrom(s.Context))
 
 		// This should fail pre-validation because branches aren't pushed to remote
 		_, err = executor.Execute(s.Context.Context, merge.ExecuteOptions{
@@ -116,7 +116,7 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		executor := merge.NewConsolidateMergeExecutor(plan, s.Engine, s.Context)
+		executor := merge.NewConsolidateMergeExecutor(plan, s.Engine, merge.DepsFrom(s.Context))
 
 		// Verify the executor was created successfully
 		require.NotNil(t, executor)
@@ -155,7 +155,7 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		executor := merge.NewConsolidateMergeExecutor(plan, s.Engine, s.Context)
+		executor := merge.NewConsolidateMergeExecutor(plan, s.Engine, merge.DepsFrom(s.Context))
 
 		// Verify the executor understands the scope
 		require.NotNil(t, executor)
@@ -316,7 +316,7 @@ func TestConsolidationErrorHandling(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		executor := merge.NewConsolidateMergeExecutor(plan, s.Engine, s.Context)
+		executor := merge.NewConsolidateMergeExecutor(plan, s.Engine, merge.DepsFrom(s.Context))
 
 		// Mock GitHub client
 		mockConfig := testhelpers.NewMockGitHubServerConfig()

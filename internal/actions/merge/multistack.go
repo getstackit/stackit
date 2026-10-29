@@ -5,23 +5,23 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // ExecuteMultiStack performs the multi-stack merge operation.
 // It merges multiple independent stacks into a single consolidated branch,
 // handling conflicts by skipping entire stacks that conflict.
-func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackResult, error) {
-	eng := ctx.Engine
-	out := ctx.Output
+func ExecuteMultiStack(ctx context.Context, deps Deps, opts MultiStackOptions) (*MultiStackResult, error) {
+	eng := deps.Engine
+	out := deps.Out
 
 	out.Debug("multistack: starting with opts=%+v", opts)
 
 	// 1. Discover available stacks
 	out.Debug("multistack: discovering available stacks")
-	stacks, err := DiscoverStacks(ctx.Context, eng)
+	stacks, err := DiscoverStacks(ctx, eng)
 	if err != nil {
 		out.Debug("multistack: failed to discover stacks: %v", err)
 		return nil, fmt.Errorf("failed to discover stacks: %w", err)
@@ -53,7 +53,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 	// This is critical: if branches differ from remote, the octopus merge uses local SHAs
 	// but PRs track remote SHAs, so GitHub won't auto-close individual PRs
 	out.Debug("multistack: validating branches match remote")
-	if err := validateBranchesMatchRemote(ctx.Context, eng, stacks, out); err != nil {
+	if err := validateBranchesMatchRemote(ctx, eng, stacks, out); err != nil {
 		out.Debug("multistack: branch validation failed: %v", err)
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 	out.Debug("multistack: creating worktree executor")
 	executor := NewMultiStackWorktreeExecutor(eng, out)
 	out.Debug("multistack: executing in worktree")
-	worktreeResult, err := executor.ExecuteInWorktree(ctx.Context, stacks)
+	worktreeResult, err := executor.ExecuteInWorktree(ctx, stacks)
 	if err != nil {
 		out.Debug("multistack: worktree execution failed: %v", err)
 		return nil, fmt.Errorf("failed to execute in worktree: %w", err)
@@ -97,7 +97,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 	consolidationCreated := false
 	defer func() {
 		if !consolidationCreated {
-			unlockConsolidatingStacks(ctx, eng, result.IncludedStacks)
+			unlockConsolidatingStacks(ctx, eng, out, result.IncludedStacks)
 		}
 	}()
 
@@ -105,28 +105,28 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 	// This indicates the PRs are part of a consolidation in progress
 	branchName := GenerateMultiStackBranchName()
 	out.Debug("multistack: locking individual PRs before CI validation")
-	if err := lockAndNotifyMultiStackPRs(ctx, eng, result.IncludedStacks, branchName); err != nil {
+	if err := lockAndNotifyMultiStackPRs(ctx, deps, eng, result.IncludedStacks, branchName); err != nil {
 		out.Warn("Failed to lock individual PRs: %v", err)
 	}
 
 	// 5. Run CI validation if not skipped
 	if !opts.SkipLocalCI {
 		out.Debug("multistack: running CI validation")
-		validator := NewLocalCIValidator(ctx.Config, out)
+		validator := NewLocalCIValidator(deps.Config, out)
 		if !validator.IsConfigured() {
 			out.Debug("multistack: CI not configured, skipping")
 			out.Warn("CI validation skipped (no ci.command configured)")
 		} else {
 			// Run CI on merged stacks
 			out.Debug("multistack: running CI validation")
-			err := validator.Validate(ctx.Context, worktreeResult.WorktreePath)
+			err := validator.Validate(ctx, worktreeResult.WorktreePath)
 			if err != nil {
 				out.Debug("multistack: CI validation failed: %v", err)
 				// CI failed - try binary search to find largest working set
 				out.Warn("CI validation failed, searching for working subset...")
 
 				searchResult, searchErr := FindLargestWorkingSet(
-					ctx.Context,
+					ctx,
 					validator,
 					executor,
 					worktreeResult.WorktreeEngine,
@@ -146,7 +146,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 				// Update result with binary search findings
 				result.IncludedStacks = searchResult.WorkingStacks
 				result.ExcludedStacks = append(result.ExcludedStacks, searchResult.FailedStacks...)
-				unlockExcludedMultiStackBranches(ctx, eng, searchResult.FailedStacks)
+				unlockExcludedMultiStackBranches(ctx, eng, out, searchResult.FailedStacks)
 
 				out.Success("Found %d stacks that pass CI together", len(result.IncludedStacks))
 			} else {
@@ -159,11 +159,11 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 
 	// 6. Create consolidated PR
 	out.Debug("multistack: creating consolidated PR")
-	prCreator := NewMultiStackPRCreator(ctx, worktreeResult.WorktreeEngine, worktreeResult.WorktreePath)
+	prCreator := NewMultiStackPRCreator(deps, worktreeResult.WorktreeEngine, worktreeResult.WorktreePath)
 
 	out.Info("Creating combined branch: %s", branchName)
 	out.Debug("multistack: creating and pushing branch")
-	if err := prCreator.CreateAndPushBranch(ctx.Context, branchName); err != nil {
+	if err := prCreator.CreateAndPushBranch(ctx, branchName); err != nil {
 		out.Debug("multistack: failed to create and push branch: %v", err)
 		return nil, fmt.Errorf("failed to create and push branch: %w", err)
 	}
@@ -171,7 +171,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 	out.Info("Creating pull request...")
 	out.Debug("multistack: creating PR with %d included stacks, %d excluded stacks",
 		len(result.IncludedStacks), len(result.ExcludedStacks))
-	pr, err := prCreator.CreatePR(ctx.Context, branchName, result.IncludedStacks, result.ExcludedStacks)
+	pr, err := prCreator.CreatePR(ctx, branchName, result.IncludedStacks, result.ExcludedStacks)
 	if err != nil {
 		out.Debug("multistack: failed to create PR: %v", err)
 		return nil, fmt.Errorf("failed to create PR: %w", err)
@@ -181,7 +181,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 	result.PRURL = pr.HTMLURL
 	result.BranchName = branchName
 	consolidationCreated = true
-	unlockExcludedMultiStackBranches(ctx, eng, result.ExcludedStacks)
+	unlockExcludedMultiStackBranches(ctx, eng, out, result.ExcludedStacks)
 
 	out.Success("Created PR #%d: %s", pr.Number, pr.HTMLURL)
 	out.Debug("multistack: PR created successfully")
@@ -192,7 +192,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 	if opts.Wait {
 		out.Info("Waiting for CI to pass...")
 		out.Debug("multistack: waiting for CI and auto-merge")
-		if err := prCreator.WaitAndMerge(ctx.Context, branchName, pr, trailers); err != nil {
+		if err := prCreator.WaitAndMerge(ctx, branchName, pr, trailers); err != nil {
 			out.Debug("multistack: wait and merge failed: %v", err)
 			return nil, fmt.Errorf("failed to wait and merge: %w", err)
 		}
@@ -206,18 +206,18 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 			branchNames = append(branchNames, stack.AllBranches...)
 		}
 
-		userName, _ := eng.GetUserName(ctx.Context)
-		cleaner := NewPRCleaner(ctx, eng, PRCleanupConfig{
+		userName, _ := eng.GetUserName(ctx)
+		cleaner := NewPRCleaner(deps, eng, PRCleanupConfig{
 			Source:                CleanupSourceMultiStack,
 			ConsolidationPRNumber: pr.Number,
 			UserName:              userName,
 		})
 
-		cleanupResult := cleaner.CleanupBranches(ctx.Context, branchNames)
+		cleanupResult := cleaner.CleanupBranches(ctx, branchNames)
 		cleaner.LogResult(cleanupResult)
 	} else {
 		out.Debug("multistack: enabling auto-merge for fire-and-forget")
-		if err := prCreator.EnableAutoMerge(ctx.Context, pr, trailers); err != nil {
+		if err := prCreator.EnableAutoMerge(ctx, pr, trailers); err != nil {
 			out.Warn("Could not enable automerge: %v", err)
 			out.Tip("Enable automerge manually on the PR: %s", pr.HTMLURL)
 		} else {
@@ -232,7 +232,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 // unlockConsolidatingStacks releases only locks created for multi-stack
 // consolidation. User locks and other workflow locks are intentionally left
 // untouched.
-func unlockConsolidatingStacks(ctx *app.Context, eng engine.Engine, stacks []MultiStackInfo) {
+func unlockConsolidatingStacks(ctx context.Context, eng engine.Engine, out output.Output, stacks []MultiStackInfo) {
 	branches := engine.NewBranchesBuilder(0)
 	for _, stack := range stacks {
 		for _, name := range stack.AllBranches {
@@ -243,18 +243,18 @@ func unlockConsolidatingStacks(ctx *app.Context, eng engine.Engine, stacks []Mul
 		}
 	}
 	if selected := branches.Build(); len(selected) > 0 {
-		if _, err := eng.SetLocked(ctx.Context, selected, engine.LockReasonNone); err != nil {
-			ctx.Output.Warn("Failed to unlock excluded multi-stack branches: %v", err)
+		if _, err := eng.SetLocked(ctx, selected, engine.LockReasonNone); err != nil {
+			out.Warn("Failed to unlock excluded multi-stack branches: %v", err)
 		}
 	}
 }
 
-func unlockExcludedMultiStackBranches(ctx *app.Context, eng engine.Engine, excluded []MultiStackExcluded) {
+func unlockExcludedMultiStackBranches(ctx context.Context, eng engine.Engine, out output.Output, excluded []MultiStackExcluded) {
 	stacks := make([]MultiStackInfo, 0, len(excluded))
 	for _, item := range excluded {
 		stacks = append(stacks, item.Stack)
 	}
-	unlockConsolidatingStacks(ctx, eng, stacks)
+	unlockConsolidatingStacks(ctx, eng, out, stacks)
 }
 
 // validateBranchesMatchRemote checks that all branches in the stacks match their remote.
@@ -293,10 +293,10 @@ func validateBranchesMatchRemote(ctx context.Context, eng engine.Engine, stacks 
 
 // lockAndNotifyMultiStackPRs locks every branch of the included stacks and
 // marks them as shipping through the consolidation branch.
-func lockAndNotifyMultiStackPRs(ctx *app.Context, eng engine.Engine, includedStacks []MultiStackInfo, consolidationBranch string) error {
+func lockAndNotifyMultiStackPRs(ctx context.Context, deps Deps, eng engine.Engine, includedStacks []MultiStackInfo, consolidationBranch string) error {
 	var branchNames []string
 	for _, stack := range includedStacks {
 		branchNames = append(branchNames, stack.AllBranches...)
 	}
-	return lockAndMarkConsolidating(ctx, eng, branchNames, consolidationBranch)
+	return lockAndMarkConsolidating(ctx, deps, eng, branchNames, consolidationBranch)
 }

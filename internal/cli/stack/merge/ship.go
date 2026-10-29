@@ -208,7 +208,7 @@ func runMergeShip(ctx *app.Context, opts mergeShipOptions, postMergeHandler Post
 		MergeMethod:    mergeMethod,
 	}
 
-	if err := mergeAction.Action(ctx, actionOpts); err != nil {
+	if err := mergeAction.Action(ctx.Context, common.MergeDeps(ctx), actionOpts); err != nil {
 		return err
 	}
 
@@ -343,7 +343,7 @@ func runMultiStackShip(ctx *app.Context, opts shipMultiStackOptions) error {
 	}
 
 	// Execute multi-stack merge
-	result, err := mergeAction.ExecuteMultiStack(ctx, mergeAction.MultiStackOptions{
+	result, err := mergeAction.ExecuteMultiStack(ctx.Context, common.MergeDeps(ctx), mergeAction.MultiStackOptions{
 		SelectedStacks: opts.stacks,
 		SkipLocalCI:    opts.skipLocalCI,
 		Wait:           opts.wait,
@@ -363,7 +363,7 @@ func runMultiStackShip(ctx *app.Context, opts shipMultiStackOptions) error {
 
 	// Fire-and-forget (default): enable automerge and return immediately
 	if !opts.wait {
-		if err := mergeAction.EnableAutoMergeForPR(ctx, result.PRNumber); err != nil {
+		if err := mergeAction.EnableAutoMergeForPR(ctx.Context, common.MergeDeps(ctx), result.PRNumber); err != nil {
 			out.Warn("Could not enable automerge: %v", err)
 			out.Tip("Enable automerge manually on the PR: %s", result.PRURL)
 		} else {

@@ -67,7 +67,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		s.Checkout("main")
 
 		// Execute in worktree
-		err = merge.ExecuteInWorktree(s.Context, s.Engine, merge.ExecuteOptions{
+		err = merge.ExecuteInWorktree(s.Context.Context, merge.DepsFrom(s.Context), merge.ExecuteOptions{
 			Plan:  plan,
 			Force: true,
 			// The mock reports a CI check; skip the real registration wait.
@@ -153,7 +153,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		require.Equal(t, resolvedWorktreePath, resolvedWorktreeForBranch, "branch-a should be checked out in the worktree")
 
 		// Execute the merge plan - this should delete branch-a even though it's in a worktree
-		err = merge.ExecuteInWorktree(s.Context, s.Engine, merge.ExecuteOptions{
+		err = merge.ExecuteInWorktree(s.Context.Context, merge.DepsFrom(s.Context), merge.ExecuteOptions{
 			Plan:  plan,
 			Force: true,
 			// The mock reports a CI check; skip the real registration wait.

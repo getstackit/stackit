@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
 )
@@ -90,10 +89,10 @@ func validateStepPreconditions(ctx context.Context, step PlanStep, eng mergeExec
 
 // executeUpdatePRBase handles the UPDATE_PR_BASE step
 // This is used in top-down strategy to rebase the current branch onto trunk
-func executeUpdatePRBase(ctx *app.Context, eng mergeExecuteEngine, step PlanStep) error {
+func executeUpdatePRBase(ctx context.Context, deps Deps, eng mergeExecuteEngine, step PlanStep) error {
 	trunk := eng.Trunk()
 	trunkName := trunk.Name()
-	githubClient := ctx.GitHub()
+	githubClient := deps.GitHub()
 
 	// Get the parent revision (old base)
 	branch := eng.GetBranch(step.BranchName)
@@ -101,7 +100,7 @@ func executeUpdatePRBase(ctx *app.Context, eng mergeExecuteEngine, step PlanStep
 
 	// Get the old parent revision
 	parentBranch := eng.GetBranch(parentName)
-	oldParentRev, err := parentBranch.Revision(ctx.Context)
+	oldParentRev, err := parentBranch.Revision(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get parent revision: %w", err)
 	}
@@ -109,33 +108,33 @@ func executeUpdatePRBase(ctx *app.Context, eng mergeExecuteEngine, step PlanStep
 	// If parent is already trunk, we might just need to update the PR base
 	if parentName == trunkName {
 		// Just update the PR base branch via GitHub API
-		return updatePRBaseBranchFromContext(ctx.Context, githubClient, step.BranchName, trunkName)
+		return updatePRBaseBranchFromContext(ctx, githubClient, step.BranchName, trunkName)
 	}
 
 	// Rebase the branch onto trunk
 	// Save current branch state since git.Rebase no longer does this
-	currentBranchObj := eng.CurrentBranch(ctx.Context)
+	currentBranchObj := eng.CurrentBranch(ctx)
 	currentBranch := ""
 	if currentBranchObj != nil {
 		currentBranch = currentBranchObj.Name()
 	}
 	var currentRev string
 	if currentBranch == "" {
-		currentRev, _ = eng.GetCurrentRevision(ctx.Context)
+		currentRev, _ = eng.GetCurrentRevision(ctx)
 	}
 
-	ctx.Output.Debug("Rebasing %s onto trunk %s (old base %s)", step.BranchName, trunkName, oldParentRev)
-	gitResult, err := eng.Rebase(ctx.Context, git.RebaseSpec{Branch: step.BranchName, Onto: trunkName, OldBase: oldParentRev})
+	deps.Out.Debug("Rebasing %s onto trunk %s (old base %s)", step.BranchName, trunkName, oldParentRev)
+	gitResult, err := eng.Rebase(ctx, git.RebaseSpec{Branch: step.BranchName, Onto: trunkName, OldBase: oldParentRev})
 
 	// Restore original branch state
 	if currentBranch != "" {
-		_ = eng.CheckoutBranch(ctx.Context, eng.GetBranch(currentBranch))
+		_ = eng.CheckoutBranch(ctx, eng.GetBranch(currentBranch))
 	} else if currentRev != "" {
-		_ = eng.Detach(ctx.Context, currentRev)
+		_ = eng.Detach(ctx, currentRev)
 	}
 
 	if err != nil {
-		ctx.Output.Debug("Rebase of %s onto %s failed: %v", step.BranchName, trunkName, err)
+		deps.Out.Debug("Rebase of %s onto %s failed: %v", step.BranchName, trunkName, err)
 		return fmt.Errorf("failed to rebase %s onto %s: %w", step.BranchName, trunkName, err)
 	}
 
@@ -144,12 +143,12 @@ func executeUpdatePRBase(ctx *app.Context, eng mergeExecuteEngine, step PlanStep
 	}
 
 	// Update parent to trunk
-	if err := eng.SetParent(ctx.Context, eng.GetBranch(step.BranchName), eng.GetBranch(trunkName), engine.DivergenceRecompute); err != nil {
+	if err := eng.SetParent(ctx, eng.GetBranch(step.BranchName), eng.GetBranch(trunkName), engine.DivergenceRecompute); err != nil {
 		return fmt.Errorf("failed to update parent: %w", err)
 	}
 
 	// Update PR base branch via GitHub API
-	if err := updatePRBaseBranchFromContext(ctx.Context, githubClient, step.BranchName, trunkName); err != nil {
+	if err := updatePRBaseBranchFromContext(ctx, githubClient, step.BranchName, trunkName); err != nil {
 		return fmt.Errorf("failed to update PR base: %w", err)
 	}
 
@@ -185,11 +184,11 @@ func updatePRBaseBranchFromContext(ctx context.Context, githubClient github.Clie
 }
 
 // executeConsolidation handles the stack consolidation process
-func executeConsolidation(ctx *app.Context, eng mergeExecuteEngine, stepIndex int, opts ExecuteOptions) (*ConsolidationResult, error) {
-	consolidator := NewConsolidateMergeExecutor(opts.Plan, eng, ctx)
+func executeConsolidation(ctx context.Context, deps Deps, eng mergeExecuteEngine, stepIndex int, opts ExecuteOptions) (*ConsolidationResult, error) {
+	consolidator := NewConsolidateMergeExecutor(opts.Plan, eng, deps)
 	consolidator.SetProgressHandler(opts.Handler, stepIndex)
 	consolidator.mergeMethod = opts.MergeMethod
-	result, err := consolidator.Execute(ctx.Context, opts)
+	result, err := consolidator.Execute(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +197,7 @@ func executeConsolidation(ctx *app.Context, eng mergeExecuteEngine, stepIndex in
 }
 
 // executeWaitCIWithProgress waits for CI checks with progress reporting
-func executeWaitCIWithProgress(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecuteEngine, opts ExecuteOptions) error {
+func executeWaitCIWithProgress(ctx context.Context, deps Deps, step PlanStep, stepIndex int, eng mergeExecuteEngine, opts ExecuteOptions) error {
 	// Get PR info for better error messages
 	branch := eng.GetBranch(step.BranchName)
 	prInfo, err := branch.PrInfo()
@@ -216,14 +215,14 @@ func executeWaitCIWithProgress(ctx *app.Context, step PlanStep, stepIndex int, e
 	}
 
 	waiter := NewCIWaiter(CIWaiterOptions{
-		Client:            ctx.GitHub(),
-		Output:            ctx.Output,
+		Client:            deps.GitHub(),
+		Output:            deps.Out,
 		Timeout:           timeout,
 		RegistrationDelay: opts.CIRegistrationDelay,
 	})
 	waiter.SetProgressHandler(opts.Handler, stepIndex)
 
-	result, err := waiter.WaitForChecks(ctx.Context, step.BranchName, prNumber, step.ExpectChecks)
+	result, err := waiter.WaitForChecks(ctx, step.BranchName, prNumber, step.ExpectChecks)
 	if err != nil {
 		return fmt.Errorf("CI checks failed on PR #%d (%s): %w", prNumber, step.BranchName, err)
 	}

@@ -137,7 +137,7 @@ func TestDrainPushesRestackedBranchesToRemote(t *testing.T) {
 
 	fake := &drainFakeMergeAPI{repo: repo}
 	restore := newPRMergeAPI
-	newPRMergeAPI = func(*app.Context) prMergeAPI { return fake }
+	newPRMergeAPI = func(Deps) prMergeAPI { return fake }
 	t.Cleanup(func() { newPRMergeAPI = restore })
 
 	ctx := app.NewContext(eng,
@@ -154,7 +154,7 @@ func TestDrainPushesRestackedBranchesToRemote(t *testing.T) {
 	require.NoError(t, repo.CheckoutBranch("b"))
 	plan, _, err := CreateMergePlan(ctx.Context, eng, ctx.Output, ctx.GitHub(), CreatePlanOptions{Strategy: StrategyBottomUp})
 	require.NoError(t, err)
-	result, err := Drain(ctx, DrainOptions{
+	result, err := Drain(ctx.Context, DepsFrom(ctx), DrainOptions{
 		Plan:         plan,
 		TargetBranch: plan.CurrentBranch,
 		Limit:        1,

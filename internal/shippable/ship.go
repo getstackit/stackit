@@ -1,11 +1,11 @@
 package shippable
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions/merge"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/git"
 )
 
@@ -33,17 +33,17 @@ type ShipResult struct {
 
 // Shipper handles shipping selected stacks to trunk.
 type Shipper struct {
-	ctx *app.Context
+	deps merge.Deps
 }
 
-// NewShipper creates a new shipper.
-func NewShipper(ctx *app.Context) *Shipper {
-	return &Shipper{ctx: ctx}
+// NewShipper creates a new shipper that runs the multi-stack merge with deps.
+func NewShipper(deps merge.Deps) *Shipper {
+	return &Shipper{deps: deps}
 }
 
 // Ship ships the selected stacks to trunk by creating a consolidated PR.
 // It uses the existing multi-stack merge functionality.
-func (s *Shipper) Ship(stacks []Stack, opts ShipOptions) (*ShipResult, error) {
+func (s *Shipper) Ship(ctx context.Context, stacks []Stack, opts ShipOptions) (*ShipResult, error) {
 	if len(stacks) == 0 {
 		return nil, errors.New("no stacks to ship")
 	}
@@ -68,7 +68,7 @@ func (s *Shipper) Ship(stacks []Stack, opts ShipOptions) (*ShipResult, error) {
 	}
 
 	// Execute the multi-stack merge
-	mergeResult, err := merge.ExecuteMultiStack(s.ctx, merge.MultiStackOptions{
+	mergeResult, err := merge.ExecuteMultiStack(ctx, s.deps, merge.MultiStackOptions{
 		SelectedStacks: selectedRoots,
 		SkipLocalCI:    opts.SkipLocalCI,
 		Wait:           opts.Wait,

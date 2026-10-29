@@ -170,7 +170,7 @@ func runMergeDrain(ctx *app.Context, opts mergeDrainOptions) error {
 		return err
 	}
 
-	result, err := mergeAction.Drain(ctx, mergeAction.DrainOptions{
+	result, err := mergeAction.Drain(ctx.Context, common.MergeDeps(ctx), mergeAction.DrainOptions{
 		Plan:         plan,
 		TargetBranch: targetBranch,
 		Scope:        opts.scope,
@@ -206,7 +206,7 @@ func resolveMergeMethod(ctx *app.Context, methodFlag string) (github.MergeMethod
 			return "", fmt.Errorf("invalid merge method: %s (must be squash, merge, or rebase)", methodFlag)
 		}
 	}
-	return mergeAction.GetMergeMethod(ctx, ctx.Config, ctx.GitHub())
+	return mergeAction.GetMergeMethod(ctx.Context, ctx.Output, ctx.Prompts(), ctx.Config, ctx.GitHub())
 }
 
 func formatMergeDrainPlan(plan *mergeAction.Plan, validation *mergeAction.PlanValidation) string {

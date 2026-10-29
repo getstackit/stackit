@@ -3,8 +3,9 @@ package merge
 import (
 	"testing"
 
-	"github.com/getstackit/stackit/internal/git"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getstackit/stackit/internal/git"
 )
 
 func TestPRCleanupResult(t *testing.T) {
@@ -91,7 +92,7 @@ func TestPRCleanerWithNilGitHubClient(t *testing.T) {
 		t.Parallel()
 
 		// Create a cleaner with nil context (no GitHub client)
-		cleaner := NewPRCleaner(nil, nil, PRCleanupConfig{
+		cleaner := NewPRCleaner(Deps{}, nil, PRCleanupConfig{
 			Source:                CleanupSourceConsolidate,
 			ConsolidationPRNumber: 123,
 		})

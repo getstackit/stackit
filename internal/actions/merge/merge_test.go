@@ -21,7 +21,7 @@ func TestAction(t *testing.T) {
 		// Detach HEAD
 		s.RunGit("checkout", "HEAD~0").Rebuild()
 
-		err := merge.Action(s.Context, merge.Options{
+		err := merge.Action(s.Context.Context, merge.DepsFrom(s.Context), merge.Options{
 			DryRun:   false,
 			Confirm:  false,
 			Strategy: merge.StrategyBottomUp,
@@ -45,7 +45,7 @@ func TestAction(t *testing.T) {
 		// Verify we're on trunk
 		require.True(t, s.Engine.CurrentBranch(t.Context()).IsTrunk())
 
-		err := merge.Action(s.Context, merge.Options{
+		err := merge.Action(s.Context.Context, merge.DepsFrom(s.Context), merge.Options{
 			DryRun:   false,
 			Confirm:  false,
 			Strategy: merge.StrategyBottomUp,
@@ -62,7 +62,7 @@ func TestAction(t *testing.T) {
 		// Verify branch is not tracked
 		require.False(t, s.Engine.GetBranch("untracked").IsTracked())
 
-		err := merge.Action(s.Context, merge.Options{
+		err := merge.Action(s.Context.Context, merge.DepsFrom(s.Context), merge.Options{
 			DryRun:   false,
 			Confirm:  false,
 			Strategy: merge.StrategyBottomUp,
@@ -84,7 +84,7 @@ func TestAction(t *testing.T) {
 		// Verify branch is tracked
 		require.True(t, s.Engine.GetBranch("branch1").IsTracked())
 
-		err := merge.Action(s.Context, merge.Options{
+		err := merge.Action(s.Context.Context, merge.DepsFrom(s.Context), merge.Options{
 			DryRun:   false,
 			Confirm:  false,
 			Strategy: merge.StrategyBottomUp,
@@ -118,7 +118,7 @@ func TestAction(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, prInfo)
 
-		err = merge.Action(s.Context, merge.Options{
+		err = merge.Action(s.Context.Context, merge.DepsFrom(s.Context), merge.Options{
 			DryRun:   true,
 			Confirm:  false,
 			Strategy: merge.StrategyBottomUp,
@@ -220,7 +220,7 @@ func TestAction(t *testing.T) {
 		s.Checkout("branch-a")
 
 		// Execute the merge plan
-		err = merge.Execute(s.Context, s.Engine, merge.ExecuteOptions{
+		err = merge.Execute(s.Context.Context, merge.DepsFrom(s.Context), merge.ExecuteOptions{
 			Plan:  plan,
 			Force: true,
 			// The mock reports a CI check; skip the real registration wait.
@@ -261,7 +261,7 @@ func TestExecute_AlwaysCallsComplete(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		handler := &mockHandler{}
-		err := merge.Execute(s.Context, s.Engine, merge.ExecuteOptions{
+		err := merge.Execute(s.Context.Context, merge.DepsFrom(s.Context), merge.ExecuteOptions{
 			Plan:    &merge.Plan{Steps: []merge.PlanStep{}},
 			Handler: handler,
 		})
@@ -273,7 +273,7 @@ func TestExecute_AlwaysCallsComplete(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		handler := &mockHandler{}
-		err := merge.Execute(s.Context, s.Engine, merge.ExecuteOptions{
+		err := merge.Execute(s.Context.Context, merge.DepsFrom(s.Context), merge.ExecuteOptions{
 			Plan: &merge.Plan{Steps: []merge.PlanStep{
 				{StepType: merge.StepMergePR, BranchName: "non-existent", Description: "test failure"},
 			}},

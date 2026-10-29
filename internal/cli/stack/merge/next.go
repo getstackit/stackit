@@ -144,7 +144,7 @@ func runMergeNext(ctx *app.Context, opts mergeNextOptions, postMergeHandler Post
 	}
 
 	// Merge the PR (direct merge → automerge → poll fallback)
-	outcome, err := mergeAction.MergePR(ctx, mergeAction.MergePROptions{
+	outcome, err := mergeAction.MergePR(ctx.Context, common.MergeDeps(ctx), mergeAction.MergePROptions{
 		BranchName:  bottomPR.BranchName,
 		PRNumber:    bottomPR.PRNumber,
 		MergeMethod: mergeMethod,

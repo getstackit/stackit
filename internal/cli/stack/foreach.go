@@ -8,8 +8,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions/foreach"
+	"github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
+	wtcli "github.com/getstackit/stackit/internal/cli/worktree"
 	"github.com/getstackit/stackit/internal/engine"
 )
 
@@ -79,6 +81,14 @@ Examples:
 					FindFirstFailure: firstFail,
 					Jobs:             jobs,
 				}
+				deps := foreach.Deps{
+					Engine:   ctx.Engine,
+					Out:      ctx.Output,
+					RepoRoot: ctx.RepoRoot,
+					ResolveWorktreeHooks: func() ([]string, error) {
+						return worktree.ResolveApprovedHooks(wtcli.DepsFrom(ctx))
+					},
+				}
 
 				// Scope is ignored when running across independent stacks — every
 				// branch in each selected stack is included.
@@ -110,7 +120,7 @@ Examples:
 				if jsonOutput {
 					cmd.SilenceErrors = true
 					jsonHandler := foreach.NewJSONHandler()
-					err := foreach.Action(ctx, opts, jsonHandler)
+					err := foreach.Action(ctx.Context, deps, opts, jsonHandler)
 					if err != nil {
 						jsonHandler.SetError(err)
 					}
@@ -128,7 +138,7 @@ Examples:
 				// "No branches to process" CompletionEvent races with the
 				// deferred Cleanup and the user only sees bubbletea
 				// startup/teardown codes flash.
-				hasWork, err := foreach.HasForeachWork(ctx, opts)
+				hasWork, err := foreach.HasForeachWork(ctx.Context, deps, opts)
 				if err != nil {
 					return err
 				}
@@ -140,7 +150,7 @@ Examples:
 				// Create runner (manages terminal state) and handler (processes events)
 				runner, handler := NewForeachUI(ctx.Output, ctx.Logger, opts.Parallel)
 				defer runner.Cleanup()
-				return foreach.Action(ctx, opts, handler)
+				return foreach.Action(ctx.Context, deps, opts, handler)
 			})
 		},
 	}

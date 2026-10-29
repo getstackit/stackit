@@ -6,8 +6,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
 )
@@ -55,15 +53,15 @@ func (r PRCleanupResult) FailedCount() int { return len(r.FailedPRs) }
 
 // PRCleaner handles post-merge cleanup of individual PRs
 type PRCleaner struct {
-	ctx    *app.Context
+	deps   Deps
 	engine prCleanupEngine
 	config PRCleanupConfig
 }
 
 // NewPRCleaner creates a new PR cleaner
-func NewPRCleaner(ctx *app.Context, eng prCleanupEngine, config PRCleanupConfig) *PRCleaner {
+func NewPRCleaner(deps Deps, eng prCleanupEngine, config PRCleanupConfig) *PRCleaner {
 	return &PRCleaner{
-		ctx:    ctx,
+		deps:   deps,
 		engine: eng,
 		config: config,
 	}
@@ -72,8 +70,8 @@ func NewPRCleaner(ctx *app.Context, eng prCleanupEngine, config PRCleanupConfig)
 // CleanupBranches closes PRs for the given branch names and updates their bodies with a footer
 func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) PRCleanupResult {
 	result := PRCleanupResult{}
-	out := c.ctx.Output
-	githubClient := c.ctx.GitHub()
+	out := c.deps.Out
+	githubClient := c.deps.GitHub()
 
 	if githubClient == nil {
 		out.Debug("No GitHub client available for PR cleanup")
@@ -106,7 +104,7 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		branchPRs = append(branchPRs, branchWithPR{branch: branch, prInfo: prInfo})
 		prNumbers = append(prNumbers, *prInfo.Number())
 	}
-	prDetails, err := github.BatchGetPRStateBodyGraphQL(ctx, c.ctx.GHRunner, repo, prNumbers)
+	prDetails, err := github.BatchGetPRStateBodyGraphQL(ctx, c.deps.GHRunner, repo, prNumbers)
 	if err != nil {
 		out.Debug("Failed to batch fetch PR details: %v", err)
 		prDetails = map[git.PRNumber]github.PRStateBody{}
@@ -164,7 +162,7 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 
 	// Sync metadata to remote
 	if len(affectedBranches) > 0 {
-		if err := actions.PushMetadataAndSyncPRs(c.ctx, affectedBranches); err != nil {
+		if err := c.deps.PRSync.PushAndSync(ctx, affectedBranches); err != nil {
 			out.Debug("Failed to sync PR metadata: %v", err)
 		}
 	}
@@ -184,7 +182,7 @@ func (c *PRCleaner) buildFooter() string {
 
 // LogResult logs the cleanup result to output
 func (c *PRCleaner) LogResult(result PRCleanupResult) {
-	out := c.ctx.Output
+	out := c.deps.Out
 	if result.ClosedCount() > 0 {
 		out.Info("Closed %d individual PR(s)", result.ClosedCount())
 	}

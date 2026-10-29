@@ -1,12 +1,12 @@
 package merge
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/actions/sync"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
@@ -40,8 +40,8 @@ type DrainResult struct {
 // A restack conflict in a drain branch is a hard error; drain never enters the
 // conflict workflow (see PostMergeSync). Branches are locked with
 // LockReasonDraining for the duration and unlocked on return.
-func Drain(ctx *app.Context, opts DrainOptions, handler ProgressHandler) (DrainResult, error) {
-	eng := ctx.Engine
+func Drain(ctx context.Context, deps Deps, opts DrainOptions, handler ProgressHandler) (DrainResult, error) {
+	eng := deps.Engine
 	result := DrainResult{}
 	if opts.Plan == nil || len(opts.Plan.BranchesToMerge) == 0 {
 		return result, nil
@@ -57,14 +57,14 @@ func Drain(ctx *app.Context, opts DrainOptions, handler ProgressHandler) (DrainR
 	for i, b := range opts.Plan.BranchesToMerge {
 		branchesToLock[i] = eng.GetBranch(b.BranchName)
 	}
-	if _, err := eng.SetLocked(ctx.Context, branchesToLock, engine.LockReasonDraining); err != nil {
+	if _, err := eng.SetLocked(ctx, branchesToLock, engine.LockReasonDraining); err != nil {
 		return result, fmt.Errorf("failed to lock drain branches: %w", err)
 	}
-	defer unlockDrainBranches(ctx, opts.Plan.BranchesToMerge)
+	defer unlockDrainBranches(ctx, eng, opts.Plan.BranchesToMerge)
 
 	for opts.Limit == 0 || result.Merged < opts.Limit {
 		// Re-read state each iteration (branches change after merges + sync)
-		plan, _, err := CreateMergePlan(ctx.Context, eng, ctx.Output, ctx.GitHub(), CreatePlanOptions{
+		plan, _, err := CreateMergePlan(ctx, eng, deps.Out, deps.GitHub(), CreatePlanOptions{
 			Strategy:     StrategyBottomUp,
 			Force:        opts.Force,
 			TargetBranch: opts.TargetBranch,
@@ -93,7 +93,7 @@ func Drain(ctx *app.Context, opts DrainOptions, handler ProgressHandler) (DrainR
 		})
 
 		// Drain always waits for each PR to merge before proceeding.
-		if _, err := MergePR(ctx, MergePROptions{
+		if _, err := MergePR(ctx, deps, MergePROptions{
 			BranchName:  bottomPR.BranchName,
 			PRNumber:    bottomPR.PRNumber,
 			MergeMethod: opts.MergeMethod,
@@ -104,7 +104,7 @@ func Drain(ctx *app.Context, opts DrainOptions, handler ProgressHandler) (DrainR
 
 		result.Merged++
 
-		if err := syncAfterDrainMerge(ctx, bottomPR.PRNumber, plan.BranchesToMerge[1:], handler); err != nil {
+		if err := syncAfterDrainMerge(ctx, deps, bottomPR.PRNumber, plan.BranchesToMerge[1:], handler); err != nil {
 			return result, err
 		}
 	}
@@ -114,13 +114,13 @@ func Drain(ctx *app.Context, opts DrainOptions, handler ProgressHandler) (DrainR
 
 // syncAfterDrainMerge checks out trunk, restacks the remaining drain branches,
 // and publishes them.
-func syncAfterDrainMerge(ctx *app.Context, mergedPR git.PRNumber, remaining []BranchMergeInfo, handler ProgressHandler) error {
+func syncAfterDrainMerge(ctx context.Context, deps Deps, mergedPR git.PRNumber, remaining []BranchMergeInfo, handler ProgressHandler) error {
 	handler.OnProgress(DrainSyncingEvent{PRNumber: mergedPR})
 
 	// Everything after the PR we just merged
 	restackScope := remainingBranchNames(remaining)
 
-	syncResult, err := PostMergeSync(ctx, PostMergeSyncOptions{RestackScope: restackScope}, func() sync.Handler {
+	syncResult, err := PostMergeSync(ctx, deps, PostMergeSyncOptions{RestackScope: restackScope}, func() sync.Handler {
 		return &sync.NullHandler{}
 	})
 	if err != nil {
@@ -153,7 +153,7 @@ func syncAfterDrainMerge(ctx *app.Context, mergedPR git.PRNumber, remaining []Br
 	// which makes the PR *look* correct while both of the above are still
 	// wrong.
 	if len(restackScope) > 0 {
-		if err := pushDrainedBranches(ctx, restackScope, handler); err != nil {
+		if err := pushDrainedBranches(ctx, deps.Submit, restackScope, handler); err != nil {
 			return fmt.Errorf("post-merge push failed after PR #%d: %w", mergedPR, err)
 		}
 	}
@@ -168,8 +168,8 @@ func syncAfterDrainMerge(ctx *app.Context, mergedPR git.PRNumber, remaining []Br
 // retargets each PR's base. UpdateOnly keeps it to branches that already have a
 // PR — a drain must never open one — and NoEdit keeps it silent about
 // titles and descriptions, which are not drain's business to change.
-func pushDrainedBranches(ctx *app.Context, branchNames []string, handler ProgressHandler) error {
-	return submit.Action(ctx, submit.Options{
+func pushDrainedBranches(ctx context.Context, submitDeps submit.Deps, branchNames []string, handler ProgressHandler) error {
+	return submit.Action(ctx, submitDeps, submit.Options{
 		// branchNames[0] is the next PR to merge and needs pushing itself, so
 		// the range has to include it as well as its descendants.
 		Branch:     branchNames[0],
@@ -213,16 +213,22 @@ func remainingBranchNames(branches []BranchMergeInfo) []string {
 	return names
 }
 
+// drainUnlockEngine is the engine surface needed to release drain locks.
+type drainUnlockEngine interface {
+	GetBranch(branchName string) engine.Branch
+	SetLocked(ctx context.Context, branches engine.Branches, reason engine.LockReason) (engine.BatchLockResult, error)
+}
+
 // unlockDrainBranches unlocks any remaining drain-locked branches that still exist.
-func unlockDrainBranches(ctx *app.Context, branches []BranchMergeInfo) {
+func unlockDrainBranches(ctx context.Context, eng drainUnlockEngine, branches []BranchMergeInfo) {
 	var toUnlock []engine.Branch
 	for _, b := range branches {
-		branch := ctx.Engine.GetBranch(b.BranchName)
+		branch := eng.GetBranch(b.BranchName)
 		if branch.IsTracked() && branch.LockReason() == engine.LockReasonDraining {
 			toUnlock = append(toUnlock, branch)
 		}
 	}
 	if len(toUnlock) > 0 {
-		_, _ = ctx.Engine.SetLocked(ctx.Context, toUnlock, engine.LockReasonNone)
+		_, _ = eng.SetLocked(ctx, toUnlock, engine.LockReasonNone)
 	}
 }

@@ -3,7 +3,7 @@ package navigation
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/checkout"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
@@ -86,7 +86,7 @@ as an argument to move multiple levels at once.`,
 					return nil
 				}
 
-				_, err = common.Checkout(ctx, actions.CheckoutOptions{BranchName: targetBranch.Name()}, nil)
+				_, err = common.Checkout(ctx, checkout.Options{BranchName: targetBranch.Name()}, nil)
 				return err
 			})
 		},

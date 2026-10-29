@@ -4,9 +4,13 @@ package branch
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/actions/create"
+	wtactions "github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
+	wtcli "github.com/getstackit/stackit/internal/cli/worktree"
 	"github.com/getstackit/stackit/internal/config"
 )
 
@@ -88,7 +92,13 @@ Examples:
 					defer runner.Cleanup()
 				}
 
-				result, err := create.Action(ctx, opts, handler)
+				result, err := create.Action(ctx.Context, create.Deps{
+					Engine:       ctx.Engine,
+					MutationDeps: actiondeps.Mutation(ctx),
+					Log:          ctx.Logger,
+					Verify:       ctx.Verify,
+					Worktrees:    wtactions.BranchWorktrees{Deps: wtcli.DepsFrom(ctx)},
+				}, opts, handler)
 				if err != nil {
 					return err
 				}

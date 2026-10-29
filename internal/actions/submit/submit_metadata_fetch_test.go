@@ -47,7 +47,7 @@ func TestPreparePRMetadata_FetchFromGitHub(t *testing.T) {
 		// 3. Prepare metadata without editing
 		opts := submit.MetadataOptions{}
 
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), branch, opts, nil)
 		require.NoError(t, err)
 
 		// 4. Verify body was fetched from GitHub

@@ -49,7 +49,7 @@ func TestSyncStackBranchesBatchFastForward(t *testing.T) {
 
 	summary := &Summary{}
 	// Pass nil statuses to exercise the on-demand fallback path.
-	require.NoError(t, syncStackBranches(s.Context, nil, nil, &NullHandler{}, summary))
+	require.NoError(t, syncStackBranches(s.Context.Context, DepsFrom(s.Context), nil, nil, &NullHandler{}, summary))
 
 	require.Equal(t, 3, summary.BranchesSynced, "all three behind branches should be synced")
 	require.Empty(t, summary.ConflictBranches, "no branch should conflict")
@@ -85,7 +85,7 @@ func TestSyncStackBranchesSkipsDiverged(t *testing.T) {
 
 	summary := &Summary{}
 	// Pass nil statuses to exercise the on-demand fallback path.
-	require.NoError(t, syncStackBranches(s.Context, nil, nil, &NullHandler{}, summary))
+	require.NoError(t, syncStackBranches(s.Context.Context, DepsFrom(s.Context), nil, nil, &NullHandler{}, summary))
 
 	require.Equal(t, 0, summary.BranchesSynced, "diverged branch should not be synced")
 	require.NotContains(t, summary.ConflictBranches, "d", "diverged branch is skipped, not flagged as conflict")
@@ -111,7 +111,7 @@ func TestSyncActionFastForwardsBehindBranches(t *testing.T) {
 
 	s.Checkout("main")
 
-	require.NoError(t, Action(s.Context, Options{}, nil))
+	require.NoError(t, Action(s.Context.Context, DepsFrom(s.Context), Options{}, nil))
 
 	for branch, wantSha := range want {
 		got, err := s.Scene.Repo.GetRevision(branch)

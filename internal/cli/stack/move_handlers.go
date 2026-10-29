@@ -1,12 +1,12 @@
 package stack
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/actions/move"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
@@ -18,9 +18,9 @@ import (
 // The runner manages terminal state; the handler processes events.
 // Caller must defer runner.Cleanup() to restore terminal on exit.
 // Currently returns nil runner as there's no TUI component yet.
-func NewMoveUI(out output.Output, _ output.Logger, interactive bool) (*tui.Runner, move.Handler) {
+func NewMoveUI(out output.Output, eng engine.Engine, interactive bool) (*tui.Runner, move.Handler) {
 	if interactive {
-		return nil, NewInteractiveMoveHandler(out)
+		return nil, NewInteractiveMoveHandler(out, eng)
 	}
 	return nil, NewSimpleMoveHandler(out)
 }
@@ -82,19 +82,21 @@ func (h *SimpleMoveHandler) PromptConfirmMove(_ move.Preview) (bool, error) {
 }
 
 // PromptSelectOnto returns error for simple handler (non-interactive).
-func (h *SimpleMoveHandler) PromptSelectOnto(_ *app.Context, _ string) (string, []engine.RebaseSpec, error) {
+func (h *SimpleMoveHandler) PromptSelectOnto(context.Context, string) (string, []engine.RebaseSpec, error) {
 	return "", nil, errors.New("target branch must be specified for move")
 }
 
 // InteractiveMoveHandler provides interactive prompts for move operations
 type InteractiveMoveHandler struct {
 	SimpleMoveHandler
+	eng engine.Engine
 }
 
 // NewInteractiveMoveHandler creates a new InteractiveMoveHandler
-func NewInteractiveMoveHandler(out output.Output) *InteractiveMoveHandler {
+func NewInteractiveMoveHandler(out output.Output, eng engine.Engine) *InteractiveMoveHandler {
 	return &InteractiveMoveHandler{
 		SimpleMoveHandler: *NewSimpleMoveHandler(out),
+		eng:               eng,
 	}
 }
 
@@ -139,22 +141,22 @@ func (h *InteractiveMoveHandler) PromptConfirmMove(preview move.Preview) (bool, 
 }
 
 // PromptSelectOnto prompts user to select a new parent when --onto is not provided.
-func (h *InteractiveMoveHandler) PromptSelectOnto(ctx *app.Context, sourceBranch string) (string, []engine.RebaseSpec, error) {
-	return selectOntoInteractive(ctx, sourceBranch)
+func (h *InteractiveMoveHandler) PromptSelectOnto(ctx context.Context, sourceBranch string) (string, []engine.RebaseSpec, error) {
+	return selectOntoInteractive(ctx, h.eng, h.Output, sourceBranch)
 }
 
 // selectOntoInteractive shows an interactive branch selector for choosing the "onto" branch
 // and returns precomputed rebase specs for the final selection.
 // This uses a compact inline bubbletea model that combines selection and confirmation.
-func selectOntoInteractive(ctx *app.Context, sourceBranch string) (string, []engine.RebaseSpec, error) {
-	selection, err := move.PrepareSelection(ctx, sourceBranch)
+func selectOntoInteractive(ctx context.Context, eng engine.Engine, out output.Output, sourceBranch string) (string, []engine.RebaseSpec, error) {
+	selection, err := move.PrepareSelection(ctx, eng, out, sourceBranch)
 	if err != nil {
 		return "", nil, err
 	}
 
 	// Create validation function that checks for conflicts when moving to a branch.
 	validator := func(ontoBranch string) (*tui.MoveValidation, error) {
-		validation, commits, rebaseSpecs, err := selection.ValidateOnto(ctx.Context, ontoBranch)
+		validation, commits, rebaseSpecs, err := selection.ValidateOnto(ctx, ontoBranch)
 		if err != nil {
 			return nil, err
 		}
@@ -188,7 +190,7 @@ func selectOntoInteractive(ctx *app.Context, sourceBranch string) (string, []eng
 		Validator:    validator,
 	}
 
-	result, err := tui.PromptMoveSelect(ctx.Context, ctx.Engine, config)
+	result, err := tui.PromptMoveSelect(ctx, eng, config)
 	if err != nil {
 		return "", nil, err
 	}

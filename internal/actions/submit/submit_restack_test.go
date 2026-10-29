@@ -53,7 +53,7 @@ func TestSubmitReportsRestackPerBranch(t *testing.T) {
 
 	handler := &captureRestackHandler{}
 	opts := submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Restack: true}
-	require.NoError(t, submit.Action(s.Context, opts, handler))
+	require.NoError(t, submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, handler))
 
 	results := map[string]actions.RestackResult{}
 	for _, event := range handler.branches {

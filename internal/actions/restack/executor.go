@@ -413,3 +413,30 @@ func resultName(r engine.RestackResult) string {
 	}
 	return "unknown"
 }
+
+// Runner plans and applies in one call, for the common case of restacking a
+// set of branches and stopping at the first conflict.
+type Runner struct {
+	Planner  Planner
+	Executor Executor
+}
+
+// Restack plans branches and applies the plan, entering the conflict
+// workflow on the first conflict.
+func (r Runner) Restack(ctx context.Context, branches engine.Branches) error {
+	return r.RestackWithReport(ctx, branches, nil, ConflictEnterWorkflow)
+}
+
+// RestackWithReport is Restack with a progress sink and conflict mode. A nil
+// report keeps the executor's own.
+func (r Runner) RestackWithReport(ctx context.Context, branches engine.Branches, report ProgressFunc, mode ConflictMode) error {
+	plan, err := r.Planner.Plan(ctx, branches, nil)
+	if err != nil {
+		return err
+	}
+	exec := r.Executor
+	if report != nil {
+		exec.Report = report
+	}
+	return exec.Execute(ctx, plan, mode, nil)
+}

@@ -4,7 +4,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/actions/freeze"
+	"github.com/getstackit/stackit/internal/actions/get"
 
 	"github.com/stretchr/testify/require"
 
@@ -34,12 +39,12 @@ import (
 // landedParentHandler answers get's landed-ancestor prompt and records what it
 // was told, standing in for the interactive CLI handler.
 type landedParentHandler struct {
-	actions.GetNullHandler
-	decision actions.LandedAncestorDecision
-	reports  []actions.LandedAncestorReport
+	get.NullHandler
+	decision get.LandedAncestorDecision
+	reports  []get.LandedAncestorReport
 }
 
-func (h *landedParentHandler) ReportLandedAncestors(report actions.LandedAncestorReport) (actions.LandedAncestorDecision, error) {
+func (h *landedParentHandler) ReportLandedAncestors(report get.LandedAncestorReport) (get.LandedAncestorDecision, error) {
 	h.reports = append(h.reports, report)
 	return h.decision, nil
 }
@@ -123,8 +128,8 @@ func stackWithLandedParent(t *testing.T, land mergeMethod, forget forgottenMetad
 		TrackBranch("b", "a")
 
 	sh.Context.GitHubClient = newCountingGitHubClient(t, testhelpers.NewMockGitHubServerConfig())
-	require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
-	require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+	require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
+	require.NoError(t, syncaction.Action(sh.Context.Context, common.SyncDeps(sh.Context), syncaction.Options{}, nil))
 
 	sh.Checkout("main")
 	land(t, sh)
@@ -156,12 +161,12 @@ func stackWithLandedParent(t *testing.T, land mergeMethod, forget forgottenMetad
 func restackBranchOntoStack(t *testing.T, sh *scenario.Scenario, branch string) {
 	t.Helper()
 	sh.Checkout(branch)
-	plan, err := actions.PlanRestack(sh.Context, actions.RestackOptions{
+	plan, err := actions.PlanRestack(sh.Context, actiondeps.Restack(sh.Context), actions.RestackOptions{
 		BranchName: branch,
 		Scope:      engine.StackRangeFull(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, actions.RestackAction(sh.Context, plan, &actions.NullRestackHandler{}))
+	require.NoError(t, actions.RestackAction(sh.Context, actiondeps.Restack(sh.Context), plan, &actions.NullRestackHandler{}))
 	sh.Rebuild()
 }
 
@@ -191,8 +196,8 @@ func TestGetPastLandedParent(t *testing.T) {
 			t.Parallel()
 			sh := stackWithLandedParent(t, tc.land, keepAllMetadata)
 
-			handler := &landedParentHandler{decision: actions.UnfreezeAndRestack}
-			require.NoError(t, actions.GetAction(sh.Context, "b", actions.GetOptions{Restack: true}, handler))
+			handler := &landedParentHandler{decision: get.UnfreezeAndRestack}
+			require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "b", get.Options{Restack: true}, handler))
 			sh.Rebuild()
 
 			sh.ExpectStackStructure(map[string]string{"b": "main"})
@@ -216,8 +221,8 @@ func TestGetPastLandedParentReport(t *testing.T) {
 		t.Parallel()
 		sh := stackWithLandedParent(t, squashLanding, keepAllMetadata)
 
-		handler := &landedParentHandler{decision: actions.LeaveFrozen}
-		require.NoError(t, actions.GetAction(sh.Context, "b", actions.GetOptions{Restack: true}, handler))
+		handler := &landedParentHandler{decision: get.LeaveFrozen}
+		require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "b", get.Options{Restack: true}, handler))
 
 		require.Len(t, handler.reports, 1)
 		report := handler.reports[0]
@@ -264,8 +269,8 @@ func TestGetPastLandedParentReport(t *testing.T) {
 			TrackBranch("b", "a")
 
 		sh.Context.GitHubClient = newCountingGitHubClient(t, testhelpers.NewMockGitHubServerConfig())
-		require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
-		require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+		require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
+		require.NoError(t, syncaction.Action(sh.Context.Context, common.SyncDeps(sh.Context), syncaction.Options{}, nil))
 
 		sh.Checkout("main")
 		squashLanding(t, sh)
@@ -273,8 +278,8 @@ func TestGetPastLandedParentReport(t *testing.T) {
 		require.NoError(t, sh.Scene.Repo.RunGitCommand("push", "origin", ":refs/heads/a"))
 		sh.Rebuild()
 
-		handler := &landedParentHandler{decision: actions.UnfreezeAndRestack}
-		require.NoError(t, actions.GetAction(sh.Context, "b", actions.GetOptions{Restack: true}, handler))
+		handler := &landedParentHandler{decision: get.UnfreezeAndRestack}
+		require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "b", get.Options{Restack: true}, handler))
 		sh.Rebuild()
 
 		require.Empty(t, handler.reports, "a is still local, so nothing was re-anchored")
@@ -305,8 +310,8 @@ func TestGetPastLandedParentWithoutParentMetadata(t *testing.T) {
 			t.Parallel()
 			sh := stackWithLandedParent(t, tc.land, forgetLandedMetadata)
 
-			handler := &landedParentHandler{decision: actions.UnfreezeAndRestack}
-			require.NoError(t, actions.GetAction(sh.Context, "b", actions.GetOptions{Restack: true}, handler))
+			handler := &landedParentHandler{decision: get.UnfreezeAndRestack}
+			require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "b", get.Options{Restack: true}, handler))
 			sh.Rebuild()
 
 			require.Len(t, handler.reports, 1)
@@ -329,8 +334,8 @@ func TestGetPastLandedParentWithNoMetadataAtAll(t *testing.T) {
 	t.Parallel()
 	sh := stackWithLandedParent(t, squashLanding, forgetAllMetadata)
 
-	handler := &landedParentHandler{decision: actions.UnfreezeAndRestack}
-	require.NoError(t, actions.GetAction(sh.Context, "b", actions.GetOptions{Restack: true}, handler))
+	handler := &landedParentHandler{decision: get.UnfreezeAndRestack}
+	require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "b", get.Options{Restack: true}, handler))
 	sh.Rebuild()
 
 	require.Len(t, handler.reports, 1)
@@ -367,9 +372,9 @@ func TestGetPastLandedParentUnfrozenLeavesUnanchoredAlone(t *testing.T) {
 			t.Parallel()
 			sh := stackWithLandedParent(t, tc.land, forgetAllMetadata)
 
-			handler := &landedParentHandler{decision: actions.UnfreezeAndRestack}
-			require.NoError(t, actions.GetAction(sh.Context, "b",
-				actions.GetOptions{Restack: true, Unfrozen: true}, handler))
+			handler := &landedParentHandler{decision: get.UnfreezeAndRestack}
+			require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "b",
+				get.Options{Restack: true, Unfrozen: true}, handler))
 			sh.Rebuild()
 
 			require.Len(t, handler.reports, 1)
@@ -399,8 +404,8 @@ func TestGetPastLandedParentWithoutRestack(t *testing.T) {
 	t.Parallel()
 	sh := stackWithLandedParent(t, squashLanding, keepAllMetadata)
 
-	handler := &landedParentHandler{decision: actions.UnfreezeAndRestack}
-	require.NoError(t, actions.GetAction(sh.Context, "b", actions.GetOptions{Restack: false}, handler))
+	handler := &landedParentHandler{decision: get.UnfreezeAndRestack}
+	require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "b", get.Options{Restack: false}, handler))
 	sh.Rebuild()
 
 	require.Len(t, handler.reports, 1)

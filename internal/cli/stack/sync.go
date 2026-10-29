@@ -76,7 +76,7 @@ If trunk cannot be fast-forwarded to match remote, overwrites trunk with the rem
 				defer runner.Cleanup()
 
 				// Run sync action with handler
-				return sync.Action(ctx, opts, handler)
+				return sync.Action(ctx.Context, common.SyncDeps(ctx), opts, handler)
 			})
 		},
 	}

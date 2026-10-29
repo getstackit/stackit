@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
@@ -16,33 +15,43 @@ type Options struct {
 	Force bool
 }
 
-// abortEngine lists exactly the engine methods abort calls.
-type abortEngine interface {
+// Engine lists exactly the engine methods abort calls.
+type Engine interface {
 	actions.RecoveryEngine
+	actions.TopologyEngine
 	engine.BranchLookup
 	LoadSnapshot(snapshotID string) (*engine.Snapshot, error)
 }
 
+// Deps are the collaborators abort needs.
+type Deps struct {
+	Engine   Engine
+	Out      output.Output
+	RepoRoot string
+	// LinearStacks reflects stack.shape=linear, for the restored-topology warning.
+	LinearStacks bool
+}
+
 // Action cancels an in-progress operation
-func Action(ctx *app.Context, opts Options, handler Handler) error {
+func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error {
 	if handler == nil {
 		handler = &NullHandler{}
 	}
 	defer handler.Cleanup()
 
-	var eng abortEngine = ctx.Engine
-	out := ctx.Output
+	eng := deps.Engine
+	out := deps.Out
 
-	rebaseInProgress := eng.IsRebaseInProgress(ctx.Context)
-	mergeInProgress := eng.IsMergeInProgress(ctx.Context)
+	rebaseInProgress := eng.IsRebaseInProgress(ctx)
+	mergeInProgress := eng.IsMergeInProgress(ctx)
 
 	// Check for continuation state. It also names the snapshot the halted
 	// command recorded, which is the only one abort may roll back to.
-	continuation, continuationErr := config.GetContinuationState(ctx.RepoRoot)
+	continuation, continuationErr := config.GetContinuationState(deps.RepoRoot)
 	hasContinuation := continuationErr == nil
 
-	if hasContinuation && !continuationOwnsAbort(ctx, eng, continuation) {
-		if err := config.ClearContinuationState(ctx.RepoRoot); err != nil {
+	if hasContinuation && !ContinuationOwnsAbort(ctx, eng, continuation) {
+		if err := config.ClearContinuationState(deps.RepoRoot); err != nil {
 			out.Debug("Failed to clear stale continuation state: %v", err)
 		}
 		out.Info("No operation in progress to abort. Cleared leftover state from a conflict finished outside stackit.")
@@ -71,7 +80,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// after a failed restore is still recognized as this abort.
 	if hasContinuation && !continuation.RollbackPending {
 		continuation.RollbackPending = true
-		if err := config.PersistContinuationState(ctx.RepoRoot, continuation); err != nil {
+		if err := config.PersistContinuationState(deps.RepoRoot, continuation); err != nil {
 			return fmt.Errorf("failed to record abort in progress: %w", err)
 		}
 	}
@@ -79,13 +88,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Abort Git operations
 	if rebaseInProgress {
 		out.Info("Aborting rebase...")
-		if err := eng.RebaseAbort(ctx.Context); err != nil {
+		if err := eng.RebaseAbort(ctx); err != nil {
 			return fmt.Errorf("failed to abort rebase: %w", err)
 		}
 	}
 	if mergeInProgress {
 		out.Info("Aborting merge...")
-		if err := eng.MergeAbort(ctx.Context); err != nil {
+		if err := eng.MergeAbort(ctx); err != nil {
 			return fmt.Errorf("failed to abort merge: %w", err)
 		}
 	}
@@ -93,13 +102,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Keep the rollback binding until restoration succeeds. In particular,
 	// an untracked-file collision can be resolved and the abort retried even
 	// though Git's rebase has already been unwound.
-	if err := restoreBoundSnapshot(ctx, eng, continuation); err != nil {
+	if err := restoreBoundSnapshot(ctx, deps, continuation); err != nil {
 		return err
 	}
 
 	// Clear continuation state
 	if hasContinuation {
-		if err := config.ClearContinuationState(ctx.RepoRoot); err != nil {
+		if err := config.ClearContinuationState(deps.RepoRoot); err != nil {
 			out.Debug("Failed to clear continuation state: %v", err)
 		}
 	}
@@ -118,11 +127,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 // owed. A branch that has moved on means the conflict was finished outside
 // stackit (`git rebase --continue`); its snapshot predates whatever the user
 // has done since, and restoring it would roll that work back.
-func ContinuationOwnsAbort(ctx *app.Context, continuation *config.ContinuationState) bool {
-	return continuationOwnsAbort(ctx, ctx.Engine, continuation)
-}
-
-func continuationOwnsAbort(ctx context.Context, eng abortEngine, continuation *config.ContinuationState) bool {
+func ContinuationOwnsAbort(ctx context.Context, eng Engine, continuation *config.ContinuationState) bool {
 	if eng.IsRebaseInProgress(ctx) || eng.IsMergeInProgress(ctx) || continuation.RollbackPending {
 		return true
 	}
@@ -143,8 +148,9 @@ func continuationOwnsAbort(ctx context.Context, eng abortEngine, continuation *c
 // reorder would roll the repository back past a `create` and delete the branch
 // that create had made. Restoring nothing is the only safe answer when the
 // halted command left no rollback point.
-func restoreBoundSnapshot(ctx *app.Context, eng abortEngine, continuation *config.ContinuationState) error {
-	out := ctx.Output
+func restoreBoundSnapshot(ctx context.Context, deps Deps, continuation *config.ContinuationState) error {
+	eng := deps.Engine
+	out := deps.Out
 
 	if continuation == nil || continuation.SnapshotID == "" {
 		out.Info("Operation aborted. It recorded no rollback point, so branches are as it left them.")
@@ -163,11 +169,11 @@ func restoreBoundSnapshot(ctx *app.Context, eng abortEngine, continuation *confi
 	}
 
 	out.Info("Restoring to state before %s started...", output.Cyan("stackit "+snapshot.Command))
-	if err := eng.RestoreSnapshot(ctx.Context, continuation.SnapshotID); err != nil {
+	if err := eng.RestoreSnapshot(ctx, continuation.SnapshotID); err != nil {
 		return fmt.Errorf("failed to restore snapshot: %w", err)
 	}
-	restoreUncommittedWork(ctx.Context, eng, ctx.Output, continuation.SnapshotID, snapshot.Command)
-	actions.WarnIfLinearStackRestored(ctx, "Abort")
+	restoreUncommittedWork(ctx, eng, out, continuation.SnapshotID, snapshot.Command)
+	actions.WarnIfNonLinearRestore(ctx, eng, out, deps.LinearStacks, "Abort")
 	out.Info("Successfully aborted and restored repository state.")
 
 	return nil

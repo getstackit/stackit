@@ -61,7 +61,7 @@ func TestAbortAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		err := abort.Action(s.Context, abort.Options{}, nil)
+		err := abort.Action(t.Context(), abortDeps(s), abort.Options{}, nil)
 		require.NoError(t, err)
 	})
 
@@ -97,7 +97,7 @@ func TestAbortAction(t *testing.T) {
 		require.NotEqual(t, initialSHA, movedSHA)
 
 		// Run abort
-		err = abort.Action(s.Context, abort.Options{Force: true}, nil)
+		err = abort.Action(t.Context(), abortDeps(s), abort.Options{Force: true}, nil)
 		require.NoError(t, err)
 
 		// Verify continuation state is gone
@@ -132,7 +132,7 @@ func TestAbortAction(t *testing.T) {
 		continuationPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_continue")
 		require.NoError(t, os.WriteFile(continuationPath, []byte(`{"rollbackPending":true}`), 0600))
 
-		require.NoError(t, abort.Action(s.Context, abort.Options{Force: true}, nil))
+		require.NoError(t, abort.Action(t.Context(), abortDeps(s), abort.Options{Force: true}, nil))
 
 		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().Name())
 		afterSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
@@ -159,7 +159,7 @@ func TestAbortAction(t *testing.T) {
 		require.NoError(t, err)
 
 		handler := &testAbortHandler{isInteractive: true, confirmResult: true}
-		require.NoError(t, abort.Action(s.Context, abort.Options{}, handler))
+		require.NoError(t, abort.Action(t.Context(), abortDeps(s), abort.Options{}, handler))
 		require.False(t, handler.promptConfirmCalled, "nothing to confirm when there is nothing to abort")
 
 		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().Name())
@@ -188,7 +188,7 @@ func TestAbortAction(t *testing.T) {
 			RollbackPending: true,
 		}))
 
-		require.NoError(t, abort.Action(s.Context, abort.Options{Force: true}, nil))
+		require.NoError(t, abort.Action(t.Context(), abortDeps(s), abort.Options{Force: true}, nil))
 
 		s.Engine.Rebuild(t.Context(), s.Engine.Trunk().Name())
 		afterSHA, err := s.Engine.GetBranch("feature").Revision(t.Context())
@@ -222,7 +222,7 @@ func TestAbortAction(t *testing.T) {
 
 		bindContinuationToLatestSnapshot(t, s)
 
-		err = abort.Action(s.Context, abort.Options{Force: true}, nil)
+		err = abort.Action(t.Context(), abortDeps(s), abort.Options{Force: true}, nil)
 		require.NoError(t, err)
 		require.Contains(t, s.Output.String(), "Abort restored a non-linear stack")
 	})
@@ -246,7 +246,7 @@ func TestAbortAction(t *testing.T) {
 			confirmResult: false,
 		}
 
-		err = abort.Action(s.Context, abort.Options{}, handler)
+		err = abort.Action(t.Context(), abortDeps(s), abort.Options{}, handler)
 		require.NoError(t, err)
 		require.True(t, handler.promptConfirmCalled)
 
@@ -281,7 +281,7 @@ func TestAbortAction(t *testing.T) {
 			confirmResult: true,
 		}
 
-		err = abort.Action(s.Context, abort.Options{}, handler)
+		err = abort.Action(t.Context(), abortDeps(s), abort.Options{}, handler)
 		require.NoError(t, err)
 		require.True(t, handler.promptConfirmCalled)
 
@@ -309,7 +309,7 @@ func TestAbortAction(t *testing.T) {
 			confirmResult: false,
 		}
 
-		err = abort.Action(s.Context, abort.Options{}, handler)
+		err = abort.Action(t.Context(), abortDeps(s), abort.Options{}, handler)
 		require.NoError(t, err)
 		require.True(t, handler.promptConfirmCalled)
 
@@ -344,7 +344,7 @@ func TestAbortAction(t *testing.T) {
 			confirmResult: false,
 		}
 
-		err = abort.Action(s.Context, abort.Options{Force: true}, handler)
+		err = abort.Action(t.Context(), abortDeps(s), abort.Options{Force: true}, handler)
 		require.NoError(t, err)
 		require.False(t, handler.promptConfirmCalled) // Force bypasses prompt
 
@@ -352,4 +352,13 @@ func TestAbortAction(t *testing.T) {
 		_, err = os.Stat(continuationPath)
 		require.ErrorIs(t, err, os.ErrNotExist, "continuation state should be gone")
 	})
+}
+
+func abortDeps(s *scenario.Scenario) abort.Deps {
+	return abort.Deps{
+		Engine:       s.Engine,
+		Out:          s.Context.Output,
+		RepoRoot:     s.Context.RepoRoot,
+		LinearStacks: s.Context.Config != nil && s.Context.Config.LinearStacks(),
+	}
 }

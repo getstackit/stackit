@@ -1,17 +1,28 @@
-package actions_test
+package modify_test
 
 import (
 	"os"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/modify"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
-func TestModifyAction_Stdin(t *testing.T) {
+func deps(s *scenario.Scenario) modify.Deps {
+	return modify.Deps{
+		Engine:       s.Context.Engine,
+		MutationDeps: actiondeps.Mutation(s.Context),
+		RepoRoot:     s.Context.RepoRoot,
+		Verify:       s.Context.Verify,
+	}
+}
+
+func TestAction_Stdin(t *testing.T) {
 	t.Run("reads commit message from stdin in non-interactive mode", func(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
@@ -38,10 +49,10 @@ func TestModifyAction_Stdin(t *testing.T) {
 
 		// Scenario already calls term.SetInteractive(false)
 
-		opts := actions.ModifyOptions{
+		opts := modify.Options{
 			All: true,
 		}
-		err = actions.ModifyAction(s.Context, opts)
+		err = modify.Action(t.Context(), deps(s), opts)
 		require.NoError(t, err)
 
 		// Verify commit message was updated

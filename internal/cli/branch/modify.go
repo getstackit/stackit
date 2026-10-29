@@ -4,7 +4,9 @@ package branch
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
+	"github.com/getstackit/stackit/internal/actions/modify"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 )
@@ -55,7 +57,12 @@ Examples:
 				noEditFlag := noEdit || !edit
 
 				// Run modify action
-				return actions.ModifyAction(ctx, actions.ModifyOptions{
+				return modify.Action(ctx.Context, modify.Deps{
+					Engine:       ctx.Engine,
+					MutationDeps: actiondeps.Mutation(ctx),
+					RepoRoot:     ctx.RepoRoot,
+					Verify:       ctx.Verify,
+				}, modify.Options{
 					All:               all,
 					Update:            update,
 					Patch:             patch,

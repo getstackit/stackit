@@ -19,7 +19,7 @@ func TestSyncAction(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewRemoteScenario(t)
 
-		err := Action(s.Context, Options{
+		err := Action(s.Context.Context, DepsFrom(s.Context), Options{
 			All:     false,
 			Force:   false,
 			Restack: false,
@@ -31,7 +31,7 @@ func TestSyncAction(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		err := Action(s.Context, Options{}, nil)
+		err := Action(s.Context.Context, DepsFrom(s.Context), Options{}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to fetch trunk from")
 	})
@@ -46,7 +46,7 @@ func TestSyncAction(t *testing.T) {
 				"branch1": "main",
 			})
 
-		err := Action(s.Context, Options{
+		err := Action(s.Context.Context, DepsFrom(s.Context), Options{
 			All:     false,
 			Force:   false,
 			Restack: true,
@@ -64,7 +64,7 @@ func TestSyncAction(t *testing.T) {
 				"branch3": "branch2",
 			})
 
-		err := Action(s.Context, Options{
+		err := Action(s.Context.Context, DepsFrom(s.Context), Options{
 			All:     false,
 			Force:   false,
 			Restack: true,
@@ -84,7 +84,7 @@ func TestSyncAction(t *testing.T) {
 				"stackB-child1": "stackB",
 			})
 
-		err := Action(s.Context, Options{
+		err := Action(s.Context.Context, DepsFrom(s.Context), Options{
 			All:     false,
 			Force:   false,
 			Restack: true,
@@ -121,7 +121,7 @@ func TestSyncAction(t *testing.T) {
 		err := s.Engine.Rebuild(t.Context(), "main")
 		require.NoError(t, err)
 
-		err = Action(s.Context, Options{
+		err = Action(s.Context.Context, DepsFrom(s.Context), Options{
 			All:     true,
 			Restack: true,
 		}, nil)
@@ -170,7 +170,7 @@ func TestSyncAction(t *testing.T) {
 		s.Checkout("P")
 
 		handler := &NullHandler{}
-		err = Action(s.Context, Options{
+		err = Action(s.Context.Context, DepsFrom(s.Context), Options{
 			All:     true,
 			Restack: true,
 		}, handler)
@@ -212,7 +212,7 @@ func TestSyncAction(t *testing.T) {
 		s.Engine = eng
 		s.Context.Engine = eng
 
-		err = Action(s.Context, Options{
+		err = Action(s.Context.Context, DepsFrom(s.Context), Options{
 			Restack: true,
 		}, nil)
 		require.NoError(t, err)

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
@@ -51,7 +53,7 @@ func TestPluckStackID(t *testing.T) {
 				require.NotEmpty(t, originalID)
 
 				s.Checkout(tt.pluck)
-				require.NoError(t, Action(s.Context, Options{Source: tt.pluck, Onto: "main"}, nil))
+				require.NoError(t, Action(t.Context(), deps(s), Options{Source: tt.pluck, Onto: "main"}, nil))
 
 				// After plucking to trunk the plucked branch gets a fresh ID.
 				newID := s.EnsureStackID(tt.pluck)
@@ -79,7 +81,7 @@ func TestPluckStackID(t *testing.T) {
 		require.NotEqual(t, firstID, secondID)
 
 		// Pluck b onto x (from first stack to second stack); c stays in first stack.
-		require.NoError(t, Action(s.Context, Options{Source: "b", Onto: "x"}, nil))
+		require.NoError(t, Action(t.Context(), deps(s), Options{Source: "b", Onto: "x"}, nil))
 
 		require.Equal(t, secondID, s.Engine.GetStackID(s.Engine.GetBranch("b")))
 		require.Equal(t, firstID, s.Engine.GetStackID(s.Engine.GetBranch("a")))
@@ -99,7 +101,7 @@ func TestPluckStackID(t *testing.T) {
 		originalID := s.EnsureStackID("a")
 
 		// Pluck c onto a (within same stack); d is reparented to b.
-		require.NoError(t, Action(s.Context, Options{Source: "c", Onto: "a"}, nil))
+		require.NoError(t, Action(t.Context(), deps(s), Options{Source: "c", Onto: "a"}, nil))
 
 		for _, name := range []string{"a", "b", "c", "d"} {
 			require.Equal(t, originalID, s.Engine.GetStackID(s.Engine.GetBranch(name)),
@@ -121,7 +123,7 @@ func TestPluckAction(t *testing.T) {
 
 		// Pluck branch2 from branch1 to main
 		// branch3 should be reparented to branch1 (the grandparent)
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "main",
 		}, nil)
@@ -149,7 +151,7 @@ func TestPluckAction(t *testing.T) {
 			})
 
 		// Pluck branch2 (leaf branch) to main
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "main",
 		}, nil)
@@ -183,7 +185,7 @@ func TestPluckAction(t *testing.T) {
 		// Pluck branch2 from branch1 to branchX
 		// child2a and child2b should be reparented to branch1 (grandparent)
 		// grandch should stay on child2a
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "branchX",
 		}, nil)
@@ -226,7 +228,7 @@ func TestPluckAction(t *testing.T) {
 		s.Checkout("branch2")
 
 		// Pluck without specifying source
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "",
 			Onto:   "main",
 		}, nil)
@@ -243,7 +245,7 @@ func TestPluckAction(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "main",
 			Onto:   "main",
 		}, nil)
@@ -258,7 +260,7 @@ func TestPluckAction(t *testing.T) {
 				"branch1": "main",
 			})
 
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch1",
 			Onto:   "branch1",
 		}, nil)
@@ -276,7 +278,7 @@ func TestPluckAction(t *testing.T) {
 			})
 
 		// Try to pluck branch1 onto branch3 (which is a descendant)
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch1",
 			Onto:   "branch3",
 		}, nil)
@@ -297,7 +299,7 @@ func TestPluckAction(t *testing.T) {
 			CreateBranch("untracked").
 			Checkout("main")
 
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "untracked",
 			Onto:   "main",
 		}, nil)
@@ -312,7 +314,7 @@ func TestPluckAction(t *testing.T) {
 				"branch1": "main",
 			})
 
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch1",
 			Onto:   "nonexistent",
 		}, nil)
@@ -327,7 +329,7 @@ func TestPluckAction(t *testing.T) {
 				"branch1": "main",
 			})
 
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch1",
 			Onto:   "",
 		}, nil)
@@ -342,7 +344,7 @@ func TestPluckAction(t *testing.T) {
 		// Detach HEAD
 		s.RunGit("checkout", "HEAD~0").Rebuild()
 
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "",
 			Onto:   "main",
 		}, nil)
@@ -367,7 +369,7 @@ func TestPluckAction(t *testing.T) {
 			Commit("main update")
 
 		// Pluck branch2 to main
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "main",
 		}, nil)
@@ -391,7 +393,7 @@ func TestPluckAction(t *testing.T) {
 		s.TrackBranch("branch2", "branch1")
 
 		// Pluck branch2 to main
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "main",
 		}, nil)
@@ -421,7 +423,7 @@ func TestPluckAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Pluck branch2 to main
-		err = Action(s.Context, Options{
+		err = Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "main",
 		}, nil)
@@ -446,7 +448,7 @@ func TestPluckAction(t *testing.T) {
 			})
 
 		// Pluck branch2 to main
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "main",
 		}, nil)
@@ -479,7 +481,7 @@ func TestPluckAction(t *testing.T) {
 			Checkout("main")
 
 		// Pluck branch1 onto untracked branch
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "branch1",
 			Onto:   "untracked",
 		}, nil)
@@ -517,7 +519,7 @@ func TestPluckAction(t *testing.T) {
 		s.Engine = linearEngine
 		s.Context.Engine = linearEngine
 
-		require.NoError(t, Action(s.Context, Options{
+		require.NoError(t, Action(t.Context(), deps(s), Options{
 			Source: "branch2",
 			Onto:   "main",
 		}, nil))
@@ -539,7 +541,7 @@ func TestPluckAction(t *testing.T) {
 				"D": "C",
 			})
 
-		err := Action(s.Context, Options{
+		err := Action(t.Context(), deps(s), Options{
 			Source: "B",
 			Onto:   "main",
 		}, nil)
@@ -560,4 +562,8 @@ func TestPluckAction(t *testing.T) {
 		parentD := branchD.Parent()
 		require.Equal(t, "C", parentD.Name())
 	})
+}
+
+func deps(s *scenario.Scenario) Deps {
+	return Deps{Engine: s.Context.Engine, Log: s.Context.Logger, MutationDeps: actiondeps.Mutation(s.Context)}
 }

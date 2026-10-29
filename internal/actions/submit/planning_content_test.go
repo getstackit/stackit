@@ -139,7 +139,7 @@ func TestPlanningBatchesMissingPRContent(t *testing.T) {
 			s.Context.Context = context.WithValue(s.Context.Context, oauth2.HTTPClient, &http.Client{Transport: runner})
 			handler := &contentPlanHandler{}
 
-			infos, err := prepareBranchesForSubmit(s.Context, branches, Options{NoEdit: true}, "b", engine.BranchRemoteStatuses{}, nil, handler)
+			infos, err := prepareBranchesForSubmit(s.Context.Context, DepsFrom(s.Context), branches, Options{NoEdit: true}, "b", engine.BranchRemoteStatuses{}, nil, handler)
 			require.NoError(t, err)
 			require.Len(t, handler.events, 3)
 			for i, name := range []string{"a", "b", "c"} {

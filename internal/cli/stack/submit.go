@@ -150,7 +150,7 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 		if f.jsonOutput {
 			cmd.SilenceErrors = true
 			jsonHandler := submit.NewJSONHandler()
-			err := submit.Action(ctx, opts, jsonHandler)
+			err := submit.Action(ctx.Context, common.SubmitDeps(ctx), opts, jsonHandler)
 			if err != nil {
 				jsonHandler.SetError(err)
 			}
@@ -173,7 +173,7 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 		}
 		runner, handler := NewSubmitUI(ctx.Output, ctx.Logger, verbosity)
 		defer runner.Cleanup()
-		return submit.Action(ctx, opts, handler)
+		return submit.Action(ctx.Context, common.SubmitDeps(ctx), opts, handler)
 	})
 }
 

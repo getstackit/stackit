@@ -7,7 +7,7 @@
 //     conflict and leaves the repository mid-rebase for `stackit continue`.
 //
 // Neither touches bootstrap state. Adapters build them from whatever runtime
-// they have (see actions.RestackBranches for the CLI's).
+// they have (see actions.RestackDepsFrom for the CLI's).
 package restack
 
 import (

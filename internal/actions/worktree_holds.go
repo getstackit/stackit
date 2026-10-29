@@ -7,7 +7,6 @@ import (
 	"os"
 	"slices"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 )
 
@@ -49,11 +48,10 @@ type RestackWorktreeHoldReport struct {
 // CollectRestackWorktreeHolds inspects every physical checkout and reports
 // the branches and stacks a restack must leave alone. sync and restack both
 // read this one report, so they hold back exactly the same work.
-func CollectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
-	eng := ctx.Engine
+func CollectRestackWorktreeHolds(ctx context.Context, eng engine.Engine) RestackWorktreeHoldReport {
 	report := RestackWorktreeHoldReport{}
 
-	stackHolds, err := ManagedWorktreeHolds(ctx.Context, eng)
+	stackHolds, err := ManagedWorktreeHolds(ctx, eng)
 	if err != nil {
 		report.Warnings = append(report.Warnings, fmt.Sprintf("Could not inspect managed worktrees; holding no known stacks: %v", err))
 	}
@@ -69,12 +67,12 @@ func CollectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
 		})
 	}
 	trunk := eng.Trunk().Name()
-	if worktrees, err := eng.ListWorktrees(ctx.Context); err == nil {
+	if worktrees, err := eng.ListWorktrees(ctx); err == nil {
 		for _, wt := range worktrees {
 			if wt.Branch == "" || report.blocksStack(wt.Branch) || wt.Branch == trunk {
 				continue
 			}
-			if reason := branchWorktreeHoldReason(ctx, wt.Branch, wt.Path); reason != "" {
+			if reason := branchWorktreeHoldReason(ctx, eng, wt.Branch, wt.Path); reason != "" {
 				addBranchHold(wt.Branch, wt.Path, reason)
 			}
 		}
@@ -214,19 +212,18 @@ func ManagedWorktreeHoldReason(ctx context.Context, eng ManagedWorktreeInspector
 	return ""
 }
 
-func branchWorktreeHoldReason(ctx *app.Context, branch string, path engine.WorktreePath) string {
-	eng := ctx.Engine
-	if eng.WorktreeRebaseInProgress(ctx.Context, path) {
+func branchWorktreeHoldReason(ctx context.Context, eng engine.Engine, branch string, path engine.WorktreePath) string {
+	if eng.WorktreeRebaseInProgress(ctx, path) {
 		return restackWorktreeHoldReasonRebase
 	}
-	hasChanges, err := eng.WorktreeHasTrackedChanges(ctx.Context, path)
+	hasChanges, err := eng.WorktreeHasTrackedChanges(ctx, path)
 	if err != nil {
 		return fmt.Sprintf("could not be inspected: %v", err)
 	}
 	if hasChanges {
 		return restackWorktreeHoldReasonUncommittedChanges
 	}
-	if collides, known := eng.UntrackedCollision(ctx.Context, branch, path); collides || !known {
+	if collides, known := eng.UntrackedCollision(ctx, branch, path); collides || !known {
 		if !known {
 			return restackWorktreeHoldReasonUntrackedCheckFailed
 		}

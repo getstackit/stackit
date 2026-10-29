@@ -3,6 +3,8 @@ package navigation
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
@@ -10,6 +12,16 @@ import (
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+func deps(s *scenario.Scenario) Deps {
+	return Deps{
+		Engine: s.Context.Engine,
+		Out:    s.Context.Output,
+		Log:    s.Context.Logger,
+		Quiet:  s.Context.Quiet,
+		Here:   actiondeps.Here(s.Context),
+	}
+}
 
 func TestTraverseUpwardSkipsWorktreeAnchors(t *testing.T) {
 	t.Parallel()
@@ -133,7 +145,7 @@ func TestSwitchBranchActionTopSkipsWorktreeAnchors(t *testing.T) {
 	require.NoError(t, err)
 
 	s.Checkout("main")
-	result, err := SwitchBranchAction(DirectionTop, s.Context, &NullHandler{})
+	result, err := SwitchBranchAction(t.Context(), deps(s), DirectionTop, &NullHandler{})
 	require.NoError(t, err)
 	// Should successfully target "tip" without erroring on the anchor
 	require.Empty(t, result.WorktreeSwitchPath)
@@ -155,7 +167,7 @@ func TestSwitchBranchActionBottomSkipsWorktreeAnchors(t *testing.T) {
 	require.NoError(t, err)
 
 	s.Checkout("tip")
-	result, err := SwitchBranchAction(DirectionBottom, s.Context, &NullHandler{})
+	result, err := SwitchBranchAction(t.Context(), deps(s), DirectionBottom, &NullHandler{})
 	require.NoError(t, err)
 	require.Empty(t, result.WorktreeSwitchPath)
 }

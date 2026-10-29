@@ -1,11 +1,11 @@
 package merge
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	sterrors "github.com/getstackit/stackit/internal/errors"
 )
@@ -27,9 +27,9 @@ type WizardOptions struct {
 // RunWizard executes the interactive merge wizard.
 // It guides the user through selecting what to merge, the strategy,
 // and then executes the merge.
-func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions) error {
-	eng := ctx.Engine
-	out := ctx.Output
+func RunWizard(ctx context.Context, deps Deps, handler InteractiveHandler, opts WizardOptions) error {
+	eng := deps.Engine
+	out := deps.Out
 
 	out.Debug("merge wizard: starting with opts=%+v", opts)
 
@@ -41,13 +41,13 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		out.Debug("merge wizard: no scope or target branch pre-selected, prompting user")
 
 		// Check if "this branch" is a valid option (not on trunk and not in empty worktree)
-		currentBranch := eng.CurrentBranch(ctx.Context)
+		currentBranch := eng.CurrentBranch(ctx)
 		canMergeThisBranch := currentBranch != nil && !currentBranch.IsTrunk()
 		out.Debug("merge wizard: canMergeThisBranch=%v (currentBranch=%v)", canMergeThisBranch, currentBranch != nil)
 
 		// Get available scopes and stacks for the prompt
 		availableScopes := GetAvailableScopes(eng)
-		availableStacks, err := DiscoverStacks(ctx.Context, eng)
+		availableStacks, err := DiscoverStacks(ctx, eng)
 		if err != nil {
 			out.Debug("merge wizard: failed to discover stacks: %v", err)
 			availableStacks = nil
@@ -64,7 +64,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		switch mergeType {
 		case MergeTypeThis:
 			// Use current branch
-			currentBranch := eng.CurrentBranch(ctx.Context)
+			currentBranch := eng.CurrentBranch(ctx)
 			if currentBranch != nil {
 				targetBranch = currentBranch.Name()
 				out.Debug("merge wizard: using current branch: %s", targetBranch)
@@ -101,7 +101,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 			} else {
 				// Multiple stacks: use multi-stack merge
 				out.Debug("merge wizard: multiple stacks selected, delegating to ExecuteMultiStack")
-				_, err := ExecuteMultiStack(ctx, MultiStackOptions{
+				_, err := ExecuteMultiStack(ctx, deps, MultiStackOptions{
 					SelectedStacks: selectedStacks,
 					Wait:           opts.Wait,
 				})
@@ -114,7 +114,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 
 	// Collect branches once (expensive: GitHub API calls, CI status checks)
 	out.Debug("merge wizard: collecting branches with scope=%q, targetBranch=%q", scope, targetBranch)
-	collected, err := CollectMergeBranches(ctx.Context, eng, out, ctx.GitHub(), CreatePlanOptions{
+	collected, err := CollectMergeBranches(ctx, eng, out, deps.GitHub(), CreatePlanOptions{
 		Strategy:     StrategyBottomUp,
 		Force:        opts.Force,
 		Scope:        scope,
@@ -201,7 +201,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	// issues, we skip the full plan display and use a simple "Merge X into Y?" confirmation.
 	// This reduces friction for the common case of merging a single PR, while still showing
 	// the full plan for complex scenarios where users need to understand all the steps.
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	isSimpleMerge := IsSingleBranchLeafMerge(plan, graph) &&
 		len(validation.Errors) == 0 &&
 		len(validation.Warnings) == 0
@@ -270,7 +270,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	}
 
 	out.Debug("merge wizard: executing merge action")
-	if err := Action(ctx, mergeOpts); err != nil {
+	if err := Action(ctx, deps, mergeOpts); err != nil {
 		out.Debug("merge wizard: merge action failed: %v", err)
 		return fmt.Errorf("merge action failed: %w", err)
 	}
@@ -286,7 +286,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 
 	// Handle post-merge follow-up (only when we waited for the merge)
 	out.Debug("merge wizard: handling post-merge")
-	return HandlePostMerge(ctx, handler)
+	return HandlePostMerge(ctx, eng, handler)
 }
 
 // DetermineRecommendedStrategy returns the recommended strategy based on stack size.
@@ -301,12 +301,16 @@ func DetermineRecommendedStrategy(branchCount int) Strategy {
 	}
 }
 
-// HandlePostMerge handles the post-merge follow-up workflow.
-func HandlePostMerge(ctx *app.Context, handler InteractiveHandler) error {
-	eng := ctx.Engine
+// postMergeEngine is the engine surface the post-merge prompt reads.
+type postMergeEngine interface {
+	Trunk() engine.Branch
+	HasUncommittedChanges(ctx context.Context) bool
+}
 
+// HandlePostMerge handles the post-merge follow-up workflow.
+func HandlePostMerge(ctx context.Context, eng postMergeEngine, handler InteractiveHandler) error {
 	// Check for uncommitted changes
-	hasChanges := eng.HasUncommittedChanges(ctx.Context)
+	hasChanges := eng.HasUncommittedChanges(ctx)
 	trunkName := eng.Trunk().Name()
 
 	action, err := handler.PromptPostMerge(hasChanges, trunkName)

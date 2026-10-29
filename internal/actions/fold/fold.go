@@ -8,7 +8,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/validation"
-	"github.com/getstackit/stackit/internal/app"
+
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
@@ -21,11 +21,12 @@ type Options struct {
 	DryRun     bool // If true, only shows what would happen
 }
 
-// foldEngine lists exactly the engine methods fold calls: the git-operation
+// Engine lists exactly the engine methods fold calls: the git-operation
 // precondition checks, the merge/delete/reparent mutations, and the reads the
 // dry-run preview needs.
-type foldEngine interface {
+type Engine interface {
 	validation.GitOperationEngine
+	actions.OwnershipEngine
 	Trunk() engine.Branch
 	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
 	GetRevision(ctx context.Context, branch engine.Branch) (string, error)
@@ -38,9 +39,7 @@ type foldEngine interface {
 	ReparentBranchesToParents(ctx context.Context, moves []engine.BranchParentMove, opts engine.ReparentOpts) error
 }
 
-func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch) {
-	out := ctx.Output
-
+func showDryRun(ctx context.Context, eng Engine, out output.Output, current, parent engine.Branch) {
 	out.Info("%s", output.Yellow("Dry Run: Folding plan"))
 	out.Info("  Fold branch: %s", output.CurrentBranch(current.Name()))
 	out.Info("  Into parent: %s", output.BranchName(parent.Name()))
@@ -48,7 +47,7 @@ func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch)
 
 	// Show combined commit messages
 	out.Info("%s", output.Cyan("Proposed Commit History:"))
-	parentCommitsData, err := parent.AllCommits(ctx.Context)
+	parentCommitsData, err := parent.AllCommits(ctx)
 	parentCommits := parentCommitsData.Onelines()
 	if err != nil {
 		out.Debug("Failed to get parent commits for %s: %v", parent.Name(), err)
@@ -57,7 +56,7 @@ func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch)
 		out.Info("  %s", output.Dim(commit))
 	}
 
-	currentCommitsData, err := current.AllCommits(ctx.Context)
+	currentCommitsData, err := current.AllCommits(ctx)
 	currentCommits := currentCommitsData.Onelines()
 	if err != nil {
 		out.Debug("Failed to get current commits for %s: %v", current.Name(), err)
@@ -71,7 +70,7 @@ func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch)
 	out.Info("%s", output.Cyan("Combined Diff Stat:"))
 	// Base is parent's parent (or trunk)
 	grandparentName := parent.ParentOrTrunk()
-	baseRev, err := eng.GetRevision(ctx.Context, eng.GetBranch(grandparentName))
+	baseRev, err := eng.GetRevision(ctx, eng.GetBranch(grandparentName))
 	if err != nil {
 		out.Debug("Failed to get revision for grandparent %s: %v", grandparentName, err)
 		var mbErr error
@@ -81,12 +80,12 @@ func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch)
 		}
 	}
 
-	headRev, err := current.Revision(ctx.Context)
+	headRev, err := current.Revision(ctx)
 	if err != nil {
 		out.Debug("Failed to get revision for current branch %s: %v", current.Name(), err)
 	}
 
-	diffStat, err := eng.ShowDiff(ctx.Context, git.RevRange{Base: baseRev, Head: headRev}, git.DiffFormatStat)
+	diffStat, err := eng.ShowDiff(ctx, git.RevRange{Base: baseRev, Head: headRev}, git.DiffFormatStat)
 	if err == nil && diffStat != "" {
 		out.Info("%s", diffStat)
 	} else {
@@ -100,11 +99,16 @@ func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch)
 	out.Info("%s", output.Dim("No changes were applied."))
 }
 
+// Deps are the collaborators fold needs. Adapters build them from their own
+// runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	actions.MutationDeps
+}
+
 // Action performs the fold operation
-func Action(ctx *app.Context, opts Options, handler Handler) error {
-	var eng foldEngine = ctx.Engine
-	out := ctx.Output
-	gctx := ctx.Context
+func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error {
+	eng, out := deps.Engine, deps.Out
 
 	// Use null handler if none provided
 	if handler == nil {
@@ -113,10 +117,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	defer handler.Cleanup()
 
 	// Validate preconditions
-	if err := validation.GitOperationChain(gctx, eng, "fold").Validate(); err != nil {
+	if err := validation.GitOperationChain(ctx, eng, "fold").Validate(); err != nil {
 		return err
 	}
-	currentBranch := eng.CurrentBranch(ctx.Context).Name()
+	currentBranch := eng.CurrentBranch(ctx).Name()
 	currentBranchObj := eng.GetBranch(currentBranch)
 
 	// Get parent branch
@@ -128,7 +132,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			return err
 		}
 	}
-	if err := actions.EnsureCanModifyHere(ctx, currentBranchObj, parentBranch); err != nil {
+	if err := actions.EnsureCanModify(ctx, eng, deps.Here, currentBranchObj, parentBranch); err != nil {
 		return err
 	}
 
@@ -139,7 +143,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		actions.WithFlag(opts.Keep, "--keep"),
 		actions.WithFlag(opts.AllowTrunk, "--allow-trunk"),
 	)
-	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
+	deps.Snapshots.Take(ctx, snapshotOpts)
 
 	// Prohibit folding branches with different scopes
 	if !parentBranch.IsTrunk() {
@@ -154,7 +158,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.Start(currentBranch, parentName, opts.DryRun)
 
 	if opts.DryRun {
-		showDryRun(ctx, eng, currentBranchObj, parentBranch)
+		showDryRun(ctx, eng, out, currentBranchObj, parentBranch)
 		return nil
 	}
 
@@ -163,7 +167,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if parentBranch.IsTrunk() {
 			return errors.New("cannot fold into trunk with --keep because it would delete the trunk branch")
 		}
-		if err := foldWithKeep(gctx, ctx, currentBranchObj, parentBranch, eng, out, opts); err != nil {
+		if err := foldWithKeep(ctx, deps.Restack, currentBranchObj, parentBranch, eng, out, opts); err != nil {
 			return err
 		}
 		// With --keep, the parent is folded into current, so parent is deleted
@@ -179,7 +183,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return fmt.Errorf("cannot fold into trunk branch %s without --allow-trunk. Folding into trunk will modify your local main branch directly", parentName)
 	}
 
-	if err := foldNormal(gctx, ctx, currentBranchObj, parentBranch, eng, out, opts); err != nil {
+	if err := foldNormal(ctx, deps.Restack, currentBranchObj, parentBranch, eng, out, opts); err != nil {
 		return err
 	}
 	// Normal fold: current is folded into parent, so current is deleted

@@ -7,13 +7,26 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/getstackit/stackit/internal/term"
-
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/term"
 )
 
 var newWorktreeEngine = engine.NewEngineForWorktree
+
+// RestackDeps are the collaborators the restack command pipeline (PlanRestack,
+// RestackAction, RunRestack) needs.
+type RestackDeps struct {
+	Engine    engine.Engine
+	Out       output.Output
+	Log       output.Logger
+	RepoRoot  string
+	Snapshots Snapshots
+	// Interactive and Quiet mirror the global flags; together with the
+	// terminal they decide whether RestackAction may prompt to enable rerere.
+	Interactive bool
+	Quiet       bool
+}
 
 // RestackOptions contains options for the restack command
 type RestackOptions struct {
@@ -88,24 +101,24 @@ func (p *RestackPlan) BranchCount() int {
 // The per-group engine plan is *not* reused in parallel mode — each worktree
 // has its own engine and must compute its own plan against worktree-local
 // state.
-func PlanRestack(ctx *app.Context, opts RestackOptions) (*RestackPlan, error) {
-	eng := ctx.Engine
-	rawGroups, err := planRestackBranchGroups(ctx.Context, eng, opts)
+func PlanRestack(ctx context.Context, deps RestackDeps, opts RestackOptions) (*RestackPlan, error) {
+	eng := deps.Engine
+	rawGroups, err := planRestackBranchGroups(ctx, eng, opts)
 	if err != nil {
 		return nil, err
 	}
 	// Drop dirty-worktree stacks before the guard so a restack that has nothing
 	// left to move is a no-op rather than a guard error.
-	rawGroups = skipDirtyWorktreeStacks(ctx, rawGroups)
+	rawGroups = skipDirtyWorktreeStacks(ctx, deps, rawGroups)
 	if err := guardUnpushedTrunk(ctx, eng, rawGroups); err != nil {
 		return nil, err
 	}
 	plan := &RestackPlan{opts: opts}
 	for _, g := range rawGroups {
-		sorted := eng.SortBranchesTopologically(ctx.Context, g.branches)
+		sorted := eng.SortBranchesTopologically(ctx, g.branches)
 		var enginePlan *engine.RestackPlan
 		if len(sorted) > 0 {
-			enginePlan, err = eng.PlanRestack(ctx.Context, sorted)
+			enginePlan, err = eng.PlanRestack(ctx, sorted)
 			if err != nil {
 				return nil, err
 			}
@@ -123,11 +136,11 @@ func PlanRestack(ctx *app.Context, opts RestackOptions) (*RestackPlan, error) {
 // Build the plan via PlanRestack — callers are expected to use the plan to
 // gate UX decisions (e.g. whether to start a TUI), so requiring it here
 // keeps the two phases consistent.
-func RestackAction(ctx *app.Context, plan *RestackPlan, handler RestackHandler) error {
+func RestackAction(ctx context.Context, deps RestackDeps, plan *RestackPlan, handler RestackHandler) error {
 	if plan == nil {
 		return errors.New("restack plan is required")
 	}
-	out := ctx.Output
+	out := deps.Out
 	opts := plan.opts
 
 	branchCount := plan.BranchCount()
@@ -136,7 +149,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler RestackHandler) 
 		return nil
 	}
 
-	ctx.Logger.Info("restack started branchCount=%v", branchCount)
+	deps.Log.Info("restack started branchCount=%v", branchCount)
 
 	// Restack is repository reconciliation, like sync: it may run from any
 	// worktree, but the engine holds branches whose checked-out worktree is
@@ -162,7 +175,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler RestackHandler) 
 			WithFlag(opts.ContinueOnConflict, "--continue-on-conflict"),
 			WithFlag(opts.Parallel, "--parallel"),
 		)
-		TakeBestEffortSnapshot(ctx, snapshotOpts)
+		deps.Snapshots.Take(ctx, snapshotOpts)
 	}
 
 	// A routine conflict under NonInteractive is data, not an error: report it
@@ -176,11 +189,11 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler RestackHandler) 
 		policy = RestackConflictPrompt
 	}
 
-	_, err := RunRestack(ctx, RestackRequest{
+	_, err := RunRestack(ctx, deps, RestackRequest{
 		groups:         plan.groups,
 		ConflictPolicy: policy,
 		Prompter:       prompter,
-		PromptRerere:   ctx.Interactive && !ctx.Quiet && term.IsInteractive() && !opts.NonInteractive,
+		PromptRerere:   deps.Interactive && !deps.Quiet && term.IsInteractive() && !opts.NonInteractive,
 		Parallel:       parallelDispatch,
 		Jobs:           opts.Jobs,
 	}, handler)
@@ -200,7 +213,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler RestackHandler) 
 // It is a no-op when there is no work to do, and for repos with no
 // remote-tracking trunk ref (local-only, never fetched, fresh clone), which the
 // engine reports via HasRemoteRef=false.
-func guardUnpushedTrunk(ctx *app.Context, eng engine.BranchReader, groups []restackBranchGroup) error {
+func guardUnpushedTrunk(ctx context.Context, eng engine.BranchReader, groups []restackBranchGroup) error {
 	hasBranches := false
 	for _, g := range groups {
 		if len(g.branches) > 0 {
@@ -212,7 +225,7 @@ func guardUnpushedTrunk(ctx *app.Context, eng engine.BranchReader, groups []rest
 		return nil
 	}
 
-	state := eng.TrunkRemoteState(ctx.Context)
+	state := eng.TrunkRemoteState(ctx)
 	if !state.AheadOrDiverged {
 		return nil
 	}
@@ -269,15 +282,15 @@ func planRestackBranchGroups(ctx context.Context, eng engine.BranchReader, opts 
 //     normally run from — holds a single branch, so only that branch is dropped.
 //     Its descendants stay: they are still correctly based on a branch that did
 //     not move, so restacking them is a no-op rather than a hazard.
-func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []restackBranchGroup {
-	report := CollectRestackWorktreeHolds(ctx)
+func skipDirtyWorktreeStacks(ctx context.Context, deps RestackDeps, groups []restackBranchGroup) []restackBranchGroup {
+	report := CollectRestackWorktreeHolds(ctx, deps.Engine)
 	for _, message := range report.Messages() {
-		ctx.Output.Warn("%s", message)
+		deps.Out.Warn("%s", message)
 	}
 
 	kept := make([]restackBranchGroup, 0, len(groups))
 	for _, g := range groups {
-		if built := report.Filter(ctx.Engine, g.branches); len(built) > 0 {
+		if built := report.Filter(deps.Engine, g.branches); len(built) > 0 {
 			kept = append(kept, restackBranchGroup{rootBranch: g.rootBranch, branches: built})
 		}
 	}

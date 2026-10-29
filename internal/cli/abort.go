@@ -1,8 +1,10 @@
 package cli
 
 import (
-	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
+
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+	"github.com/getstackit/stackit/internal/term"
 
 	"github.com/getstackit/stackit/internal/actions/abort"
 	"github.com/getstackit/stackit/internal/actions/absorb"
@@ -43,15 +45,22 @@ Examples:
 				// mistaken for a failed absorb. A stale continuation, from a
 				// conflict finished outside stackit, must not block absorb's
 				// own cleanup.
+				abortDeps := abort.Deps{
+					Engine:       ctx.Engine,
+					Out:          ctx.Output,
+					RepoRoot:     ctx.RepoRoot,
+					LinearStacks: ctx.Config != nil && ctx.Config.LinearStacks(),
+				}
 				continuation, continuationErr := config.GetContinuationState(ctx.RepoRoot)
-				ownedByContinuation := continuationErr == nil && abort.ContinuationOwnsAbort(ctx, continuation)
-				if !ownedByContinuation && absorb.IsAbsorbInProgress(ctx) {
-					return absorb.Abort(ctx)
+				ownedByContinuation := continuationErr == nil && abort.ContinuationOwnsAbort(ctx.Context, abortDeps.Engine, continuation)
+				absorbDeps := absorb.Deps{Engine: ctx.Engine, MutationDeps: actiondeps.Mutation(ctx)}
+				if !ownedByContinuation && absorb.IsAbsorbInProgress(ctx.Context, absorbDeps) {
+					return absorb.Abort(ctx.Context, absorbDeps)
 				}
 
 				// Otherwise use the standard abort action
 				handler := stack.NewAbortUI(ctx.Output, term.IsInteractive())
-				return abort.Action(ctx, abort.Options{
+				return abort.Action(ctx.Context, abortDeps, abort.Options{
 					Force: force,
 				}, handler)
 			})

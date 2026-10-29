@@ -1,16 +1,16 @@
 package create
 
 import (
+	"context"
 	"errors"
 
 	"github.com/getstackit/stackit/internal/term"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/editor"
 )
 
-func getCommitMessage(ctx *app.Context) (string, error) {
-	template, err := ctx.Engine.GetCommitTemplate(ctx.Context)
+func getCommitMessage(ctx context.Context, eng Engine) (string, error) {
+	template, err := eng.GetCommitTemplate(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -25,7 +25,7 @@ func getCommitMessage(ctx *app.Context) (string, error) {
 
 // getCommitMessageForBranch gets the commit message, reading from stdin if needed.
 // If branch name is not provided and commit message is empty, it will prompt for one in interactive mode.
-func getCommitMessageForBranch(ctx *app.Context, opts *Options, commitMessage string) (string, error) {
+func getCommitMessageForBranch(ctx context.Context, eng Engine, opts *Options, commitMessage string) (string, error) {
 	// If commit message is already provided, use it
 	if commitMessage != "" {
 		return commitMessage, nil
@@ -44,7 +44,7 @@ func getCommitMessageForBranch(ctx *app.Context, opts *Options, commitMessage st
 			return "", nil // Allow empty message when branch name is explicit
 		}
 		// Interactive: prompt for commit message via editor
-		msg, err := getCommitMessage(ctx)
+		msg, err := getCommitMessage(ctx, eng)
 		if err != nil {
 			return "", err
 		}
@@ -57,7 +57,7 @@ func getCommitMessageForBranch(ctx *app.Context, opts *Options, commitMessage st
 	}
 
 	// Interactive: get commit message from editor
-	msg, err := getCommitMessage(ctx)
+	msg, err := getCommitMessage(ctx, eng)
 	if err != nil {
 		return "", err
 	}

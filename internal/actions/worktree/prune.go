@@ -1,9 +1,8 @@
 package worktree
 
 import (
+	"context"
 	"fmt"
-
-	"github.com/getstackit/stackit/internal/app"
 )
 
 // PruneOptions contains options for the prune action.
@@ -24,8 +23,8 @@ type SkippedEntry struct {
 }
 
 // PruneAction removes all empty worktrees.
-func PruneAction(ctx *app.Context, opts PruneOptions) (*PruneResult, error) {
-	listResult, err := ListAction(ctx, ListOptions{})
+func PruneAction(ctx context.Context, deps Deps, opts PruneOptions) (*PruneResult, error) {
+	listResult, err := ListAction(ctx, deps, ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +43,7 @@ func PruneAction(ctx *app.Context, opts PruneOptions) (*PruneResult, error) {
 			result.Pruned = append(result.Pruned, name)
 			continue
 		}
-		if err := RemoveAction(ctx, RemoveOptions{
+		if err := RemoveAction(ctx, deps, RemoveOptions{
 			Selector: WorktreeSelector(wt.AnchorBranch),
 			Policy:   pruneRemovalPolicy(wt.Lifecycle),
 		}); err != nil {

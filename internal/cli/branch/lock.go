@@ -1,8 +1,11 @@
 package branch
 
 import (
-	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
+
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
+	"github.com/getstackit/stackit/internal/term"
 
 	"github.com/getstackit/stackit/internal/actions/lock"
 	"github.com/getstackit/stackit/internal/app"
@@ -36,7 +39,7 @@ This operation can be undone with 'st unlock'.`,
 				}
 
 				handler := NewLockUI(ctx.Output, term.IsInteractive())
-				return lock.Action(ctx, branchName, handler)
+				return lock.Action(ctx.Context, lockDeps(ctx), branchName, handler)
 			})
 		},
 	}
@@ -66,8 +69,18 @@ to enable modifications.`,
 				}
 
 				handler := NewLockUI(ctx.Output, term.IsInteractive())
-				return lock.Unlock(ctx, branchName, handler)
+				return lock.Unlock(ctx.Context, lockDeps(ctx), branchName, handler)
 			})
 		},
+	}
+}
+
+// lockDeps builds lock's collaborators from the command's runtime context.
+func lockDeps(ctx *app.Context) lock.Deps {
+	return lock.Deps{
+		Engine: ctx.Engine,
+		Out:    ctx.Output,
+		PRSync: actiondeps.PRSync(ctx),
+		Submit: common.SubmitDeps(ctx),
 	}
 }

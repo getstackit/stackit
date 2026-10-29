@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -29,7 +31,7 @@ import (
 func planRestackFeatureErr(t *testing.T, sh *scenario.Scenario) error {
 	t.Helper()
 	sh.Checkout("feature")
-	_, err := actions.PlanRestack(sh.Context, actions.RestackOptions{
+	_, err := actions.PlanRestack(sh.Context, actiondeps.Restack(sh.Context), actions.RestackOptions{
 		BranchName: "feature",
 		Scope:      engine.StackRangeFull(),
 	})
@@ -169,7 +171,7 @@ func TestRestackGuardSkipsWhenNoBranches(t *testing.T) {
 	sh.CommitChange("local-only", "un-pushed trunk commit")
 	sh.Rebuild()
 
-	_, err := actions.PlanRestack(sh.Context, actions.RestackOptions{
+	_, err := actions.PlanRestack(sh.Context, actiondeps.Restack(sh.Context), actions.RestackOptions{
 		BranchName: "main",
 		Scope:      engine.StackRangeFull(),
 	})

@@ -91,7 +91,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		}
 
 		// With mocked client, push is skipped, so this should succeed
-		err = submit.Action(s.Context, opts, &noopHandler{})
+		err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, &noopHandler{})
 		require.NoError(t, err, "Submit should succeed with mocked GitHub client")
 
 		// Verify that PR was created in the mock
@@ -152,7 +152,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		}
 
 		// With mocked client, push is skipped, so this should succeed
-		err = submit.Action(s.Context, opts, &noopHandler{})
+		err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, &noopHandler{})
 		require.NoError(t, err, "Submit should succeed with mocked GitHub client")
 
 		// Verify that PR was updated in the mock
@@ -192,7 +192,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 			Draft:      true,
 		}
 
-		err = submit.Action(s.Context, opts, &noopHandler{})
+		err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, &noopHandler{})
 		require.NoError(t, err)
 
 		// Should have created 3 PRs: P, C1, and C2
@@ -282,7 +282,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		}
 
 		s.Checkout("B")
-		err = submit.Action(s.Context, opts, &noopHandler{})
+		err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, &noopHandler{})
 		require.NoError(t, err, "Submit should succeed even when base update is skipped due to no commits")
 
 		// Verify that the PR was updated (other fields should be updated)
@@ -321,7 +321,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 
 		s.Checkout("feature")
 		// Second submit with the branch already pushed — must not fail with a push rejection.
-		err = submit.Action(s.Context, opts, &noopHandler{})
+		err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, &noopHandler{})
 		require.NoError(t, err, "submit should succeed when branch is already in sync with remote")
 	})
 }
@@ -342,7 +342,7 @@ func TestSubmitCreatesNativeGitHubStackWhenRequested(t *testing.T) {
 	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
 	s.Context.Config = cfg
 
-	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
 	require.NoError(t, err)
 	require.Len(t, mockConfig.CreatedStacks, 1)
 
@@ -354,7 +354,7 @@ func TestSubmitCreatesNativeGitHubStackWhenRequested(t *testing.T) {
 
 	// A repeated submit must leave the existing native Stack intact rather than
 	// trying to create a second resource for the same pull requests.
-	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
 	require.NoError(t, err)
 	require.Len(t, mockConfig.CreatedStacks, 1)
 }
@@ -376,7 +376,7 @@ func TestSubmitCreatesNativeGitHubStackWhenConfigured(t *testing.T) {
 	require.NoError(t, cfg.SetGitHubStack(true))
 	s.Context.Config = cfg
 
-	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
 	require.NoError(t, err)
 	require.Len(t, mockConfig.CreatedStacks, 1)
 }
@@ -399,7 +399,7 @@ func TestSubmitConfiguredGitHubStackFallsBackWhenValidationPrunesToOnePullReques
 	require.NoError(t, cfg.SetGitHubStack(true))
 	s.Context.Config = cfg
 
-	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
 	require.NoError(t, err)
 	require.Len(t, mockConfig.CreatedPRs, 1, "the valid parent should submit normally")
 	require.Empty(t, mockConfig.CreatedStacks, "one surviving PR must not create native Stack metadata")
@@ -416,7 +416,7 @@ func TestSubmitConfiguredGitHubStackSkipsSinglePullRequest(t *testing.T) {
 	require.NoError(t, cfg.SetGitHubStack(true))
 	s.Context.Config = cfg
 
-	err = submit.Action(s.Context, submit.Options{DryRun: true, ConfigGitHubStack: cfg.GitHubStack()}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{DryRun: true, ConfigGitHubStack: cfg.GitHubStack()}, &noopHandler{})
 	require.NoError(t, err)
 }
 
@@ -445,14 +445,14 @@ func TestSubmitGitHubStackOversizedChain(t *testing.T) {
 	s.Context.Config = cfg
 
 	// Explicit flag with github.stack unset: rejected before submitting anything.
-	err = submit.Action(s.Context, submit.Options{CreateGitHubStack: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{CreateGitHubStack: true}, &noopHandler{})
 	require.EqualError(t, err, "a GitHub Stack supports at most 100 pull requests (got 101)")
 	require.Empty(t, mockConfig.CreatedPRs, "the oversized rejection must fail before any PR is created")
 	require.Empty(t, mockConfig.CreatedStacks, "the oversized rejection must not create native Stack metadata")
 
 	// Configured key: the oversized chain is skipped, not fatal.
 	require.NoError(t, cfg.SetGitHubStack(true))
-	err = submit.Action(s.Context, submit.Options{DryRun: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{DryRun: true}, &noopHandler{})
 	require.NoError(t, err, "an oversized submission is ineligible for native Stack sync but should still submit normally")
 }
 
@@ -472,7 +472,7 @@ func TestSubmitNativeGitHubStackRejectsPrunedSinglePullRequestBeforeSubmit(t *te
 	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
 	s.Context.Config = cfg
 
-	err = submit.Action(s.Context, submit.Options{NoEdit: true, CreateGitHubStack: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{NoEdit: true, CreateGitHubStack: true}, &noopHandler{})
 	require.EqualError(t, err, "a GitHub Stack requires at least two pull requests")
 	require.Empty(t, mockConfig.CreatedPRs, "native Stack validation must fail before submitting the surviving parent")
 }
@@ -482,7 +482,7 @@ func TestSubmitGitHubStackRequiresLinearMode(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{"base": "main", "api": "base"})
 
-	err := submit.Action(s.Context, submit.Options{CreateGitHubStack: true}, &noopHandler{})
+	err := submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{CreateGitHubStack: true}, &noopHandler{})
 	require.EqualError(t, err, "native GitHub Stack creation requires stack.shape=linear; run 'stackit config set stack.shape linear'")
 }
 
@@ -497,7 +497,7 @@ func TestSubmitGitHubStackRejectsForkedChain(t *testing.T) {
 	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
 	s.Context.Config = cfg
 
-	err = submit.Action(s.Context, submit.Options{StackRange: engine.StackRangeFull(), CreateGitHubStack: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{StackRange: engine.StackRangeFull(), CreateGitHubStack: true}, &noopHandler{})
 	require.EqualError(t, err, "branch \"ui\" is stacked on \"base\", not on \"api\"; native GitHub Stacks require a single linear chain")
 }
 
@@ -545,7 +545,7 @@ func TestSubmitReadsRemoteStatusOnceForStack(t *testing.T) {
 		Draft:      true,
 	}
 
-	err = submit.Action(ctx, opts, &noopHandler{})
+	err = submit.Action(ctx.Context, submit.DepsFrom(ctx), opts, &noopHandler{})
 	require.NoError(t, err)
 	require.Len(t, config.CreatedPRs, 3, "should create a PR for each of P, C1, C2")
 
@@ -590,7 +590,7 @@ func TestSubmitDryRunCreateOnlySkipsRemoteStatusRead(t *testing.T) {
 		DryRun:     true,
 	}
 
-	require.NoError(t, submit.Action(ctx, opts, &noopHandler{}))
+	require.NoError(t, submit.Action(ctx.Context, submit.DepsFrom(ctx), opts, &noopHandler{}))
 	require.Equal(t, int64(0), counting.fetchRemoteShas.Load(),
 		"create-only dry runs must not read remote status")
 	require.Equal(t, int64(0), counting.pushBranches.Load(), "dry runs must not push")
@@ -638,7 +638,7 @@ func TestSubmitPushesStackInSingleBatch(t *testing.T) {
 		Draft:      true,
 	}
 
-	err = submit.Action(ctx, opts, &noopHandler{})
+	err = submit.Action(ctx.Context, submit.DepsFrom(ctx), opts, &noopHandler{})
 	require.NoError(t, err)
 	require.Len(t, config.CreatedPRs, 3, "should create a PR for each of P, C1, C2")
 
@@ -691,7 +691,7 @@ func TestSubmitNoOpReadsRemoteOnceAndSkipsPush(t *testing.T) {
 	// First submit: creates the PRs and pushes the branches. Use non-draft so a
 	// subsequent submit with the same options has genuinely nothing to do.
 	firstOpts := submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true}
-	require.NoError(t, submit.Action(ctx, firstOpts, &noopHandler{}))
+	require.NoError(t, submit.Action(ctx.Context, submit.DepsFrom(ctx), firstOpts, &noopHandler{}))
 	require.Len(t, config.CreatedPRs, 3)
 
 	// Second submit: nothing changed, so it should be a no-op.
@@ -699,7 +699,7 @@ func TestSubmitNoOpReadsRemoteOnceAndSkipsPush(t *testing.T) {
 	counting.pushBranches.Store(0)
 	createdBefore := len(config.CreatedPRs)
 
-	require.NoError(t, submit.Action(ctx, firstOpts, &noopHandler{}))
+	require.NoError(t, submit.Action(ctx.Context, submit.DepsFrom(ctx), firstOpts, &noopHandler{}))
 
 	require.Len(t, config.CreatedPRs, createdBefore, "no-op submit must not create PRs")
 	require.Equal(t, int64(0), counting.pushBranches.Load(), "no-op submit must not push")
@@ -737,7 +737,7 @@ func TestSubmitPreservesLockStatus(t *testing.T) {
 		Draft:  true,
 	}
 
-	err = submit.Action(s.Context, opts, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, &noopHandler{})
 	require.NoError(t, err)
 
 	// Verify that the branch is STILL locked
@@ -767,7 +767,7 @@ func TestSubmitDryRunWithWorktreeAnchorParent(t *testing.T) {
 		NoEdit: true,
 	}
 
-	err = submit.Action(s.Context, opts, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, &noopHandler{})
 	require.NoError(t, err, "submit dry-run should treat worktree-anchor parent as trunk for validation/base resolution")
 }
 
@@ -790,7 +790,7 @@ func TestSubmitDisplayTreeSkipsWorktreeAnchorParent(t *testing.T) {
 		NoEdit: true,
 	}
 
-	err = submit.Action(s.Context, opts, handler)
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), opts, handler)
 	require.NoError(t, err)
 	require.NotNil(t, handler.stackEvent)
 
@@ -849,7 +849,7 @@ func TestSubmitConfiguredGitHubStackSkipsNonLinearShape(t *testing.T) {
 
 	s.Checkout("api")
 	handler := &captureSkipHandler{}
-	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, handler)
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{NoEdit: true, Draft: true}, handler)
 	require.NoError(t, err, "configured sync must not fail a submit on a tree-shaped stack")
 	require.Len(t, mockConfig.CreatedPRs, 2, "both PRs should still submit")
 	require.Empty(t, mockConfig.CreatedStacks, "native Stack metadata must be skipped")
@@ -877,7 +877,7 @@ func TestSubmitConfiguredGitHubStackSkipsForkedChain(t *testing.T) {
 
 	s.Checkout("base")
 	handler := &captureSkipHandler{}
-	err = submit.Action(s.Context, submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Draft: true}, handler)
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Draft: true}, handler)
 	require.NoError(t, err, "configured sync must not fail a submit on a pre-existing fork")
 	require.Empty(t, mockConfig.CreatedStacks)
 	require.Len(t, handler.reasons, 1)
@@ -907,7 +907,7 @@ func TestSubmitConfiguredGitHubStackWarnsWhenStacksAPIFails(t *testing.T) {
 
 	s.Checkout("api")
 	handler := &captureSkipHandler{}
-	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, handler)
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{NoEdit: true, Draft: true}, handler)
 	require.NoError(t, err, "PRs landed, so the run must not report failure")
 	require.Len(t, mockConfig.CreatedPRs, 2)
 	require.Equal(t, submit.OutcomeComplete, handler.outcome)
@@ -935,7 +935,7 @@ func TestSubmitExplicitGitHubStackFailsWhenStacksAPIFails(t *testing.T) {
 	s.Context.Config = cfg
 
 	s.Checkout("api")
-	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
 	require.ErrorContains(t, err, "creating native GitHub Stack metadata failed")
 }
 
@@ -964,7 +964,7 @@ func TestSubmitGitHubStackSyncsDisjointChainsFromTrunk(t *testing.T) {
 	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
 	s.Context.Config = cfg
 
-	err = submit.Action(s.Context, submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
 	require.NoError(t, err)
 	require.Len(t, mockConfig.CreatedStacks, 2)
 
@@ -1006,7 +1006,7 @@ func TestSubmitConfiguredGitHubStackSyncsDisjointChainsFromTrunk(t *testing.T) {
 
 	s.Checkout("main")
 	handler := &captureSkipHandler{}
-	err = submit.Action(s.Context, submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Draft: true}, handler)
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Draft: true}, handler)
 	require.NoError(t, err, "submitting every stack must still succeed")
 	require.Len(t, mockConfig.CreatedStacks, 2)
 	require.Empty(t, handler.reasons, "independent linear chains should sync without a warning")
@@ -1037,7 +1037,7 @@ func TestSubmitConfiguredGitHubStackSyncsEligibleChainsAlongsideForks(t *testing
 
 	s.Checkout("main")
 	handler := &captureSkipHandler{}
-	err = submit.Action(s.Context, submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Draft: true}, handler)
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Draft: true}, handler)
 	require.NoError(t, err)
 	require.Len(t, mockConfig.CreatedStacks, 1, "the valid chain should still synchronize")
 	require.Len(t, handler.reasons, 1, "the fork should be skipped independently")
@@ -1063,7 +1063,7 @@ func TestSubmitGitHubStackAcceptsContiguousChain(t *testing.T) {
 	s.Context.Config = cfg
 
 	s.Checkout("top")
-	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
 	require.NoError(t, err)
 	require.Len(t, mockConfig.CreatedStacks, 1)
 	require.Len(t, mockConfig.CreatedStacks[0], 3, "all three PRs should form one native Stack")
@@ -1089,14 +1089,14 @@ func TestSubmitDissolvesNativeGitHubStackToRetargetBase(t *testing.T) {
 	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
 	s.Context.Config = cfg
 
-	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
 	require.NoError(t, err)
 	require.Len(t, mockConfig.CreatedStacks, 1)
 
 	// Move "api" out of the stack onto trunk, then resubmit just that branch —
 	// too few PRs for a native Stack, so nothing else clears the stale one.
 	s.TrackBranch("api", "main").Checkout("api")
-	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
 	require.NoError(t, err)
 
 	require.Empty(t, mockConfig.CreatedStacks[0], "the stale native Stack should have been dissolved")
@@ -1127,7 +1127,7 @@ func TestSubmitRetargetsBaseWhenStackKeepsMergedPullRequest(t *testing.T) {
 	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
 	s.Context.Config = cfg
 
-	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
 	require.NoError(t, err)
 	require.Len(t, mockConfig.CreatedStacks, 1)
 	require.NotEmpty(t, mockConfig.CreatedStacks[0])
@@ -1137,7 +1137,7 @@ func TestSubmitRetargetsBaseWhenStackKeepsMergedPullRequest(t *testing.T) {
 	mockConfig.MergedStackPRs = []git.PRNumber{mockConfig.CreatedStacks[0][0]}
 
 	s.TrackBranch("api", "main").Checkout("api")
-	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
+	err = submit.Action(s.Context.Context, submit.DepsFrom(s.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
 	require.NoError(t, err, "a Stack pinned open by a merged PR must not block retargeting the others")
 
 	apiPR, err := s.Engine.GetBranch("api").PrInfo()

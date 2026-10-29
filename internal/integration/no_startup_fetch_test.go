@@ -8,6 +8,10 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -83,7 +87,12 @@ func TestCreateDoesNotFetchAtStartup(t *testing.T) {
 	require.NoError(t, s.Scene.Repo.RunGitCommand("add", "-A"))
 
 	ctx, counting := countingContext(t, s)
-	_, err := create.Action(ctx, create.Options{Message: "feat: new"}, nil)
+	_, err := create.Action(t.Context(), create.Deps{
+		Engine:       ctx.Engine,
+		MutationDeps: actiondeps.Mutation(ctx),
+		Log:          ctx.Logger,
+		Verify:       ctx.Verify,
+	}, create.Options{Message: "feat: new"}, nil)
 	require.NoError(t, err)
 
 	require.Zero(t, counting.totalFetches(), "create must not fetch remote metadata at startup")
@@ -95,7 +104,7 @@ func TestTrackDoesNotFetchAtStartup(t *testing.T) {
 	require.NoError(t, s.Scene.Repo.RunGitCommand("branch", "extra", "main"))
 
 	ctx, counting := countingContext(t, s)
-	require.NoError(t, track.Action(ctx, track.Options{BranchName: "extra", Parent: "main"}, nil))
+	require.NoError(t, track.Action(t.Context(), track.Deps{Engine: ctx.Engine, Out: ctx.Output, Here: actiondeps.Here(ctx)}, track.Options{BranchName: "extra", Parent: "main"}, nil))
 
 	require.Zero(t, counting.totalFetches(), "track must not fetch remote metadata at startup")
 }
@@ -127,7 +136,7 @@ func TestSyncFetchesDuringSyncPhase(t *testing.T) {
 	s := remoteMetadataScenario(t)
 
 	ctx, counting := countingContext(t, s)
-	require.NoError(t, syncaction.Action(ctx, syncaction.Options{}, nil))
+	require.NoError(t, syncaction.Action(ctx.Context, common.SyncDeps(ctx), syncaction.Options{}, nil))
 
 	require.GreaterOrEqual(t, counting.fetchRefSpecs.Load(), int64(1),
 		"sync must fetch from the remote during its sync phase")

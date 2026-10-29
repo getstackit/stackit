@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/squash"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/shippable"
@@ -387,8 +391,8 @@ func (m *shippableModel) executeShip() (tea.Model, tea.Cmd) {
 
 	return m, func() tea.Msg {
 		quietCtx := m.quietCtx()
-		shipper := shippable.NewShipper(quietCtx)
-		result, err := shipper.Ship(selected, shippable.ShipOptions{
+		shipper := shippable.NewShipper(common.MergeDeps(quietCtx))
+		result, err := shipper.Ship(quietCtx.Context, selected, shippable.ShipOptions{
 			SkipLocalCI: !m.options.RunLocalCI,
 			Wait:        false, // Don't wait in UI, user can monitor PR
 		})
@@ -479,7 +483,13 @@ func (m *shippableModel) executeSquash() (tea.Model, tea.Cmd) {
 		quietCtx := m.quietCtx()
 
 		// The action checks out the target and restores the current branch.
-		if err := actions.SquashAction(quietCtx, actions.SquashOptions{Branch: branchName, NoEdit: true}); err != nil {
+		deps := squash.Deps{
+			Engine:       quietCtx.Engine,
+			MutationDeps: actiondeps.Mutation(quietCtx),
+			Log:          quietCtx.Logger,
+			Verify:       quietCtx.Verify,
+		}
+		if err := squash.Action(quietCtx.Context, deps, squash.Options{Branch: branchName, NoEdit: true}); err != nil {
 			return squashCompleteMsg{branch: branchName, err: err}
 		}
 
@@ -509,7 +519,8 @@ func (m *shippableModel) startSubmit() (tea.Model, tea.Cmd) {
 
 		submitted := 0
 		handler := &dashboardSubmitHandler{onSubmit: func() { submitted++ }}
-		if err := submit.Action(m.quietCtx(), opts, handler); err != nil {
+		quietCtx := m.quietCtx()
+		if err := submit.Action(quietCtx.Context, common.SubmitDeps(quietCtx), opts, handler); err != nil {
 			return submitCompleteMsg{err: err}
 		}
 

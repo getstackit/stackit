@@ -5,17 +5,34 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
+	"github.com/getstackit/stackit/internal/actions/get"
+
 	"github.com/google/go-github/v93/github"
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/git"
 	githubpkg "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+// getDeps builds get's collaborators from a test shell's runtime context.
+func getDeps(ctx *app.Context) get.Deps {
+	return get.Deps{
+		Engine:      ctx.Engine,
+		Out:         ctx.Output,
+		GitHub:      ctx.GitHub,
+		GitHubError: ctx.GitHubError,
+		Restack:     actiondeps.Restack(ctx),
+	}
+}
 
 // countingGitHubClient wraps a github.Client and counts GetPullRequestByBranch
 // calls, so tests can assert whether get fell back to the GitHub ancestry crawl.
@@ -32,11 +49,11 @@ func (c *countingGitHubClient) GetPullRequestByBranch(ctx context.Context, branc
 // recordingGetHandler captures the PR number surfaced for each branch. EmitEvent is
 // only called from sequential phases (sync loop, restack callback), so no locking.
 type recordingGetHandler struct {
-	actions.GetNullHandler
+	get.NullHandler
 	prByBranch map[string]git.PRNumber
 }
 
-func (h *recordingGetHandler) EmitEvent(e actions.GetEvent) {
+func (h *recordingGetHandler) EmitEvent(e get.Event) {
 	if e.Branch == "" || e.PRNumber == nil {
 		return
 	}
@@ -85,8 +102,8 @@ func TestGetMetadataDiscovery(t *testing.T) {
 		sh.Context.GitHubClient = gh
 
 		// Submit + sync so parent and PR info land in the pushed metadata.
-		require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
-		require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+		require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
+		require.NoError(t, syncaction.Action(sh.Context.Context, common.SyncDeps(sh.Context), syncaction.Options{}, nil))
 
 		// Precondition: the remote metadata carries the PR number, so get has no reason
 		// to call GitHub for display either.
@@ -107,7 +124,7 @@ func TestGetMetadataDiscovery(t *testing.T) {
 		// Now measure: get should resolve everything from metadata, zero GitHub crawl.
 		gh.prByBranch.Store(0)
 		handler := &recordingGetHandler{}
-		require.NoError(t, actions.GetAction(sh.Context, "b", actions.GetOptions{Restack: true}, handler))
+		require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "b", get.Options{Restack: true}, handler))
 		sh.Rebuild()
 
 		sh.ExpectStackStructure(map[string]string{"b": "a", "a": "main"})
@@ -139,7 +156,7 @@ func TestGetMetadataDiscovery(t *testing.T) {
 		gh := newCountingGitHubClient(t, config)
 		sh.Context.GitHubClient = gh
 
-		require.NoError(t, actions.GetAction(sh.Context, "feature-x", actions.GetOptions{Restack: true}, &actions.GetNullHandler{}))
+		require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "feature-x", get.Options{Restack: true}, &get.NullHandler{}))
 		sh.Rebuild()
 
 		sh.ExpectStackStructure(map[string]string{"feature-x": "main"})
@@ -173,7 +190,7 @@ func TestGetMetadataDiscovery(t *testing.T) {
 		}
 		sh.Context.GitHubClient = newCountingGitHubClient(t, config)
 
-		require.NoError(t, actions.GetAction(sh.Context, "feature-y", actions.GetOptions{Restack: true}, &actions.GetNullHandler{}))
+		require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "feature-y", get.Options{Restack: true}, &get.NullHandler{}))
 		sh.Rebuild()
 
 		prInfo, err := sh.Engine.GetPrInfo(sh.Engine.GetBranch("feature-y"))
@@ -194,8 +211,8 @@ func TestGetMetadataDiscovery(t *testing.T) {
 		gh := newCountingGitHubClient(t, config)
 		sh.Context.GitHubClient = gh
 
-		require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
-		require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+		require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
+		require.NoError(t, syncaction.Action(sh.Context.Context, common.SyncDeps(sh.Context), syncaction.Options{}, nil))
 
 		// Keep b's metadata pointing to a, but remove a's metadata. Metadata discovery
 		// should not accept this partial chain; GitHub can still provide a -> main.
@@ -207,7 +224,7 @@ func TestGetMetadataDiscovery(t *testing.T) {
 		sh.Rebuild()
 
 		gh.prByBranch.Store(0)
-		require.NoError(t, actions.GetAction(sh.Context, "b", actions.GetOptions{Restack: true}, &actions.GetNullHandler{}))
+		require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "b", get.Options{Restack: true}, &get.NullHandler{}))
 		sh.Rebuild()
 
 		sh.ExpectStackStructure(map[string]string{"b": "a", "a": "main"})
@@ -225,15 +242,15 @@ func TestGetMetadataDiscovery(t *testing.T) {
 		gh := newCountingGitHubClient(t, config)
 		sh.Context.GitHubClient = gh
 
-		require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
-		require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+		require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
+		require.NoError(t, syncaction.Action(sh.Context.Context, common.SyncDeps(sh.Context), syncaction.Options{}, nil))
 
 		sh.Checkout("main")
 		dropLocalBranch(t, sh, "feature")
 		sh.Rebuild()
 
 		gh.prByBranch.Store(0)
-		require.NoError(t, actions.GetAction(sh.Context, "feature", actions.GetOptions{Restack: true}, &actions.GetNullHandler{}))
+		require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "feature", get.Options{Restack: true}, &get.NullHandler{}))
 		sh.Rebuild()
 
 		sh.ExpectStackStructure(map[string]string{"feature": "main"})

@@ -4,11 +4,13 @@ package stack
 import (
 	"errors"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/term"
 
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/reorder"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/tui"
@@ -27,13 +29,13 @@ branches will be restacked in the new order.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				opts := actions.ReorderOptions{}
+				opts := reorder.Options{}
 				// The Bubble Tea editor needs a TTY; without one the action
 				// falls back to editing the order as text in $EDITOR.
 				if term.IsInteractive() {
 					opts.Editor = tuiOrderEditor{}
 				}
-				return actions.ReorderAction(ctx, opts)
+				return reorder.Action(ctx.Context, reorder.Deps{Engine: ctx.Engine, MutationDeps: actiondeps.Mutation(ctx)}, opts)
 			})
 		},
 	}
@@ -41,13 +43,13 @@ branches will be restacked in the new order.`,
 	return cmd
 }
 
-// tuiOrderEditor implements actions.OrderEditor with the Bubble Tea reorder view.
+// tuiOrderEditor implements reorder.OrderEditor with the Bubble Tea reorder view.
 type tuiOrderEditor struct{}
 
 func (tuiOrderEditor) EditOrder(branchesTipFirst []string, trunk string) ([]string, error) {
 	newOrder, err := tui.RunReorderTUI(branchesTipFirst, trunk)
 	if errors.Is(err, tui.ErrReorderCanceled) {
-		return nil, actions.ErrReorderCanceled
+		return nil, reorder.ErrCanceled
 	}
 	return newOrder, err
 }

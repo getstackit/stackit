@@ -3,7 +3,7 @@ package navigation
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/checkout"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 )
@@ -24,7 +24,7 @@ Navigates to the configured trunk branch (typically "main" or "master").`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				_, err := common.Checkout(ctx, actions.CheckoutOptions{CheckoutTrunk: true}, nil)
+				_, err := common.Checkout(ctx, checkout.Options{CheckoutTrunk: true}, nil)
 				return err
 			})
 		},

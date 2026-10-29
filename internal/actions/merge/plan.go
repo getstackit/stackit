@@ -9,7 +9,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/workpool"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
@@ -300,7 +299,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	involvedBranches := slices.Concat(allBranches, upstackBranches)
 	allMeta, _ := eng.BatchReadMetadataRaw(ctx, involvedBranches)
 
-	remoteCtx, cancelRemote := app.WithRemoteOperationTimeout(ctx)
+	remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
 	defer cancelRemote()
 
 	// Fetch CI statuses in batch if possible

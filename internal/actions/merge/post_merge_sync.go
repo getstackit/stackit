@@ -1,9 +1,10 @@
 package merge
 
 import (
-	"github.com/getstackit/stackit/internal/actions"
+	"context"
+
+	"github.com/getstackit/stackit/internal/actions/checkout"
 	"github.com/getstackit/stackit/internal/actions/sync"
-	"github.com/getstackit/stackit/internal/app"
 )
 
 // PostMergeSyncOptions configures PostMergeSync.
@@ -13,7 +14,7 @@ type PostMergeSyncOptions struct {
 	// OnTrunkCheckedOut, when set, is called after trunk is checked out and
 	// before sync runs, so adapters can surface worktree-switch directives in
 	// order.
-	OnTrunkCheckedOut func(result actions.CheckoutResult)
+	OnTrunkCheckedOut func(result checkout.Result)
 }
 
 // PostMergeSyncResult reports what the post-merge sync did.
@@ -44,8 +45,8 @@ func (e *PostMergeCheckoutError) Unwrap() error { return e.Err }
 // that workflow detaches HEAD, and a merge command must never leave the user
 // in detached HEAD. Restack conflicts are left in the returned summary for the
 // caller to report or fail on.
-func PostMergeSync(ctx *app.Context, opts PostMergeSyncOptions, newSyncHandler func() sync.Handler) (PostMergeSyncResult, error) {
-	checkoutResult, err := actions.CheckoutAction(ctx, actions.CheckoutOptions{
+func PostMergeSync(ctx context.Context, deps Deps, opts PostMergeSyncOptions, newSyncHandler func() sync.Handler) (PostMergeSyncResult, error) {
+	checkoutResult, err := checkout.Action(ctx, deps.Checkout, checkout.Options{
 		CheckoutTrunk: true,
 	}, nil)
 	if err != nil {
@@ -56,7 +57,7 @@ func PostMergeSync(ctx *app.Context, opts PostMergeSyncOptions, newSyncHandler f
 	}
 
 	wrapped := &postMergeSyncHandler{Handler: newSyncHandler()}
-	err = sync.Action(ctx, sync.Options{
+	err = sync.Action(ctx, deps.Sync, sync.Options{
 		Restack:      true,
 		RestackScope: opts.RestackScope,
 	}, wrapped)

@@ -3,6 +3,8 @@ package integration
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/submit"
@@ -101,12 +103,12 @@ func TestScopeSubmitSyncFlow(t *testing.T) {
 		NoEdit: true,
 		Draft:  true,
 	}
-	err := submit.Action(sh.Context, opts, &noopHandler{})
+	err := submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), opts, &noopHandler{})
 	require.NoError(t, err)
 
 	// 5. Run sync to fetch remote metadata
 	// This will fetch refs/stackit/metadata/*:refs/stackit/remote-metadata/*
-	err = sync.Action(sh.Context, sync.Options{}, nil)
+	err = sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{}, nil)
 	require.NoError(t, err)
 
 	// 6. Verify the scope is now in the remote metadata cache

@@ -3,7 +3,7 @@ package navigation
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/share"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 )
@@ -32,7 +32,7 @@ Examples:
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				return actions.ShareAction(ctx, actions.ShareOptions{
+				return share.Action(ctx.Context, share.Deps{Engine: ctx.Engine, Out: ctx.Output}, share.Options{
 					BranchName: branch,
 					Marker:     marker,
 				})

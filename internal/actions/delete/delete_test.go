@@ -3,12 +3,20 @@ package delete
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
+	"github.com/getstackit/stackit/internal/actions"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+func deps(s *scenario.Scenario) Deps {
+	return Deps{Engine: s.Context.Engine, MutationDeps: actiondeps.Mutation(s.Context)}
+}
 
 func TestDelete(t *testing.T) {
 	t.Parallel()
@@ -20,7 +28,7 @@ func TestDelete(t *testing.T) {
 				"branch2": "branch1",
 			})
 
-		_, err := Action(s.Context, Options{
+		_, err := Action(t.Context(), deps(s), Options{
 			BranchName: "branch1",
 			Force:      true,
 		}, nil)
@@ -44,7 +52,7 @@ func TestDelete(t *testing.T) {
 				"branch3": "branch2",
 			})
 
-		_, err := Action(s.Context, Options{
+		_, err := Action(t.Context(), deps(s), Options{
 			BranchName: "branch1",
 			Upstack:    true,
 			Force:      true,
@@ -66,7 +74,7 @@ func TestDelete(t *testing.T) {
 				"branch3": "branch2",
 			})
 
-		_, err := Action(s.Context, Options{
+		_, err := Action(t.Context(), deps(s), Options{
 			BranchName: "branch3",
 			Downstack:  true,
 			Force:      true,
@@ -90,7 +98,7 @@ func TestDelete(t *testing.T) {
 		s.Checkout("branch1").Commit("some change")
 		s.Engine.Rebuild(t.Context(), "main")
 
-		_, err := Action(s.Context, Options{
+		_, err := Action(t.Context(), deps(s), Options{
 			BranchName: "branch1",
 			Force:      false,
 		}, nil)
@@ -110,7 +118,7 @@ func TestDelete(t *testing.T) {
 		require.NotNil(t, currentBranch)
 		require.Equal(t, "branch1", currentBranch.Name())
 
-		_, err := Action(s.Context, Options{
+		_, err := Action(t.Context(), deps(s), Options{
 			BranchName: "branch1",
 			Force:      true,
 		}, nil)
@@ -130,7 +138,7 @@ func TestDelete(t *testing.T) {
 				"child2": "parent",
 			})
 
-		_, err := Action(s.Context, Options{
+		_, err := Action(t.Context(), deps(s), Options{
 			BranchName: "parent",
 			Force:      true,
 		}, nil)
@@ -173,7 +181,7 @@ func TestDelete(t *testing.T) {
 		err := s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoMerged(1, "main"))
 		require.NoError(t, err)
 
-		_, err = Action(s.Context, Options{
+		_, err = Action(t.Context(), deps(s), Options{
 			BranchName: "branch1",
 			Force:      true,
 		}, nil)
@@ -199,13 +207,15 @@ func TestDeleteRespectsManagedWorktreeOwnership(t *testing.T) {
 	require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: "/tmp/feature-worktree", Name: "feature-wt"}))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
-	_, err := Action(s.Context, Options{BranchName: "feature", Force: true}, nil)
+	_, err := Action(t.Context(), deps(s), Options{BranchName: "feature", Force: true}, nil)
 	require.ErrorContains(t, err, "belongs to worktree feature-wt")
 
-	ctx := *s.Context
-	ctx.InManagedWorktree = true
-	ctx.WorktreeInfo = &engine.WorktreeInfo{Name: "feature-wt", Path: engine.WorktreePath("/tmp/feature-worktree"), AnchorBranch: "feature"}
-	_, err = Action(&ctx, Options{BranchName: "feature", Upstack: true, Force: true}, nil)
+	d := deps(s)
+	d.Here = actions.Here{
+		InManagedWorktree: true,
+		Worktree:          &engine.WorktreeInfo{Name: "feature-wt", Path: engine.WorktreePath("/tmp/feature-worktree"), AnchorBranch: "feature"},
+	}
+	_, err = Action(t.Context(), d, Options{BranchName: "feature", Upstack: true, Force: true}, nil)
 	require.NoError(t, err)
 }
 
@@ -230,7 +240,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 
 		// Delete the stack root
 		s.Checkout("main")
-		_, err = Action(s.Context, Options{
+		_, err = Action(t.Context(), deps(s), Options{
 			BranchName: "feature-branch",
 			Force:      true,
 		}, nil)
@@ -263,7 +273,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 
 		// Delete the child branch (not the stack root)
 		s.Checkout("stack-root")
-		_, err = Action(s.Context, Options{
+		_, err = Action(t.Context(), deps(s), Options{
 			BranchName: "child-branch",
 			Force:      true,
 		}, nil)
@@ -296,7 +306,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 
 		// Delete upstack from stack root (deletes all branches in the stack)
 		s.Checkout("main")
-		_, err = Action(s.Context, Options{
+		_, err = Action(t.Context(), deps(s), Options{
 			BranchName: "stack-root",
 			Upstack:    true,
 			Force:      true,

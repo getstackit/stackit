@@ -9,8 +9,8 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/handler"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/timeutil"
 )
 
@@ -20,16 +20,26 @@ type Options struct {
 	Force      bool   // Optional: skip confirmation prompt
 }
 
-// undoEngine lists exactly the engine methods undo calls.
-type undoEngine interface {
+// Engine lists exactly the engine methods undo calls.
+type Engine interface {
 	actions.RecoveryEngine
+	actions.TopologyEngine
 	Snapshots() ([]engine.SnapshotInfo, error)
 	WorktreeHasTrackedChanges(ctx context.Context, worktreePath engine.WorktreePath) (bool, error)
 }
 
+// Deps are the collaborators undo needs.
+type Deps struct {
+	Engine   Engine
+	Out      output.Output
+	RepoRoot string
+	// LinearStacks reflects stack.shape=linear, for the restored-topology warning.
+	LinearStacks bool
+}
+
 // Action performs the undo operation
-func Action(ctx *app.Context, opts Options, h Handler) error {
-	var eng undoEngine = ctx.Engine
+func Action(ctx context.Context, deps Deps, opts Options, h Handler) error {
+	eng := deps.Engine
 
 	// Use null handler if none provided
 	if h == nil {
@@ -128,16 +138,16 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	}
 
 	// Abort any in-progress Git operations that might interfere with restoration
-	if eng.IsRebaseInProgress(ctx.Context) {
+	if eng.IsRebaseInProgress(ctx) {
 		h.OnStep("Aborting in-progress rebase before undo...", handler.StatusStarted)
-		if err := eng.RebaseAbort(ctx.Context); err != nil {
+		if err := eng.RebaseAbort(ctx); err != nil {
 			return fmt.Errorf("failed to abort rebase: %w", err)
 		}
 		h.OnStep("Aborted in-progress rebase", handler.StatusCompleted)
 	}
-	if eng.IsMergeInProgress(ctx.Context) {
+	if eng.IsMergeInProgress(ctx) {
 		h.OnStep("Aborting in-progress merge before undo...", handler.StatusStarted)
-		if err := eng.MergeAbort(ctx.Context); err != nil {
+		if err := eng.MergeAbort(ctx); err != nil {
 			return fmt.Errorf("failed to abort merge: %w", err)
 		}
 		h.OnStep("Aborted in-progress merge", handler.StatusCompleted)
@@ -157,7 +167,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	//
 	// RestoreSnapshot separately checks untracked files against the target
 	// tree before changing refs. Unrelated untracked files can stay in place.
-	dirty, dirtyErr := eng.WorktreeHasTrackedChanges(ctx.Context, engine.WorktreePath(ctx.RepoRoot))
+	dirty, dirtyErr := eng.WorktreeHasTrackedChanges(ctx, engine.WorktreePath(deps.RepoRoot))
 	switch {
 	case dirtyErr != nil:
 		return fmt.Errorf("failed to check for uncommitted changes: %w", dirtyErr)
@@ -167,19 +177,19 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 
 	// Perform the restoration
 	h.OnStep("Restoring repository state...", handler.StatusStarted)
-	if err := eng.RestoreSnapshot(ctx.Context, selectedSnapshotID); err != nil {
+	if err := eng.RestoreSnapshot(ctx, selectedSnapshotID); err != nil {
 		return fmt.Errorf("failed to restore snapshot: %w", err)
 	}
 	// "Before the command" includes the working tree the command consumed, so
 	// restoring only refs would drop the user's uncommitted changes on the
 	// floor. Best effort: the rollback itself has already succeeded, and the
 	// capture is named so the work stays reachable either way.
-	if restored, worktreeErr := eng.RestoreWorktree(ctx.Context, selectedSnapshotID); worktreeErr != nil {
-		ctx.Output.Warn("Could not restore the uncommitted changes from before '%s': %v", selectedSnapshot.Command, worktreeErr)
+	if restored, worktreeErr := eng.RestoreWorktree(ctx, selectedSnapshotID); worktreeErr != nil {
+		deps.Out.Warn("Could not restore the uncommitted changes from before '%s': %v", selectedSnapshot.Command, worktreeErr)
 	} else if restored {
-		ctx.Output.Info("Restored the uncommitted changes you had before '%s'.", selectedSnapshot.Command)
+		deps.Out.Info("Restored the uncommitted changes you had before '%s'.", selectedSnapshot.Command)
 	}
-	actions.WarnIfLinearStackRestored(ctx, "Undo")
+	actions.WarnIfNonLinearRestore(ctx, eng, deps.Out, deps.LinearStacks, "Undo")
 
 	h.Complete(true, fmt.Sprintf("Successfully restored to state before '%s'.", selectedSnapshot.Command))
 

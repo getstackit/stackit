@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -16,7 +15,8 @@ import (
 // This is detected by checking for:
 // 1. Presence of absorb stash marker, OR
 // 2. Detached HEAD state with no rebase/merge in progress
-func IsAbsorbInProgress(ctx *app.Context) bool {
+func IsAbsorbInProgress(ctx context.Context, deps Deps) bool {
+	eng := deps.Engine
 	// A rebase or merge in progress is owned by the standard conflict-workflow
 	// abort (restack/sync/merge). EnterConflictWorkflow deliberately detaches
 	// HEAD before the conflict rebase — which writes a "checkout: moving from"
@@ -27,22 +27,22 @@ func IsAbsorbInProgress(ctx *app.Context) bool {
 	// conflict workflow's detach is misread as a mid-absorb failure, routing
 	// `stackit abort` to absorb cleanup — which never runs `git rebase --abort`
 	// and leaves the repo stuck mid-rebase with stale continuation state.
-	if ctx.Engine.IsRebaseInProgress(ctx.Context) || ctx.Engine.IsMergeInProgress(ctx.Context) {
+	if eng.IsRebaseInProgress(ctx) || eng.IsMergeInProgress(ctx) {
 		return false
 	}
 
 	// Check for absorb stash marker
-	stashList, _ := ctx.Engine.StashList(ctx.Context)
+	stashList, _ := eng.StashList(ctx)
 	if strings.Contains(stashList, absorbStashMarker) {
 		return true
 	}
 
 	// Check for detached HEAD (might be mid-absorb failure)
 	// engine.CurrentBranch() returns nil if in detached HEAD.
-	if ctx.Engine.CurrentBranch(ctx.Context) == nil {
+	if eng.CurrentBranch(ctx) == nil {
 		// In detached HEAD - could be absorb or something else
 		// Check reflog for signs of absorb
-		reflog, _ := ctx.Engine.GetReflog(ctx.Context, 5, "%gs")
+		reflog, _ := eng.GetReflog(ctx, 5, "%gs")
 		// If recent reflog shows checkout from a branch (not a commit), likely absorb
 		if strings.Contains(reflog, "checkout: moving from") {
 			return true
@@ -54,18 +54,17 @@ func IsAbsorbInProgress(ctx *app.Context) bool {
 
 // ShowConflict shows information about what absorb would do and helps diagnose conflicts.
 // This is useful when absorb fails and you want to understand what was being attempted.
-func ShowConflict(ctx *app.Context) error {
-	out := ctx.Output
-	eng := ctx.Engine
+func ShowConflict(ctx context.Context, deps Deps) error {
+	eng, out := deps.Engine, deps.Out
 
 	// Check if we're in a detached HEAD state (might be mid-absorb failure)
-	if eng.CurrentBranch(ctx.Context) == nil {
+	if eng.CurrentBranch(ctx) == nil {
 		out.Warn("Repository is in detached HEAD state.")
 		out.Info("This may be from a failed absorb. Run 'stackit abort' to recover.")
 		out.Info("")
 
 		// Show unmerged files if any
-		unmerged, _ := eng.GetUnmergedFiles(ctx.Context)
+		unmerged, _ := eng.GetUnmergedFiles(ctx)
 		if len(unmerged) > 0 {
 			out.Info("Unmerged files:")
 			for _, file := range unmerged {
@@ -77,7 +76,7 @@ func ShowConflict(ctx *app.Context) error {
 	}
 
 	// Check for staged changes
-	hasStaged, err := eng.HasStagedChanges(ctx.Context)
+	hasStaged, err := eng.HasStagedChanges(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check staged changes: %w", err)
 	}
@@ -92,7 +91,7 @@ func ShowConflict(ctx *app.Context) error {
 	out.Info("Analyzing staged changes...\n")
 
 	// Parse staged hunks
-	hunks, err := eng.ParseStagedHunks(ctx.Context)
+	hunks, err := eng.ParseStagedHunks(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to parse staged hunks: %w", err)
 	}
@@ -117,13 +116,13 @@ func ShowConflict(ctx *app.Context) error {
 	out.Info("")
 
 	// Get current branch info
-	currentBranchObj := eng.CurrentBranch(ctx.Context)
+	currentBranchObj := eng.CurrentBranch(ctx)
 	if currentBranchObj == nil {
 		return errors.New("not on a tracked branch")
 	}
 
 	// Build StackGraph for efficient traversals
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 
 	// Get downstack commits
 	downstackBranches := graph.Range(*currentBranchObj, engine.StackRange{RecursiveParents: true})
@@ -151,17 +150,16 @@ func ShowConflict(ctx *app.Context) error {
 }
 
 // Abort cleans up from a failed absorb state
-func Abort(ctx *app.Context) error {
-	out := ctx.Output
-	eng := ctx.Engine
+func Abort(ctx context.Context, deps Deps) error {
+	eng, out := deps.Engine, deps.Out
 
 	// Check if we're in a detached HEAD state
-	if eng.CurrentBranch(ctx.Context) != nil {
+	if eng.CurrentBranch(ctx) != nil {
 		// Check for stashed changes from absorb
-		stashList, _ := eng.StashList(ctx.Context)
+		stashList, _ := eng.StashList(ctx)
 		if strings.Contains(stashList, absorbStashMarker) {
 			out.Info("Found stashed changes from previous absorb attempt.")
-			restored, err := popAllAbsorbStashes(ctx.Context, eng)
+			restored, err := popAllAbsorbStashes(ctx, eng)
 			if err != nil {
 				out.Warn("Failed to restore stashed changes: %v", err)
 			} else {
@@ -177,12 +175,12 @@ func Abort(ctx *app.Context) error {
 	out.Info("Cleaning up failed absorb operation...")
 
 	// Reset any uncommitted changes
-	if err := eng.ResetHard(ctx.Context, "HEAD"); err != nil {
+	if err := eng.ResetHard(ctx, "HEAD"); err != nil {
 		out.Warn("Failed to reset: %v", err)
 	}
 
 	// Find the original branch from reflog
-	reflog, _ := eng.GetReflog(ctx.Context, 20, "%gs")
+	reflog, _ := eng.GetReflog(ctx, 20, "%gs")
 	var originalBranch string
 	for line := range strings.SplitSeq(reflog, "\n") {
 		if strings.Contains(line, "checkout: moving from") {
@@ -199,7 +197,7 @@ func Abort(ctx *app.Context) error {
 
 	if originalBranch != "" && originalBranch != "HEAD" {
 		branch := eng.GetBranch(originalBranch)
-		if err := eng.CheckoutBranch(ctx.Context, branch); err != nil {
+		if err := eng.CheckoutBranch(ctx, branch); err != nil {
 			out.Warn("Failed to return to original branch %s: %v", originalBranch, err)
 			out.Info("You can manually checkout your branch with: git checkout <branch-name>")
 		} else {
@@ -211,9 +209,9 @@ func Abort(ctx *app.Context) error {
 	}
 
 	// Pop stash if there is one
-	stashList, _ := eng.StashList(ctx.Context)
+	stashList, _ := eng.StashList(ctx)
 	if strings.Contains(stashList, absorbStashMarker) {
-		restored, err := popAllAbsorbStashes(ctx.Context, eng)
+		restored, err := popAllAbsorbStashes(ctx, eng)
 		if err != nil {
 			out.Warn("Failed to restore stashed changes: %v", err)
 		} else {

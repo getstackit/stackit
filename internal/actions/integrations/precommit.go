@@ -2,11 +2,26 @@
 package integrations
 
 import (
+	"context"
 	"io"
 
-	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
+
+// Engine lists exactly the engine methods the hook integrations call.
+type Engine interface {
+	engine.BranchLookup
+	CurrentBranch(ctx context.Context) *engine.Branch
+}
+
+// Deps are the collaborators the hook integrations need. Adapters build them
+// from their own runtime state; the actions never see bootstrap types.
+type Deps struct {
+	Engine   Engine
+	Out      output.Output
+	RepoRoot string
+}
 
 const (
 	precommitHookName    = "pre-commit"
@@ -20,21 +35,20 @@ stackit precommit verify
 `
 
 // PrecommitInstallAction installs the pre-commit hook
-func PrecommitInstallAction(ctx *app.Context) error {
-	return installHook(ctx.RepoRoot, precommitHookName, precommitMarker, precommitHookTemplate, precommitDisplayName, ctx.Output)
+func PrecommitInstallAction(deps Deps) error {
+	return installHook(deps.RepoRoot, precommitHookName, precommitMarker, precommitHookTemplate, precommitDisplayName, deps.Out)
 }
 
 // PrecommitInstallActionWithOutput installs the pre-commit hook with a custom writer.
-// This is a convenience function for use during init where we don't have an app.Context.
+// This is a convenience function for use during init where we don't have full Deps.
 func PrecommitInstallActionWithOutput(repoRoot string, writer io.Writer) error {
 	out := output.NewConsoleOutput(writer, false)
 	return installHook(repoRoot, precommitHookName, precommitMarker, precommitHookTemplate, precommitDisplayName, out)
 }
 
 // PrecommitVerifyAction checks if the current branch can be modified
-func PrecommitVerifyAction(ctx *app.Context) error {
-	eng := ctx.Engine
-	currentBranch := eng.CurrentBranch(ctx.Context)
+func PrecommitVerifyAction(ctx context.Context, deps Deps) error {
+	currentBranch := deps.Engine.CurrentBranch(ctx)
 
 	if currentBranch == nil {
 		// Not on a branch, allow the commit (e.g. initial commit or detached HEAD)
@@ -46,6 +60,6 @@ func PrecommitVerifyAction(ctx *app.Context) error {
 }
 
 // PrecommitUninstallAction uninstalls the pre-commit hook
-func PrecommitUninstallAction(ctx *app.Context) error {
-	return uninstallHook(ctx.Output, ctx.RepoRoot, precommitHookName, precommitMarker, precommitDisplayName)
+func PrecommitUninstallAction(deps Deps) error {
+	return uninstallHook(deps.Out, deps.RepoRoot, precommitHookName, precommitMarker, precommitDisplayName)
 }

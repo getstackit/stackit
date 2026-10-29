@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/lock"
@@ -41,6 +43,32 @@ func (h *testLockHandler) SubmitHandler() submit.Handler { return nil }
 func (h *testLockHandler) Cleanup()                      {}
 func (h *testLockHandler) IsInteractive() bool           { return h.isInteractive }
 
+// deps builds lock's collaborators from the scenario's runtime context. Call it
+// after any test adjustment to s.Context (such as swapping Output) so the deps
+// capture it.
+func deps(s *scenario.Scenario) lock.Deps {
+	ctx := s.Context
+	return lock.Deps{
+		Engine: ctx.Engine,
+		Out:    ctx.Output,
+		PRSync: actiondeps.PRSync(ctx),
+		Submit: submit.Deps{
+			Engine:      ctx.Engine,
+			Out:         ctx.Output,
+			Log:         ctx.Logger,
+			GitHub:      ctx.GitHub,
+			GitHubError: ctx.GitHubError,
+			GHRunner:    ctx.GHRunner,
+			PRSync:      actiondeps.PRSync(ctx),
+			Restack:     actiondeps.Restack(ctx),
+			Snapshots:   actiondeps.Snapshots(ctx),
+			Prompts:     ctx.Prompts(),
+			Verify:      ctx.Verify,
+			Config:      ctx.Config,
+		},
+	}
+}
+
 func TestLockUnlockAction(t *testing.T) {
 	t.Parallel()
 	t.Run("LockAction locks branch and ancestors", func(t *testing.T) {
@@ -54,7 +82,7 @@ func TestLockUnlockAction(t *testing.T) {
 			TrackBranch("feature-a", "main").
 			TrackBranch("feature-b", "feature-a")
 
-		err := lock.Action(s.Context, "feature-b", nil)
+		err := lock.Action(t.Context(), deps(s), "feature-b", nil)
 		require.NoError(t, err)
 
 		require.True(t, s.Engine.GetBranch("feature-b").IsLocked())
@@ -78,7 +106,7 @@ func TestLockUnlockAction(t *testing.T) {
 		var buf bytes.Buffer
 		s.Context.Output = output.NewConsoleOutput(&buf, false)
 
-		err = lock.Action(s.Context, "feature-a", nil)
+		err = lock.Action(t.Context(), deps(s), "feature-a", nil)
 		require.NoError(t, err)
 
 		out := buf.String()
@@ -103,7 +131,7 @@ func TestLockUnlockAction(t *testing.T) {
 		_, err = s.Engine.SetLocked(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature-b")), engine.LockReasonUser)
 		require.NoError(t, err)
 
-		err = lock.Unlock(s.Context, "feature-a", nil)
+		err = lock.Unlock(t.Context(), deps(s), "feature-a", nil)
 		require.NoError(t, err)
 
 		require.False(t, s.Engine.GetBranch("feature-a").IsLocked())
@@ -123,7 +151,7 @@ func TestLockUnlockAction(t *testing.T) {
 		var buf bytes.Buffer
 		s.Context.Output = output.NewConsoleOutput(&buf, false)
 
-		err := lock.Unlock(s.Context, "feature-a", nil)
+		err := lock.Unlock(t.Context(), deps(s), "feature-a", nil)
 		require.NoError(t, err)
 
 		out := buf.String()
@@ -137,7 +165,7 @@ func TestLockUnlockAction(t *testing.T) {
 		s.WithInitialCommit().
 			CreateBranchQuiet("untracked")
 
-		err := lock.Action(s.Context, "untracked", nil)
+		err := lock.Action(t.Context(), deps(s), "untracked", nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not tracked")
 	})
@@ -147,7 +175,7 @@ func TestLockUnlockAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		err := lock.Action(s.Context, "main", nil)
+		err := lock.Action(t.Context(), deps(s), "main", nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "cannot lock trunk")
 	})
@@ -177,7 +205,7 @@ func TestLockUnlockAction(t *testing.T) {
 
 		s.Context.Interactive = false // Ensure non-interactive
 
-		err = lock.Action(s.Context, "feature-a", nil)
+		err = lock.Action(t.Context(), deps(s), "feature-a", nil)
 		require.NoError(t, err)
 		require.True(t, s.Engine.GetBranch("feature-a").IsLocked())
 	})
@@ -200,7 +228,7 @@ func TestLockUnlockAction(t *testing.T) {
 			submitResult:  false, // decline submit
 		}
 
-		err = lock.Action(s.Context, "new-feature", handler)
+		err = lock.Action(t.Context(), deps(s), "new-feature", handler)
 		require.NoError(t, err)
 		require.True(t, s.Engine.GetBranch("new-feature").IsLocked())
 		require.True(t, handler.promptSubmitCalled)
@@ -232,7 +260,7 @@ func TestLockUnlockAction(t *testing.T) {
 			},
 		}
 
-		err = lock.Unlock(s.Context, "feature-b", handler)
+		err = lock.Unlock(t.Context(), deps(s), "feature-b", handler)
 		require.NoError(t, err)
 
 		require.False(t, s.Engine.GetBranch("feature-b").IsLocked())
@@ -266,7 +294,7 @@ func TestLockUnlockAction(t *testing.T) {
 			},
 		}
 
-		err = lock.Unlock(s.Context, "feature-b", handler)
+		err = lock.Unlock(t.Context(), deps(s), "feature-b", handler)
 		require.NoError(t, err)
 
 		require.False(t, s.Engine.GetBranch("feature-b").IsLocked())

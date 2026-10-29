@@ -1,11 +1,11 @@
 package split
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
 	handlerBase "github.com/getstackit/stackit/internal/actions/handler"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
@@ -29,14 +29,13 @@ type WizardOptions struct {
 // RunWizard executes the interactive split wizard.
 // It guides the user through selecting split type, direction, and then
 // executes the appropriate split operation.
-func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions) error {
-	eng := ctx.Engine
-	out := ctx.Output
+func RunWizard(ctx context.Context, deps Deps, handler InteractiveHandler, opts WizardOptions) error {
+	eng, out := deps.Engine, deps.Out
 
 	out.Debug("split wizard: starting with opts=%+v", opts)
 
 	// Get current branch
-	currentBranch := eng.CurrentBranch(ctx.Context)
+	currentBranch := eng.CurrentBranch(ctx)
 	if currentBranch == nil {
 		return errors.ErrNotOnBranch
 	}
@@ -48,12 +47,12 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	// before reaching its own ownership guard. Splitting rewrites the branch's
 	// commits, which is only safe in the worktree that owns it — guard before
 	// the snapshot below, so a refusal is a no-op.
-	if err := actions.EnsureCanModifyHere(ctx, *currentBranch); err != nil {
+	if err := actions.EnsureCanModify(ctx, deps.Engine, deps.Here, *currentBranch); err != nil {
 		return err
 	}
 
 	// Check for uncommitted tracked changes
-	hasUnstaged, err := eng.HasUnstagedChanges(ctx.Context)
+	hasUnstaged, err := eng.HasUnstagedChanges(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check unstaged changes: %w", err)
 	}
@@ -65,13 +64,13 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	currentBranchObj := eng.GetBranch(currentBranch.Name())
 	if !currentBranchObj.IsTracked() {
 		parentName := currentBranch.ParentOrTrunk()
-		if err := eng.TrackBranch(ctx.Context, currentBranch.Name(), parentName); err != nil {
+		if err := eng.TrackBranch(ctx, currentBranch.Name(), parentName); err != nil {
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 	}
 
 	// Get commit count to determine available options
-	commits, err := currentBranch.CommitIDs(ctx.Context)
+	commits, err := currentBranch.CommitIDs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get commits: %w", err)
 	}
@@ -88,7 +87,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		if style == "" {
 			handler.OnStep(StepChoosingType, handlerBase.StatusStarted, "Choose split type")
 
-			selectedStyle, err := handler.PromptSplitType(ctx.Context, availableTypes)
+			selectedStyle, err := handler.PromptSplitType(ctx, availableTypes)
 			if err != nil {
 				return err
 			}
@@ -111,7 +110,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 			}
 
 			// Get children of current branch
-			graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+			graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 			childNames := graph.Children(*currentBranch)
 
 			dirCtx := DirectionContext{
@@ -121,7 +120,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 				Children:      childNames,
 			}
 
-			selectedDirection, err := handler.PromptDirection(ctx.Context, dirCtx)
+			selectedDirection, err := handler.PromptDirection(ctx, dirCtx)
 			if errors.Is(err, errors.ErrBack) {
 				// User wants to go back to type selection
 				style = ""
@@ -146,7 +145,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 
 	// Take snapshot before any modifications
 	snapshotArgs := []string{string(style), string(direction)}
-	if err := eng.TakeSnapshot(ctx.Context, engine.SnapshotOptions{
+	if err := eng.TakeSnapshot(ctx, engine.SnapshotOptions{
 		Command: "split",
 		// split stages and commits whatever is in the working tree as it
 		// rebuilds the branch (git add -A), untracked files included, so
@@ -163,11 +162,11 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		hunkOpts := hunkOptions{
 			useGitAddP: opts.HunkSelector == HunkSelectorGit,
 		}
-		return splitByHunkWithHandler(ctx, *currentBranch, eng, out, handler, direction, hunkOpts)
+		return splitByHunkWithHandler(ctx, deps, *currentBranch, eng, out, handler, direction, hunkOpts)
 
 	case StyleFile:
 		// Prompt for files to extract
-		pathspecs, err := promptForFiles(ctx.Context, ctx.Prompts(), *currentBranch, eng, out, false, direction)
+		pathspecs, err := promptForFiles(ctx, deps.Prompts, *currentBranch, eng, out, false, direction)
 		if err != nil {
 			return err
 		}
@@ -178,7 +177,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		// Get the original commit message from the first commit on this branch
 		// GetAllCommits returns newest to oldest, so the first commit is the last element
 		var originalCommitMessage string
-		commitMessagesData, err := currentBranch.AllCommits(ctx.Context)
+		commitMessagesData, err := currentBranch.AllCommits(ctx)
 		commitMessages := commitMessagesData.Messages()
 		if err == nil && len(commitMessages) > 0 {
 			// Use the first (oldest) commit's message
@@ -202,7 +201,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		// Generate default branch name from commit message using the branch pattern
 		var defaultBranchName string
 		if opts.BranchPattern != "" {
-			defaultBranchName, err = opts.BranchPattern.GetBranchName(ctx, commitMessage, "")
+			defaultBranchName, err = opts.BranchPattern.GetBranchName(ctx, deps.Engine, commitMessage, "")
 		}
 		if opts.BranchPattern == "" || err != nil {
 			// Fallback to simpler default if pattern fails
@@ -218,7 +217,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		handler.OnStep(StepBranchName, handlerBase.StatusCompleted, branchName)
 
 		// Execute the file split with the provided name and message
-		fileResult, err := splitByFile(ctx.Context, *currentBranch, pathspecs, eng, splitByFileOptions{
+		fileResult, err := splitByFile(ctx, *currentBranch, pathspecs, eng, splitByFileOptions{
 			AsSibling: false,
 			Direction: direction,
 			Name:      branchName,
@@ -235,10 +234,10 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 				IncludeCurrent:    false,
 				RecursiveChildren: true,
 			}
-			graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+			graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 			upstackBranches := graph.Range(*currentBranch, rng)
 			if len(upstackBranches) > 0 {
-				if err := actions.RestackBranches(ctx, upstackBranches); err != nil {
+				if err := deps.Restack.Restack(ctx, upstackBranches); err != nil {
 					return fmt.Errorf("failed to restack upstack branches: %w", err)
 				}
 			}

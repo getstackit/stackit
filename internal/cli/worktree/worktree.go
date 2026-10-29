@@ -12,6 +12,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions/worktree"
@@ -23,6 +25,20 @@ import (
 )
 
 const generatedRunWorktreeFallbackName = "agent"
+
+// DepsFrom builds the worktree actions' collaborators from the command's
+// runtime context.
+func DepsFrom(ctx *app.Context) worktree.Deps {
+	return worktree.Deps{
+		Engine:   ctx.Engine,
+		Out:      ctx.Output,
+		Log:      ctx.Logger,
+		RepoRoot: ctx.RepoRoot,
+		Here:     actiondeps.Here(ctx),
+		Config:   ctx.Config,
+		Prompts:  ctx.Prompts(),
+	}
+}
 
 // mainRepoConfig resolves the main repository's config for worktree lifecycle
 // actions. They always operate on the main repository, so from inside a
@@ -97,7 +113,7 @@ Examples:
 				if err != nil {
 					return err
 				}
-				result, err := worktree.CreateAction(ctx, worktree.CreateOptions{
+				result, err := worktree.CreateAction(ctx.Context, DepsFrom(ctx), worktree.CreateOptions{
 					Name:   worktreeName,
 					Scope:  scope,
 					Config: cfg,
@@ -194,7 +210,7 @@ Use --no-open to skip the automatic directory change.`,
 				if err != nil {
 					return err
 				}
-				result, err := worktree.CreateAction(ctx, worktree.CreateOptions{
+				result, err := worktree.CreateAction(ctx.Context, DepsFrom(ctx), worktree.CreateOptions{
 					Name:   args[0],
 					Scope:  scope,
 					Config: cfg,
@@ -235,7 +251,7 @@ Shows each worktree's name, root branch, stack size, registration health, and st
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				result, err := worktree.ListAction(ctx, worktree.ListOptions{})
+				result, err := worktree.ListAction(ctx.Context, DepsFrom(ctx), worktree.ListOptions{})
 				if err != nil {
 					return err
 				}
@@ -372,7 +388,7 @@ warm-started .env files and caches have no copy in Git to recover from.`,
 		Args:         cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				return worktree.RemoveAction(ctx, worktree.RemoveOptions{
+				return worktree.RemoveAction(ctx.Context, DepsFrom(ctx), worktree.RemoveOptions{
 					Selector: worktree.WorktreeSelector(args[0]),
 					Policy:   worktree.RemovalPolicyForForce(force),
 				})
@@ -403,7 +419,7 @@ warm-started .env is prunable and that file goes with it.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				result, err := worktree.PruneAction(ctx, worktree.PruneOptions{
+				result, err := worktree.PruneAction(ctx.Context, DepsFrom(ctx), worktree.PruneOptions{
 					DryRun: dryRun,
 				})
 				if err != nil {
@@ -463,7 +479,7 @@ To enable shell integration, add to your shell config:
 		Args:         cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				path, err := worktree.OpenAction(ctx, worktree.OpenOptions{
+				path, err := worktree.OpenAction(ctx.Context, DepsFrom(ctx), worktree.OpenOptions{
 					Selector: worktree.WorktreeSelector(args[0]),
 				})
 				if err != nil {
@@ -511,7 +527,7 @@ Use --no-open to skip the automatic directory change.`,
 		Args:         cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				result, err := worktree.AttachAction(ctx, worktree.AttachOptions{
+				result, err := worktree.AttachAction(ctx.Context, DepsFrom(ctx), worktree.AttachOptions{
 					Branch: args[0],
 					Name:   name,
 				})
@@ -565,7 +581,7 @@ Examples:
 		Args:         cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				return worktree.DetachAction(ctx, worktree.DetachOptions{
+				return worktree.DetachAction(ctx.Context, DepsFrom(ctx), worktree.DetachOptions{
 					Selector: worktree.WorktreeSelector(args[0]),
 					Policy:   worktree.RemovalPolicyForForce(force),
 				})
@@ -602,7 +618,7 @@ worktree anchors. Stale registrations with missing directories are removed.`,
 				if err != nil {
 					return err
 				}
-				result, err := worktree.RepairAction(ctx, worktree.RepairOptions{
+				result, err := worktree.RepairAction(ctx.Context, DepsFrom(ctx), worktree.RepairOptions{
 					Selector: worktree.WorktreeSelector(target),
 					Config:   cfg,
 				})

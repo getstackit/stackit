@@ -8,7 +8,6 @@ import (
 	"github.com/getstackit/stackit/internal/workpool"
 
 	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
@@ -20,11 +19,11 @@ type Options struct {
 	Parent     string
 }
 
-// trackEngine lists exactly the engine methods track calls. The interactive
-// parent picker (Handler.PromptSelectParent) still receives the full engine
-// because the adapter hands it to the TUI.
-type trackEngine interface {
-	engine.BranchLookup
+// Engine lists exactly the engine methods track calls. The interactive parent
+// picker (Handler.PromptSelectParent) brings its own collaborators from the
+// adapter.
+type Engine interface {
+	actions.OwnershipEngine
 	CurrentBranch(ctx context.Context) *engine.Branch
 	Trunk() engine.Branch
 	AllBranches() engine.Branches
@@ -38,23 +37,31 @@ type trackEngine interface {
 	ConfigureRemoteMetadataSync(ctx context.Context) error
 }
 
+// Deps are the collaborators track needs. Adapters build them from their own
+// runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	Out    output.Output
+	Here   actions.Here
+}
+
 // Action performs the track operation
-func Action(ctx *app.Context, opts Options, handler Handler) error {
+func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error {
 	if handler == nil {
 		handler = &NullHandler{}
 	}
 	defer handler.Cleanup()
 
-	var eng trackEngine = ctx.Engine
+	eng := deps.Engine
 	branchName := opts.BranchName
 	if branchName == "" {
-		currentBranch := eng.CurrentBranch(ctx.Context)
+		currentBranch := eng.CurrentBranch(ctx)
 		if currentBranch != nil {
 			branchName = currentBranch.Name()
 		}
 	}
 	if branchName != "" {
-		if err := actions.EnsureCanModifyNamesHere(ctx, branchName); err != nil {
+		if err := actions.EnsureCanModifyNames(ctx, eng, deps.Here, branchName); err != nil {
 			return err
 		}
 	}
@@ -63,8 +70,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// `git fetch` keeps pulling branch metadata. Local, idempotent, and a no-op
 	// when no remote is configured — closes the gap left by removing the implicit
 	// bootstrap from engine construction (issue #1330).
-	if err := eng.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
-		ctx.Output.Debug("Failed to configure metadata refspec: %v", err)
+	if err := eng.ConfigureRemoteMetadataSync(ctx); err != nil {
+		deps.Out.Debug("Failed to configure metadata refspec: %v", err)
 	}
 
 	// Handle --parent flag (single branch tracking)
@@ -88,7 +95,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		// Validate parent is an ancestor (unless force is used)
 		if !opts.Force {
-			revisions := eng.BatchRevisions(ctx.Context, engine.BranchesOf(parentBranch, eng.GetBranch(branchName)))
+			revisions := eng.BatchRevisions(ctx, engine.BranchesOf(parentBranch, eng.GetBranch(branchName)))
 			parentRev, ok := revisions.Rev(parent)
 			if !ok {
 				return errors.New("failed to get parent revision")
@@ -97,7 +104,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			if !ok {
 				return errors.New("failed to get branch revision")
 			}
-			isAnc, err := eng.IsAncestor(ctx.Context, parentRev, branchRev)
+			isAnc, err := eng.IsAncestor(ctx, parentRev, branchRev)
 			if err != nil {
 				return fmt.Errorf("failed to check ancestry: %w", err)
 			}
@@ -107,17 +114,17 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 
 		// Track the branch
-		if err := eng.TrackBranch(ctx.Context, branchName, parent); err != nil {
+		if err := eng.TrackBranch(ctx, branchName, parent); err != nil {
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 
-		ctx.Output.Info("Tracked %s with parent %s.", output.BranchName(branchName), output.BranchName(parent))
+		deps.Out.Info("Tracked %s with parent %s.", output.BranchName(branchName), output.BranchName(parent))
 		return nil
 	}
 
 	// Handle --force flag (auto-detection without prompt)
 	if opts.Force {
-		ancestors, err := eng.FindMostRecentTrackedAncestors(ctx.Context, branchName)
+		ancestors, err := eng.FindMostRecentTrackedAncestors(ctx, branchName)
 		if err != nil {
 			return fmt.Errorf("failed to find tracked ancestor: %w", err)
 		}
@@ -126,11 +133,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 		parentBranch := ancestors[0]
 
-		if err := eng.TrackBranch(ctx.Context, branchName, parentBranch); err != nil {
+		if err := eng.TrackBranch(ctx, branchName, parentBranch); err != nil {
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 
-		ctx.Output.Info("Tracked %s with parent %s.", output.BranchName(branchName), output.BranchName(parentBranch))
+		deps.Out.Info("Tracked %s with parent %s.", output.BranchName(branchName), output.BranchName(parentBranch))
 		return nil
 	}
 
@@ -140,42 +147,42 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Interactive mode: recursively track a stack
-	return trackBranchRecursively(ctx, branchName, handler)
+	return trackBranchRecursively(ctx, deps, branchName, handler)
 }
 
 // trackBranchRecursively interactively tracks a branch and its descendants
-func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler) error {
-	var eng trackEngine = ctx.Engine
+func trackBranchRecursively(ctx context.Context, deps Deps, branchName string, handler Handler) error {
+	eng := deps.Engine
 
 	// Check if branch is already tracked
 	branch := eng.GetBranch(branchName)
 	if branch.IsTracked() {
-		ctx.Output.Info("%s is already tracked.", output.BranchName(branchName))
+		deps.Out.Info("%s is already tracked.", output.BranchName(branchName))
 		// Still ask if user wants to track descendants
 	} else {
 		// Try auto-detection (single unambiguous non-trunk tracked ancestor)
 		var parentBranch string
-		ancestors, err := eng.FindMostRecentTrackedAncestors(ctx.Context, branchName)
+		ancestors, err := eng.FindMostRecentTrackedAncestors(ctx, branchName)
 		if err == nil && len(ancestors) == 1 && ancestors[0] != eng.Trunk().Name() {
 			candidate := ancestors[0]
 			candidateBranch := eng.GetBranch(candidate)
 			// Skip worktree anchors for auto-detection
 			if !candidateBranch.IsWorktreeAnchor() {
 				parentBranch = candidate
-				ctx.Output.Info("Auto-detected parent %s for %s.", output.BranchName(parentBranch), output.BranchName(branchName))
+				deps.Out.Info("Auto-detected parent %s for %s.", output.BranchName(parentBranch), output.BranchName(branchName))
 			}
 		}
 
 		// If auto-detection didn't find a valid parent, prompt interactively
 		if parentBranch == "" {
-			parentBranch, err = handler.PromptSelectParent(ctx.Context, ctx.Engine, ctx.GitHub(), ctx.Logger, branchName)
+			parentBranch, err = handler.PromptSelectParent(ctx, branchName)
 			if err != nil {
 				return err
 			}
 
 			// Handle user cancellation (empty parent)
 			if parentBranch == "" {
-				ctx.Output.Info("Track canceled.")
+				deps.Out.Info("Track canceled.")
 				return nil
 			}
 
@@ -192,11 +199,11 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 		}
 
 		// Track the branch
-		if err := eng.TrackBranch(ctx.Context, branchName, parentBranch); err != nil {
+		if err := eng.TrackBranch(ctx, branchName, parentBranch); err != nil {
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 
-		ctx.Output.Info("Tracked %s with parent %s.", output.BranchName(branchName), output.BranchName(parentBranch))
+		deps.Out.Info("Tracked %s with parent %s.", output.BranchName(branchName), output.BranchName(parentBranch))
 	}
 
 	// Find untracked children and ask to track them
@@ -204,7 +211,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 	untrackedChildren := []string{}
 
 	// branchRev is loop-invariant; a failed lookup just disables child detection.
-	branchRev, revErr := eng.GetRevision(ctx.Context, eng.GetBranch(branchName))
+	branchRev, revErr := eng.GetRevision(ctx, eng.GetBranch(branchName))
 	if revErr == nil {
 		// GetMergeBase spawns a git subprocess per call with no batch/cached
 		// equivalent, so candidates are checked concurrently with a bounded
@@ -224,7 +231,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 
 		isChild := make([]bool, len(candidates))
 		workpool.Run(candidates, func(item indexedCandidate) {
-			mergeBase, err := eng.GetMergeBase(ctx.Context, item.candidate.Name(), branchName)
+			mergeBase, err := eng.GetMergeBase(ctx, item.candidate.Name(), branchName)
 			if err != nil {
 				return
 			}
@@ -248,7 +255,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 		}
 
 		if shouldTrack {
-			if err := trackBranchRecursively(ctx, child, handler); err != nil {
+			if err := trackBranchRecursively(ctx, deps, child, handler); err != nil {
 				return err
 			}
 		}

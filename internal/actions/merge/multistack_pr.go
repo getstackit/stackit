@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
@@ -15,16 +14,16 @@ import (
 
 // MultiStackPRCreator handles creating the multi-stack PR
 type MultiStackPRCreator struct {
-	ctx          *app.Context
+	deps         Deps
 	worktreeEng  engine.Engine
 	worktreePath engine.WorktreePath
 	prGenerator  *PRContentGenerator
 }
 
 // NewMultiStackPRCreator creates a new PR creator for multi-stack merge
-func NewMultiStackPRCreator(ctx *app.Context, worktreeEng engine.Engine, worktreePath engine.WorktreePath) *MultiStackPRCreator {
+func NewMultiStackPRCreator(deps Deps, worktreeEng engine.Engine, worktreePath engine.WorktreePath) *MultiStackPRCreator {
 	return &MultiStackPRCreator{
-		ctx:          ctx,
+		deps:         deps,
 		worktreeEng:  worktreeEng,
 		worktreePath: worktreePath,
 		prGenerator:  NewPRContentGenerator(worktreeEng),
@@ -68,7 +67,7 @@ func (p *MultiStackPRCreator) CreateAndPushBranch(ctx context.Context, branchNam
 
 // CreatePR creates the multi-stack pull request
 func (p *MultiStackPRCreator) CreatePR(ctx context.Context, branchName string, included []MultiStackInfo, excluded []MultiStackExcluded) (*github.PullRequestInfo, error) {
-	if _, err := p.ctx.RequireGitHub(); err != nil {
+	if err := p.deps.requireGitHub(); err != nil {
 		return nil, err
 	}
 
@@ -82,7 +81,7 @@ func (p *MultiStackPRCreator) CreatePR(ctx context.Context, branchName string, i
 		Draft: false,
 	}
 
-	pr, err := p.ctx.GitHub().CreatePullRequest(ctx, opts)
+	pr, err := p.deps.GitHub().CreatePullRequest(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PR: %w", err)
 	}
@@ -92,15 +91,15 @@ func (p *MultiStackPRCreator) CreatePR(ctx context.Context, branchName string, i
 
 // WaitAndMerge waits for CI to pass and auto-merges the PR
 func (p *MultiStackPRCreator) WaitAndMerge(ctx context.Context, branchName string, pr *github.PullRequestInfo, commitBody string) error {
-	if _, err := p.ctx.RequireGitHub(); err != nil {
+	if err := p.deps.requireGitHub(); err != nil {
 		return err
 	}
 
 	mergeMethod := p.resolveMergeMethod()
 
 	waiter := NewCIWaiter(CIWaiterOptions{
-		Client: p.ctx.GitHub(),
-		Output: p.ctx.Output,
+		Client: p.deps.GitHub(),
+		Output: p.deps.Out,
 	})
 
 	return waiter.WaitAndMerge(ctx, branchName, pr, true, github.MergePROptions{
@@ -111,7 +110,7 @@ func (p *MultiStackPRCreator) WaitAndMerge(ctx context.Context, branchName strin
 
 // EnableAutoMerge enables GitHub auto-merge for a multi-stack PR.
 func (p *MultiStackPRCreator) EnableAutoMerge(ctx context.Context, pr *github.PullRequestInfo, commitBody string) error {
-	if _, err := p.ctx.RequireGitHub(); err != nil {
+	if err := p.deps.requireGitHub(); err != nil {
 		return err
 	}
 	if pr == nil || pr.NodeID == "" {
@@ -120,7 +119,7 @@ func (p *MultiStackPRCreator) EnableAutoMerge(ctx context.Context, pr *github.Pu
 
 	mergeMethod := p.resolveMergeMethod()
 
-	return github.EnableAutoMerge(ctx, p.ctx.GHRunner, pr.NodeID, github.EnableAutoMergeOptions{
+	return github.EnableAutoMerge(ctx, p.deps.GHRunner, pr.NodeID, github.EnableAutoMergeOptions{
 		MergeMethod: mergeMethod,
 		CommitBody:  commitBody,
 	})
@@ -136,8 +135,8 @@ func (p *MultiStackPRCreator) BuildStackMetadata(included []MultiStackInfo) pr.S
 // resolveMergeMethod returns the configured merge method from the already-loaded
 // repository config, defaulting to squash when unset or unavailable.
 func (p *MultiStackPRCreator) resolveMergeMethod() github.MergeMethod {
-	if p.ctx.Config != nil {
-		if method := p.ctx.Config.MergeMethod(); method.Valid() {
+	if p.deps.Config != nil {
+		if method := p.deps.Config.MergeMethod(); method.Valid() {
 			return method
 		}
 	}

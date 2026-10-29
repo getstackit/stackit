@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/sync"
@@ -58,7 +60,7 @@ func TestSync(t *testing.T) {
 
 		// 3. Run sync
 		// Local parent is authoritative - GitHub PR base does NOT override local parent
-		err = sync.Action(sh.Context, sync.Options{}, nil)
+		err = sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{}, nil)
 		require.NoError(t, err)
 
 		// 4. Verify local parent of feature-b is STILL feature-a (not changed to match GitHub)
@@ -134,7 +136,7 @@ func TestSync(t *testing.T) {
 		require.NoError(t, err)
 
 		// 3. Run sync (which should call clean_branches)
-		err = sync.Action(sh.Context, sync.Options{}, nil)
+		err = sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{}, nil)
 		require.NoError(t, err)
 
 		// 4. Verify all merged branches are deleted
@@ -185,7 +187,7 @@ func TestSync(t *testing.T) {
 		_ = sh.Metadata.WriteMetadata(t.Context(), "b", metaB)
 
 		// 1. Run sync
-		err := sync.Action(sh.Context, sync.Options{}, nil)
+		err := sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{}, nil)
 		require.NoError(t, err)
 
 		// 2. Verify 'a' is deleted
@@ -237,7 +239,7 @@ func TestSyncDraftPRs(t *testing.T) {
 	require.True(t, prInfo.IsDraft())
 
 	// 3. Run sync
-	err = sync.Action(sh.Context, sync.Options{}, nil)
+	err = sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{}, nil)
 	require.NoError(t, err)
 
 	// 4. Verify branch still exists (drafts shouldn't be deleted)
@@ -284,7 +286,7 @@ func TestSyncCleanupDiamond(t *testing.T) {
 	_ = sh.Metadata.WriteMetadata(t.Context(), "b", metaB)
 
 	// Run sync
-	err := sync.Action(sh.Context, sync.Options{}, nil)
+	err := sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{}, nil)
 	require.NoError(t, err)
 
 	// Verify 'a' and 'b' are deleted, but 'c' remains (not merged)
@@ -338,7 +340,7 @@ func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 
 	// Run sync+restack from main.
 	sh.Checkout("main")
-	err = sync.Action(sh.Context, sync.Options{Restack: true}, nil)
+	err = sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil)
 	require.NoError(t, err)
 
 	allLocalBranches, err := sh.Scene.Repo.LocalBranches()
@@ -396,7 +398,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		require.NoError(t, err)
 
 		// Run sync
-		err = sync.Action(sh.Context, sync.Options{Restack: true}, nil)
+		err = sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil)
 		require.NoError(t, err)
 
 		// Verify clean status
@@ -447,7 +449,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		// - Delete feature (merged)
 		// - Reparent child to main
 		// - Restack child onto the new main (this requires actual commit movement)
-		err = sync.Action(sh.Context, sync.Options{Restack: true}, nil)
+		err = sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil)
 		require.NoError(t, err)
 
 		// 5. Verify main has clean status
@@ -502,7 +504,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		sh.Checkout("main")
 
 		// Run sync (non-interactive - should skip unpushed branches)
-		err = sync.Action(sh.Context, sync.Options{}, nil)
+		err = sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{}, nil)
 		require.NoError(t, err)
 
 		// Feature branch should NOT be deleted because it has unpushed commits
@@ -596,7 +598,7 @@ func TestSquashMergeMiddleOfStack(t *testing.T) {
 	markPrMerged(t, sh, "branch-b", 2, "branch-a")
 
 	sh.Checkout("main")
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -639,7 +641,7 @@ func TestSyncLinearStackDeletesMergedMiddleBranch(t *testing.T) {
 	sh.Context.Engine = linearEngine
 
 	sh.Checkout("main")
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -675,7 +677,7 @@ func TestSquashMergeMultipleAdjacentMergedInOneSync(t *testing.T) {
 	markPrMerged(t, sh, "branch-a", 1, mainName)
 	markPrMerged(t, sh, "branch-b", 2, mainName)
 
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -720,7 +722,7 @@ func TestSquashMergeDiamondAllChildrenMerged(t *testing.T) {
 	markPrMerged(t, sh, "branch-c", 3, "branch-a")
 
 	sh.Checkout("main")
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -744,7 +746,7 @@ func TestSquashMergeSyncWhileOnMergedBranch(t *testing.T) {
 
 	// User is sitting on the about-to-be-deleted branch when they sync.
 	sh.Checkout("branch-a")
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -772,7 +774,7 @@ func TestSquashMergeSyncWhileOnChildOfMergedBranch(t *testing.T) {
 
 	// User is on the surviving child while syncing.
 	sh.Checkout("branch-b")
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -806,7 +808,7 @@ func TestSquashMergeNoRestackLeavesGitRefsUntouched(t *testing.T) {
 	bSHAbeforeSync, err := sh.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "branch-b")
 	require.NoError(t, err)
 
-	require.NoError(t, sync.Action(sh.Context, sync.Options{NoRestack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{NoRestack: true}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -850,7 +852,7 @@ func TestSquashMergeChildBecomesEmpty(t *testing.T) {
 	sh.CommitChange("shared", "v2")
 	markPrMerged(t, sh, "branch-a", 1, mainName)
 
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -889,7 +891,7 @@ func TestUserDeletedMergedBranchBeforeSync(t *testing.T) {
 	require.NoError(t, sh.Engine.Rebuild(t.Context(), mainName))
 
 	// Sync runs and shouldn't error.
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -933,7 +935,7 @@ func TestUserManuallyRebasedChildBeforeSync(t *testing.T) {
 	// B is now based on main's new tip — A's old tip is no longer in B's history.
 	require.NoError(t, sh.Scene.Repo.RunGitCommand("rebase", mainName, "branch-b"))
 
-	err := sync.Action(sh.Context, sync.Options{Restack: true}, nil)
+	err := sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil)
 	// Document current behavior: errors loudly, A is left in place.
 	// If a future change makes sync recover gracefully, update both branches
 	// of this assertion together.
@@ -980,7 +982,7 @@ func TestMergeCommitNotSquash(t *testing.T) {
 	require.NoError(t, sh.Scene.Repo.RunGitCommand("merge", "--no-ff", "branch-a", "-m", "Merge A"))
 	markPrMerged(t, sh, "branch-a", 1, mainName)
 
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -1024,7 +1026,7 @@ func TestUserLocallyAdvancedTrunkBeforeSync(t *testing.T) {
 	require.NoError(t, err)
 
 	markPrMerged(t, sh, "branch-a", 1, mainName)
-	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{Restack: true}, nil))
 
 	// Trunk shouldn't have moved — sync had nothing to apply on top of it.
 	mainSHAAfterSync, err := sh.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", mainName)
@@ -1061,7 +1063,7 @@ func TestSyncSnapshotPrecedesBranchCleanup(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, isEmpty, "branch-a should be empty relative to main after its squash landed")
 
-	require.NoError(t, sync.Action(sh.Context, sync.Options{}, nil))
+	require.NoError(t, sync.Action(sh.Context.Context, common.SyncDeps(sh.Context), sync.Options{}, nil))
 
 	branches, err := sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)
@@ -1069,7 +1071,7 @@ func TestSyncSnapshotPrecedesBranchCleanup(t *testing.T) {
 	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").Parent().Name(),
 		"the merged branch's child should be reparented to main")
 
-	require.NoError(t, undo.Action(sh.Context, undo.Options{Force: true}, nil))
+	require.NoError(t, undo.Action(t.Context(), undo.Deps{Engine: sh.Context.Engine, Out: sh.Context.Output, RepoRoot: sh.Context.RepoRoot}, undo.Options{Force: true}, nil))
 
 	branches, err = sh.Scene.Repo.LocalBranches()
 	require.NoError(t, err)

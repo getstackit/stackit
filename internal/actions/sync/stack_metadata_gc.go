@@ -1,7 +1,7 @@
 package sync
 
 import (
-	"github.com/getstackit/stackit/internal/app"
+	"context"
 )
 
 // StackMetadataGCResult contains the results of stack metadata garbage collection.
@@ -14,16 +14,16 @@ type StackMetadataGCResult struct {
 // This is called during sync after worktree cleanup to clean up refs for stacks
 // whose branches have all been deleted or merged.
 // This function is best-effort and will not fail sync on errors.
-func gcOrphanedStackMetadata(ctx *app.Context) *StackMetadataGCResult {
+func gcOrphanedStackMetadata(ctx context.Context, deps Deps) *StackMetadataGCResult {
 	result := &StackMetadataGCResult{
 		DeletedStackIDs: []string{},
 		Errors:          []string{},
 	}
 
 	// 1. Get all local stack metadata refs (returns map[stackID]sha)
-	allStackRefs, err := ctx.Engine.ListStackMetadata(ctx.Context)
+	allStackRefs, err := deps.Engine.ListStackMetadata(ctx)
 	if err != nil {
-		ctx.Logger.Debug("failed to list stack metadata refs error=%v", err)
+		deps.Log.Debug("failed to list stack metadata refs error=%v", err)
 		return result
 	}
 
@@ -33,8 +33,8 @@ func gcOrphanedStackMetadata(ctx *app.Context) *StackMetadataGCResult {
 
 	// 2. Get active stack IDs from tracked branches
 	activeIDs := make(map[string]bool)
-	for _, branch := range ctx.Engine.AllBranches() {
-		stackID := ctx.Engine.GetStackID(branch)
+	for _, branch := range deps.Engine.AllBranches() {
+		stackID := deps.Engine.GetStackID(branch)
 		if stackID != "" {
 			activeIDs[stackID] = true
 		}
@@ -52,7 +52,7 @@ func gcOrphanedStackMetadata(ctx *app.Context) *StackMetadataGCResult {
 		return result
 	}
 
-	ctx.Logger.Info("found orphaned stack metadata refs count=%v", len(orphaned))
+	deps.Log.Info("found orphaned stack metadata refs count=%v", len(orphaned))
 
 	// 4. Delete local refs in a single update-ref --stdin batch. The previous
 	// per-orphan delete loop spawned 2 git subprocesses per ref
@@ -60,12 +60,12 @@ func gcOrphanedStackMetadata(ctx *app.Context) *StackMetadataGCResult {
 	// deletion. If the atomic batch fails, fall back to per-ref so partial
 	// progress is still reported. The engine owns the stack-ref name format, so
 	// we pass stack IDs rather than building ref names here.
-	if err := ctx.Engine.DeleteStackMetadata(ctx.Context, orphaned); err != nil {
-		ctx.Logger.Debug("batch delete of local stack refs failed, falling back per-ref error=%v", err)
+	if err := deps.Engine.DeleteStackMetadata(ctx, orphaned); err != nil {
+		deps.Log.Debug("batch delete of local stack refs failed, falling back per-ref error=%v", err)
 		for _, stackID := range orphaned {
-			if perRefErr := ctx.Engine.DeleteStackMetadata(ctx.Context, []string{stackID}); perRefErr != nil {
+			if perRefErr := deps.Engine.DeleteStackMetadata(ctx, []string{stackID}); perRefErr != nil {
 				result.Errors = append(result.Errors, "failed to delete local stack ref "+stackID+": "+perRefErr.Error())
-				ctx.Logger.Debug("failed to delete local stack ref stackID=%v error=%v", stackID, perRefErr)
+				deps.Log.Debug("failed to delete local stack ref stackID=%v error=%v", stackID, perRefErr)
 			} else {
 				result.DeletedStackIDs = append(result.DeletedStackIDs, stackID)
 			}
@@ -76,9 +76,9 @@ func gcOrphanedStackMetadata(ctx *app.Context) *StackMetadataGCResult {
 
 	// 5. Delete remote refs (best-effort, non-fatal)
 	if len(result.DeletedStackIDs) > 0 {
-		if err := ctx.Engine.DeleteRemoteStackMetadata(ctx.Context, result.DeletedStackIDs); err != nil {
+		if err := deps.Engine.DeleteRemoteStackMetadata(ctx, result.DeletedStackIDs); err != nil {
 			// This is expected to fail if refs don't exist on remote, so just log it
-			ctx.Logger.Debug("failed to delete remote stack refs (may not exist) error=%v", err)
+			deps.Log.Debug("failed to delete remote stack refs (may not exist) error=%v", err)
 		}
 	}
 

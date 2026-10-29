@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
@@ -26,7 +28,7 @@ func TestFoldAction(t *testing.T) {
 		s.Checkout("branch2")
 
 		// Fold branch2 into branch1
-		err := Action(s.Context, Options{Keep: false}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.NoError(t, err)
 
 		// Verify branch2 is deleted
@@ -61,7 +63,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.RunGitCommand("worktree", "add", worktreePath, "branch1"))
 		t.Cleanup(func() { _ = s.Scene.Repo.RunGitCommand("worktree", "remove", "--force", worktreePath) })
 
-		err = Action(s.Context, Options{Keep: false}, nil)
+		err = Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "failed to checkout parent branch")
 
@@ -86,7 +88,7 @@ func TestFoldAction(t *testing.T) {
 		s.Checkout("branch2")
 
 		// Fold branch2 into branch1
-		err := Action(s.Context, Options{Keep: false}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.NoError(t, err)
 
 		// Verify branch3's parent is now branch1
@@ -113,7 +115,7 @@ func TestFoldAction(t *testing.T) {
 		s.Checkout("branch2")
 
 		// Fold branch1 into branch2 with --keep
-		err := Action(s.Context, Options{Keep: true}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: true}, nil)
 		require.NoError(t, err)
 
 		// Verify branch1 is deleted
@@ -152,7 +154,7 @@ func TestFoldAction(t *testing.T) {
 		s.Checkout("branch2")
 
 		// Fold branch1 into branch2 with --keep
-		err := Action(s.Context, Options{Keep: true}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: true}, nil)
 		require.NoError(t, err)
 
 		// Verify branch1 is deleted
@@ -178,7 +180,7 @@ func TestFoldAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Try to fold trunk (main)
-		err := Action(s.Context, Options{Keep: false}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "cannot fold trunk branch")
 	})
@@ -189,7 +191,7 @@ func TestFoldAction(t *testing.T) {
 			CreateBranch("untracked")
 
 		// Try to fold untracked branch
-		err := Action(s.Context, Options{Keep: false}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "is not tracked by stackit")
 	})
@@ -202,7 +204,7 @@ func TestFoldAction(t *testing.T) {
 			})
 
 		// Try to fold into trunk with --keep
-		err := Action(s.Context, Options{Keep: true}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: true}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "cannot fold into trunk with --keep")
 	})
@@ -216,7 +218,7 @@ func TestFoldAction(t *testing.T) {
 			WithUncommittedChange("dirty")
 
 		// Try to fold with dirty tree
-		err := Action(s.Context, Options{Keep: false}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "uncommitted changes")
 	})
@@ -246,7 +248,7 @@ func TestFoldAction(t *testing.T) {
 		s.TrackBranch("branch2", "branch1")
 
 		// Fold branch2 into branch1 - should conflict
-		err = Action(s.Context, Options{Keep: false}, nil)
+		err = Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "due to conflicts. Please resolve the conflicts and run 'git commit'")
 	})
@@ -270,7 +272,7 @@ func TestFoldAction(t *testing.T) {
 
 		// Fold branch2 into branch1
 		s.Checkout("branch2")
-		err := Action(s.Context, Options{Keep: false}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.NoError(t, err)
 
 		// Verify branch3's parent is now branch1
@@ -310,7 +312,7 @@ func TestFoldAction(t *testing.T) {
 
 		// Fold branch3 into branch2.
 		s.Checkout("branch3")
-		err := Action(s.Context, Options{Keep: false}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.NoError(t, err)
 
 		// branch3 should be deleted and branch4 should now be a child of branch2.
@@ -358,7 +360,7 @@ func TestFoldAction(t *testing.T) {
 		s.Scene.Repo.CreateChangeAndCommit("c2", "c2.txt")
 
 		// Fold branch3 into branch2.
-		err := Action(s.Context, Options{Keep: false}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.NoError(t, err)
 
 		// branch4 should now point to branch2 tip (contains c2) even though it had no unique commits.
@@ -400,7 +402,7 @@ func TestFoldAction(t *testing.T) {
 
 		// Fold branch3 into branch2.
 		s.Checkout("branch3")
-		err := Action(s.Context, Options{Keep: false}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.NoError(t, err)
 
 		// branch4 should include c2 from folded parent and keep d1.
@@ -425,7 +427,7 @@ func TestFoldAction(t *testing.T) {
 		err := os.MkdirAll(rebasePath, 0755)
 		require.NoError(t, err)
 
-		err = Action(s.Context, Options{Keep: false}, nil)
+		err = Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "rebase is already in progress")
 	})
@@ -440,7 +442,7 @@ func TestFoldAction(t *testing.T) {
 
 		// branch2 has no unique commits (it's at the same position as branch1)
 		s.Checkout("branch2")
-		err := Action(s.Context, Options{Keep: false}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.NoError(t, err)
 
 		// Verify branch2 is deleted and we're on branch1
@@ -459,7 +461,7 @@ func TestFoldAction(t *testing.T) {
 			})
 
 		s.Checkout("branch2")
-		err := Action(s.Context, Options{Keep: false}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.NoError(t, err)
 
 		// Verify snapshot exists
@@ -478,7 +480,7 @@ func TestFoldAction(t *testing.T) {
 			})
 
 		s.Checkout("branch2")
-		err := Action(s.Context, Options{Keep: true}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: true}, nil)
 		require.NoError(t, err)
 
 		// Verify snapshot exists with --keep arg
@@ -497,7 +499,7 @@ func TestFoldAction(t *testing.T) {
 			})
 
 		s.Checkout("branch1")
-		err := Action(s.Context, Options{Keep: false, AllowTrunk: false}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: false, AllowTrunk: false}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "without --allow-trunk")
 	})
@@ -510,7 +512,7 @@ func TestFoldAction(t *testing.T) {
 			})
 
 		s.Checkout("branch1")
-		err := Action(s.Context, Options{Keep: false, AllowTrunk: true}, nil)
+		err := Action(t.Context(), deps(s), Options{Keep: false, AllowTrunk: true}, nil)
 		require.NoError(t, err)
 
 		// Verify branch1 is deleted
@@ -544,7 +546,7 @@ func TestFoldAction(t *testing.T) {
 
 		// Switch to branch2 and try to fold
 		s.Checkout("branch2")
-		err = Action(s.Context, Options{Keep: false}, nil)
+		err = Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "cannot fold branches with different scopes")
 		require.Contains(t, err.Error(), "[PROJ-456]")
@@ -564,7 +566,7 @@ func TestFoldAction(t *testing.T) {
 		_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch2), engine.LockReasonUser)
 		require.NoError(t, err)
 
-		err = Action(s.Context, Options{Keep: false}, nil)
+		err = Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "branch branch2 is locked")
 	})
@@ -582,7 +584,7 @@ func TestFoldAction(t *testing.T) {
 		_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch1), engine.LockReasonUser)
 		require.NoError(t, err)
 
-		err = Action(s.Context, Options{Keep: false}, nil)
+		err = Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "branch branch1 is locked")
 	})
@@ -600,7 +602,7 @@ func TestFoldAction(t *testing.T) {
 		_, err := s.Engine.SetFrozen(t.Context(), engine.BranchesOf(branch2), engine.BranchFrozen)
 		require.NoError(t, err)
 
-		err = Action(s.Context, Options{Keep: false}, nil)
+		err = Action(t.Context(), deps(s), Options{Keep: false}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "branch branch2 is frozen")
 	})
@@ -616,7 +618,7 @@ func TestFoldAction(t *testing.T) {
 		s.Checkout("branch2")
 
 		// Perform dry-run fold
-		err := Action(s.Context, Options{DryRun: true}, nil)
+		err := Action(t.Context(), deps(s), Options{DryRun: true}, nil)
 		require.NoError(t, err)
 
 		// Verify branch2 still exists
@@ -648,8 +650,12 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Dry-run should fail because branch is locked
-		err = Action(s.Context, Options{DryRun: true}, nil)
+		err = Action(t.Context(), deps(s), Options{DryRun: true}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "branch branch2 is locked")
 	})
+}
+
+func deps(s *scenario.Scenario) Deps {
+	return Deps{Engine: s.Context.Engine, MutationDeps: actiondeps.Mutation(s.Context)}
 }

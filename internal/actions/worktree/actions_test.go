@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/worktree"
@@ -20,7 +22,7 @@ func TestListAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
+		result, err := worktree.ListAction(t.Context(), depsFor(s), worktree.ListOptions{})
 		require.NoError(t, err)
 		require.Empty(t, result.Worktrees)
 	})
@@ -34,7 +36,7 @@ func TestListAction(t *testing.T) {
 		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/fake-worktree"})
 		require.NoError(t, err)
 
-		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
+		result, err := worktree.ListAction(t.Context(), depsFor(s), worktree.ListOptions{})
 		require.NoError(t, err)
 		require.Len(t, result.Worktrees, 1)
 		require.Equal(t, "feature-stack", result.Worktrees[0].AnchorBranch)
@@ -59,12 +61,12 @@ func TestListAction(t *testing.T) {
 			_ = s.Engine.UnregisterWorktree(s.Context, "second-anchor")
 		})
 
-		byName, err := worktree.ListAction(s.Context, worktree.ListOptions{Selector: "second"})
+		byName, err := worktree.ListAction(t.Context(), depsFor(s), worktree.ListOptions{Selector: "second"})
 		require.NoError(t, err)
 		require.Len(t, byName.Worktrees, 1)
 		require.Equal(t, "second-anchor", byName.Worktrees[0].AnchorBranch)
 
-		byAnchor, err := worktree.ListAction(s.Context, worktree.ListOptions{Selector: "first-anchor"})
+		byAnchor, err := worktree.ListAction(t.Context(), depsFor(s), worktree.ListOptions{Selector: "first-anchor"})
 		require.NoError(t, err)
 		require.Len(t, byAnchor.Worktrees, 1)
 		require.Equal(t, "first", byAnchor.Worktrees[0].Name.String())
@@ -81,7 +83,7 @@ func TestListAction(t *testing.T) {
 		worktreeDir := t.TempDir()
 		require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreeDir), Name: "feature"}))
 
-		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
+		result, err := worktree.ListAction(t.Context(), depsFor(s), worktree.ListOptions{})
 		require.NoError(t, err)
 		require.Len(t, result.Worktrees, 1)
 		require.Equal(t, worktree.RegistrationStateLegacy, result.Worktrees[0].Lifecycle.Registration)
@@ -107,7 +109,7 @@ func TestListAction(t *testing.T) {
 		// Stackit's checkout redirect.
 		s.Checkout("feature")
 
-		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
+		result, err := worktree.ListAction(t.Context(), depsFor(s), worktree.ListOptions{})
 		require.NoError(t, err)
 		require.Len(t, result.OwnershipWarnings, 1)
 		require.Contains(t, result.OwnershipWarnings[0], "branch feature belongs to managed worktree feature-wt")
@@ -123,7 +125,7 @@ func TestRemoveAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		err := worktree.RemoveAction(s.Context, worktree.RemoveOptions{
+		err := worktree.RemoveAction(t.Context(), depsFor(s), worktree.RemoveOptions{
 			Selector: "nonexistent-stack",
 		})
 		require.Error(t, err)
@@ -145,7 +147,7 @@ func TestRemoveAction(t *testing.T) {
 		require.NotNil(t, wt)
 
 		// Remove it
-		err = worktree.RemoveAction(s.Context, worktree.RemoveOptions{
+		err = worktree.RemoveAction(t.Context(), depsFor(s), worktree.RemoveOptions{
 			Selector: "feature-stack",
 		})
 		require.NoError(t, err)
@@ -164,7 +166,7 @@ func TestRemoveAction(t *testing.T) {
 		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/nonexistent-worktree"})
 		require.NoError(t, err)
 
-		err = worktree.RemoveAction(s.Context, worktree.RemoveOptions{
+		err = worktree.RemoveAction(t.Context(), depsFor(s), worktree.RemoveOptions{
 			Selector: "feature-stack",
 		})
 		require.NoError(t, err)
@@ -183,7 +185,7 @@ func TestOpenAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		_, err := worktree.OpenAction(s.Context, worktree.OpenOptions{
+		_, err := worktree.OpenAction(t.Context(), depsFor(s), worktree.OpenOptions{
 			Selector: "nonexistent-stack",
 		})
 		require.Error(t, err)
@@ -199,7 +201,7 @@ func TestOpenAction(t *testing.T) {
 		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/nonexistent-path-12345"})
 		require.NoError(t, err)
 
-		_, err = worktree.OpenAction(s.Context, worktree.OpenOptions{
+		_, err = worktree.OpenAction(t.Context(), depsFor(s), worktree.OpenOptions{
 			Selector: "feature-stack",
 		})
 		require.Error(t, err)
@@ -219,7 +221,7 @@ func TestOpenAction(t *testing.T) {
 		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: engine.WorktreePath(repoRoot)})
 		require.NoError(t, err)
 
-		path, err := worktree.OpenAction(s.Context, worktree.OpenOptions{
+		path, err := worktree.OpenAction(t.Context(), depsFor(s), worktree.OpenOptions{
 			Selector: "feature-stack",
 		})
 		require.NoError(t, err)
@@ -245,7 +247,7 @@ func TestCreateAction(t *testing.T) {
 		// Create and checkout a non-trunk branch
 		s.RunGit("checkout", "-b", "feature")
 
-		result, err := worktree.CreateAction(s.Context, worktree.CreateOptions{
+		result, err := worktree.CreateAction(t.Context(), depsFor(s), worktree.CreateOptions{
 			Name: "my-worktree",
 		})
 		require.NoError(t, err)
@@ -258,7 +260,7 @@ func TestCreateAction(t *testing.T) {
 		require.True(t, parent.IsTrunk())
 
 		// Clean up worktree
-		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
+		_ = s.Engine.RemoveWorktree(t.Context(), result.Path)
 		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 
@@ -267,7 +269,7 @@ func TestCreateAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		_, err := worktree.CreateAction(s.Context, worktree.CreateOptions{
+		_, err := worktree.CreateAction(t.Context(), depsFor(s), worktree.CreateOptions{
 			Name: "",
 		})
 		require.Error(t, err)
@@ -279,7 +281,7 @@ func TestCreateAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		_, err := worktree.CreateAction(s.Context, worktree.CreateOptions{
+		_, err := worktree.CreateAction(t.Context(), depsFor(s), worktree.CreateOptions{
 			Name: "my/worktree",
 		})
 		require.Error(t, err)
@@ -292,20 +294,20 @@ func TestCreateAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		// Create first worktree
-		result, err := worktree.CreateAction(s.Context, worktree.CreateOptions{
+		result, err := worktree.CreateAction(t.Context(), depsFor(s), worktree.CreateOptions{
 			Name: "duplicate-name",
 		})
 		require.NoError(t, err)
 
 		// Try to create second worktree with same name
-		_, err = worktree.CreateAction(s.Context, worktree.CreateOptions{
+		_, err = worktree.CreateAction(t.Context(), depsFor(s), worktree.CreateOptions{
 			Name: "duplicate-name",
 		})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "already exists")
 
 		// Clean up
-		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
+		_ = s.Engine.RemoveWorktree(t.Context(), result.Path)
 		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 
@@ -314,7 +316,7 @@ func TestCreateAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		result, err := worktree.CreateAction(s.Context, worktree.CreateOptions{
+		result, err := worktree.CreateAction(t.Context(), depsFor(s), worktree.CreateOptions{
 			Name: "my-feature",
 		})
 		require.NoError(t, err)
@@ -337,7 +339,7 @@ func TestCreateAction(t *testing.T) {
 		require.True(t, parent.IsTrunk())
 
 		// Clean up worktree
-		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
+		_ = s.Engine.RemoveWorktree(t.Context(), result.Path)
 		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 
@@ -346,7 +348,7 @@ func TestCreateAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		result, err := worktree.CreateAction(s.Context, worktree.CreateOptions{
+		result, err := worktree.CreateAction(t.Context(), depsFor(s), worktree.CreateOptions{
 			Name:  "scoped-feature",
 			Scope: "backend",
 		})
@@ -359,7 +361,7 @@ func TestCreateAction(t *testing.T) {
 		require.Equal(t, "backend", scope.String())
 
 		// Clean up worktree
-		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
+		_ = s.Engine.RemoveWorktree(t.Context(), result.Path)
 		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 }
@@ -378,7 +380,7 @@ func TestRepairAction(t *testing.T) {
 		worktreeDir := t.TempDir()
 		require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreeDir), Name: "legacy-wt"}))
 
-		result, err := worktree.RepairAction(s.Context, worktree.RepairOptions{Selector: "legacy-wt"})
+		result, err := worktree.RepairAction(t.Context(), depsFor(s), worktree.RepairOptions{Selector: "legacy-wt"})
 		require.NoError(t, err)
 		require.Len(t, result.Repaired, 1)
 		require.Equal(t, "converted legacy registration to hidden anchor", result.Repaired[0].Action)
@@ -402,4 +404,18 @@ func TestRepairAction(t *testing.T) {
 
 		_ = s.Engine.UnregisterWorktree(s.Context, result.Repaired[0].AnchorBranch)
 	})
+}
+
+// depsFor builds the worktree actions' collaborators from the scenario's
+// runtime context, as the CLI adapter does.
+func depsFor(s *scenario.Scenario) worktree.Deps {
+	return worktree.Deps{
+		Engine:   s.Context.Engine,
+		Out:      s.Context.Output,
+		Log:      s.Context.Logger,
+		RepoRoot: s.Context.RepoRoot,
+		Here:     actiondeps.Here(s.Context),
+		Config:   s.Context.Config,
+		Prompts:  s.Context.Prompts(),
+	}
 }

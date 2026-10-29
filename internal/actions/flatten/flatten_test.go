@@ -5,12 +5,18 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/flatten"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+func deps(s *scenario.Scenario) flatten.Deps {
+	return flatten.Deps{Engine: s.Context.Engine, Log: s.Context.Logger, MutationDeps: actiondeps.Mutation(s.Context)}
+}
 
 func writeFile(t *testing.T, s *scenario.Scenario, name, content string) {
 	t.Helper()
@@ -31,7 +37,7 @@ func TestFlattenAction(t *testing.T) {
 				"C": "B",
 			})
 
-		err := flatten.Action(s.Context, flatten.Options{BranchName: "C"}, nil)
+		err := flatten.Action(t.Context(), deps(s), flatten.Options{BranchName: "C"}, nil)
 		require.NoError(t, err)
 
 		s.Rebuild()
@@ -64,7 +70,7 @@ func TestFlattenAction(t *testing.T) {
 
 		s.Rebuild()
 
-		err := flatten.Action(s.Context, flatten.Options{BranchName: "B"}, nil)
+		err := flatten.Action(t.Context(), deps(s), flatten.Options{BranchName: "B"}, nil)
 		require.NoError(t, err)
 
 		s.Rebuild()
@@ -108,7 +114,7 @@ func TestFlattenAction(t *testing.T) {
 
 		s.Rebuild()
 
-		err := flatten.Action(s.Context, flatten.Options{BranchName: "C"}, nil)
+		err := flatten.Action(t.Context(), deps(s), flatten.Options{BranchName: "C"}, nil)
 		require.NoError(t, err)
 
 		s.Rebuild()
@@ -131,7 +137,7 @@ func TestFlattenAction(t *testing.T) {
 				"B": "main",
 			})
 
-		err := flatten.Action(s.Context, flatten.Options{BranchName: "A"}, nil)
+		err := flatten.Action(t.Context(), deps(s), flatten.Options{BranchName: "A"}, nil)
 		require.NoError(t, err)
 
 		s.Rebuild()
@@ -156,7 +162,7 @@ func TestFlattenAction(t *testing.T) {
 		s.Rebuild()
 
 		// Empty branch name should use current branch
-		err := flatten.Action(s.Context, flatten.Options{}, nil)
+		err := flatten.Action(t.Context(), deps(s), flatten.Options{}, nil)
 		require.NoError(t, err)
 
 		s.Rebuild()
@@ -176,7 +182,7 @@ func TestFlattenAction(t *testing.T) {
 		s.RunGit("checkout", "-b", "untracked-branch")
 		s.Rebuild()
 
-		err := flatten.Action(s.Context, flatten.Options{BranchName: "untracked-branch"}, nil)
+		err := flatten.Action(t.Context(), deps(s), flatten.Options{BranchName: "untracked-branch"}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not tracked")
 	})
@@ -219,7 +225,7 @@ func TestFlattenAction(t *testing.T) {
 		s.Rebuild()
 
 		// Run flatten
-		err := flatten.Action(s.Context, flatten.Options{BranchName: "C", SkipConfirm: true}, nil)
+		err := flatten.Action(t.Context(), deps(s), flatten.Options{BranchName: "C", SkipConfirm: true}, nil)
 		require.NoError(t, err, "flatten should succeed (excluding problematic moves, not failing)")
 
 		s.Rebuild()
@@ -283,7 +289,7 @@ func TestFlattenAction(t *testing.T) {
 		require.Nil(t, meta.GetParentBranchRevision())
 
 		// Run flatten
-		err = flatten.Action(s.Context, flatten.Options{BranchName: "B"}, nil)
+		err = flatten.Action(t.Context(), deps(s), flatten.Options{BranchName: "B"}, nil)
 		require.NoError(t, err)
 
 		s.Rebuild()

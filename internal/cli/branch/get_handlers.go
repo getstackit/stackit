@@ -8,6 +8,7 @@ import (
 	"github.com/getstackit/stackit/internal/term"
 
 	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/get"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/git"
 
@@ -20,7 +21,7 @@ import (
 // The runner manages terminal state; the handler processes events.
 // Caller must defer runner.Cleanup() to restore terminal on exit.
 // Currently returns nil runner as there's no TUI component yet.
-func NewGetUI(out output.Output, _ output.Logger) (*tui.Runner, actions.GetHandler) {
+func NewGetUI(out output.Output, _ output.Logger) (*tui.Runner, get.Handler) {
 	// TODO: Add interactive TUI handler when needed
 	// For now, use simple handler for both TTY and non-TTY
 	return nil, NewSimpleGetHandler(out)
@@ -29,7 +30,7 @@ func NewGetUI(out output.Output, _ output.Logger) (*tui.Runner, actions.GetHandl
 // SimpleGetHandler provides streaming text output for non-TTY environments
 type SimpleGetHandler struct {
 	common.BaseHandler
-	currentPhase actions.GetPhase
+	currentPhase get.Phase
 	targetBranch string
 	prNumber     *git.PRNumber
 }
@@ -50,12 +51,12 @@ func (h *SimpleGetHandler) Start(targetBranch string, prNumber *git.PRNumber) {
 }
 
 // EmitEvent handles progress updates
-func (h *SimpleGetHandler) EmitEvent(event actions.GetEvent) {
+func (h *SimpleGetHandler) EmitEvent(event get.Event) {
 	h.Lock()
 	defer h.Unlock()
 
 	// Handle phase transitions
-	if event.Type == actions.GetEventStarted && event.Phase != h.currentPhase {
+	if event.Type == get.EventStarted && event.Phase != h.currentPhase {
 		h.currentPhase = event.Phase
 		h.printPhaseHeader(event.Phase)
 		return
@@ -68,7 +69,7 @@ func (h *SimpleGetHandler) EmitEvent(event actions.GetEvent) {
 // describeLandedAncestors writes the human-readable explanation of branches
 // re-anchored past landed work. Split from the prompt so the text is identical
 // whether or not there is a terminal to ask on.
-func describeLandedAncestors(out output.Output, report actions.LandedAncestorReport) {
+func describeLandedAncestors(out output.Output, report get.LandedAncestorReport) {
 	out.Newline()
 	out.Warn("Landed work in this stack is no longer on the remote:")
 	for _, r := range report.Reanchored {
@@ -103,10 +104,10 @@ func describeLandedAncestors(out output.Output, report actions.LandedAncestorRep
 	}
 }
 
-// ReportLandedAncestors implements GetHandler. Explains the re-anchoring and,
+// ReportLandedAncestors implements get.Handler. Explains the re-anchoring and,
 // when there is something safe to offer and a terminal to ask on, offers to
 // unfreeze the affected branches so this run rebases them.
-func (h *SimpleGetHandler) ReportLandedAncestors(report actions.LandedAncestorReport) (actions.LandedAncestorDecision, error) {
+func (h *SimpleGetHandler) ReportLandedAncestors(report get.LandedAncestorReport) (get.LandedAncestorDecision, error) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -114,7 +115,7 @@ func (h *SimpleGetHandler) ReportLandedAncestors(report actions.LandedAncestorRe
 
 	unfreezable := report.Unfreezable()
 	if len(unfreezable) == 0 || !report.CanRestack {
-		return actions.LeaveFrozen, nil
+		return get.LeaveFrozen, nil
 	}
 
 	// Unstyled, and naming the branches rather than a parent: more than one
@@ -122,10 +123,10 @@ func (h *SimpleGetHandler) ReportLandedAncestors(report actions.LandedAncestorRe
 	confirmed, err := tui.PromptConfirm(
 		fmt.Sprintf("Unfreeze and restack %s now?", strings.Join(unfreezable, ", ")), false)
 	if err != nil && !errors.Is(err, term.ErrInteractiveDisabled) {
-		return actions.LeaveFrozen, err
+		return get.LeaveFrozen, err
 	}
 	if confirmed {
-		return actions.UnfreezeAndRestack, nil
+		return get.UnfreezeAndRestack, nil
 	}
 
 	// `st unfreeze` takes one branch and thaws its upstack with it, so naming
@@ -133,7 +134,7 @@ func (h *SimpleGetHandler) ReportLandedAncestors(report actions.LandedAncestorRe
 	h.Output.Info("  Run %s then %s when you're ready to rebase.",
 		style.ColorCyan("st unfreeze "+unfreezable[0]),
 		style.ColorCyan("st restack"))
-	return actions.LeaveFrozen, nil
+	return get.LeaveFrozen, nil
 }
 
 // pluralWord picks the singular or plural form for a count of branches.
@@ -161,7 +162,7 @@ func formatBranchList(names []string) string {
 }
 
 // Complete is called when get finishes
-func (h *SimpleGetHandler) Complete(summary actions.GetSummary) {
+func (h *SimpleGetHandler) Complete(summary get.Summary) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -201,35 +202,35 @@ func (h *SimpleGetHandler) Complete(summary actions.GetSummary) {
 	}
 }
 
-func (h *SimpleGetHandler) printPhaseHeader(phase actions.GetPhase) {
+func (h *SimpleGetHandler) printPhaseHeader(phase get.Phase) {
 	// Add spacing between phases (but not before first phase)
-	if h.currentPhase != "" && phase != actions.GetPhaseFetch {
+	if h.currentPhase != "" && phase != get.PhaseFetch {
 		h.Output.Newline()
 	}
 
 	switch phase {
-	case actions.GetPhaseFetch:
+	case get.PhaseFetch:
 		h.Output.Info("📥 Fetching from remote...")
-	case actions.GetPhaseSync:
+	case get.PhaseSync:
 		h.Output.Info("🔄 Syncing branches...")
-	case actions.GetPhaseMetadata:
+	case get.PhaseMetadata:
 		// Metadata phase is silent
-	case actions.GetPhaseCheckout:
+	case get.PhaseCheckout:
 		// Checkout is handled in Complete
 	}
 }
 
-func (h *SimpleGetHandler) printEventLine(event actions.GetEvent) {
+func (h *SimpleGetHandler) printEventLine(event get.Event) {
 	switch event.Phase {
-	case actions.GetPhaseFetch:
+	case get.PhaseFetch:
 		h.printFetchEvent(event)
-	case actions.GetPhaseSync:
+	case get.PhaseSync:
 		h.printSyncEvent(event)
 	}
 }
 
-func (h *SimpleGetHandler) printFetchEvent(event actions.GetEvent) {
-	if event.Type == actions.GetEventCompleted {
+func (h *SimpleGetHandler) printFetchEvent(event get.Event) {
+	if event.Type == get.EventCompleted {
 		if event.NewRevision != "" {
 			h.Output.Info("  %s fast-forwarded to %s",
 				style.ColorBranchName(event.Branch),
@@ -240,18 +241,18 @@ func (h *SimpleGetHandler) printFetchEvent(event actions.GetEvent) {
 	}
 }
 
-func (h *SimpleGetHandler) printSyncEvent(event actions.GetEvent) {
+func (h *SimpleGetHandler) printSyncEvent(event get.Event) {
 	// A skipped branch is the one case where saying nothing is wrong: the
 	// branch silently keeps its old content, and the remedy lives in another
 	// worktree the user is not looking at.
-	if event.Type == actions.GetEventSkipped {
+	if event.Type == get.EventSkipped {
 		h.Output.Warn("  Skipped %s: %s",
 			style.ColorBranchName(event.Branch),
 			event.Message)
 		return
 	}
 
-	if event.Type != actions.GetEventCompleted {
+	if event.Type != get.EventCompleted {
 		return
 	}
 

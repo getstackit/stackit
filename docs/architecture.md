@@ -49,10 +49,10 @@ If an action needs prompts or progress reporting, define an interface next to th
 
 For generic prompts (confirm, single select, text input, multi-select), depend
 on the narrow interfaces in `internal/actions/handler` (`Confirmer`,
-`Selector`, `TextInputPrompter`, `MultiSelector`). Actions that take
-`*app.Context` reach the adapter's implementation through `ctx.Prompts()`,
+`Selector`, `TextInputPrompter`, `MultiSelector`). An action that prompts
+takes a `handler.Prompter` in its `Deps`; the CLI passes `ctx.Prompts()`,
 which falls back to a non-interactive prompter (every prompt returns
-`term.ErrInteractiveDisabled`) when no adapter set `ctx.Prompter`; the CLI
+`term.ErrInteractiveDisabled`) when no adapter set `ctx.Prompter`. The CLI
 sets `common.TUIPrompter`. Whole-screen interactive flows (e.g. the move
 target picker, the reorder editor) live in the adapter and hand the action
 its result or implement an action-defined interface such as
@@ -144,26 +144,29 @@ When adding or refactoring an operation:
 
 1. Put the orchestration in an `internal/actions/<name>/` package.
 2. Pass resolved options into the request struct instead of loading config inside the operation.
-3. Pass dependencies explicitly instead of passing `*app.Context`. The entry
+3. Pass dependencies explicitly. Actions never see `*app.Context`: the entry
    point is `func Action(ctx context.Context, deps Deps, opts Options, ...)`,
    where `Deps` holds the package's exported consumer-side `Engine` interface
-   plus whatever else it needs (`output.Output`, a GitHub runner, the repo
-   root). The CLI adapter builds `Deps` from its `app.Context`. `describe`,
-   `doctor`, `freeze`, `pop`, `scope` and `untrack` follow this shape; the
-   `actions-no-app-context` depguard rule keeps them off `internal/app`, so
-   add a package to that rule when you convert it.
+   plus whatever else it needs (`output.Output`, a lazy
+   `GitHub func() github.Client`, the gh runner, the repo root, resolved
+   config values or a narrow `Config` interface).
+   Branch-rewriting actions embed `actions.MutationDeps` (output, `Here`,
+   `Snapshots`, a `restack.Runner`). Adapters build deps at the boundary with
+   `internal/app/actiondeps` (shared pieces: `actiondeps.Mutation`,
+   `actiondeps.Restack`, `actiondeps.PRSync`, ...) and, for commands that
+   delegate to other commands, `common.SubmitDeps` / `SyncDeps` /
+   `MergeDeps` / `CheckoutDeps`. The `actions-no-app-context` depguard rule
+   rejects `internal/app` imports from non-test files under
+   `internal/actions/`.
 4. Return structured results and typed events instead of writing output directly.
 5. Keep terminal rendering, JSON mapping, and interactive prompts in adapters.
 6. Read-only consumers take `engine.StackView` (or a narrower local interface
    composed from it) instead of `engine.Engine` / `engine.BranchReader`, and get
    shared view data (stack discovery, annotations, batched branch reads) from
    `internal/actions/stackview`.
-7. Actions that still receive `*app.Context` declare an unexported
-   consumer-side interface listing exactly the engine methods the package
-   calls (e.g. `lockEngine`, `foldEngine`, `deleteEngine`) and bind it at the
-   entry point with `var eng fooEngine = ctx.Engine`. Helpers that only need
-   the engine take that narrow type rather than `*app.Context` or
-   `engine.Engine`. Compose shared pieces instead of repeating them:
+7. Each action's `Engine` interface lists exactly the engine methods the
+   package calls. Helpers that only need the engine take that narrow type
+   rather than `engine.Engine`. Compose shared pieces instead of repeating them:
    `engine.StackView` / `engine.BranchLookup` for reads,
    `validation.BranchValidationEngine` / `GitOperationEngine` when the package
    runs those validators, `actions.MetadataPushEngine` for `PushMetadataOnly`,
@@ -186,8 +189,10 @@ split so each half depends only on what it uses:
 
 Neither writes output directly: progress goes to the `ProgressFunc`, and
 `restack.TextReporter` renders it for commands without a progress UI.
-`actions.RestackBranches` is the `*app.Context` adapter that builds both for
-not-yet-converted callers.
+Converted actions get a `restack.Runner` through `actions.MutationDeps`; the
+command-level pipeline (`PlanRestack`, `RestackAction`, `RunRestack`) takes
+`actions.RestackDeps`. The CLI builds both with `actiondeps.Mutation` and
+`actiondeps.Restack`.
 
 ## Transitional Guidance
 
@@ -195,7 +200,7 @@ The repository already uses `internal/actions/*` as the home for reusable orches
 
 When extending or adding actions:
 
-- prefer explicit deps over `*app.Context`
+- take `(ctx, Deps, ...)`, never `*app.Context`
 - keep new logic free of direct output/styling
 - keep config loading in callers (already enforced by lint)
 - define interfaces for prompts and progress

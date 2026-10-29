@@ -70,7 +70,7 @@ func TestHandleOrphanedMetadata(t *testing.T) {
 		setupOrphanedBranches(t, s, "a", "b", "c")
 
 		h := &scriptedOrphanHandler{push: map[string]bool{"a": true}, cancelOn: "b"}
-		err := handleOrphanedMetadata(s.Context, &Options{}, h)
+		err := handleOrphanedMetadata(s.Context.Context, DepsFrom(s.Context), &Options{}, h)
 
 		require.ErrorIs(t, err, errors.ErrCanceled)
 		require.Equal(t, []string{"a", "b"}, h.asked, "prompts stop at the cancel")
@@ -87,7 +87,7 @@ func TestHandleOrphanedMetadata(t *testing.T) {
 		setupOrphanedBranches(t, s, "a", "b")
 
 		h := &scriptedOrphanHandler{push: map[string]bool{"a": true}}
-		require.NoError(t, handleOrphanedMetadata(s.Context, &Options{}, h))
+		require.NoError(t, handleOrphanedMetadata(s.Context.Context, DepsFrom(s.Context), &Options{}, h))
 
 		require.True(t, onRemote(t, s, "a"))
 		require.True(t, hasLocalOnlyHash(t, s, "a"), "pushed branch is recorded as synced")
@@ -101,7 +101,7 @@ func TestHandleOrphanedMetadata(t *testing.T) {
 		setupOrphanedBranches(t, s, "a")
 
 		h := &scriptedOrphanHandler{push: map[string]bool{"a": true}}
-		require.NoError(t, handleOrphanedMetadata(s.Context, &Options{}, h))
+		require.NoError(t, handleOrphanedMetadata(s.Context.Context, DepsFrom(s.Context), &Options{}, h))
 
 		require.True(t, hasLocalOnlyHash(t, s, "a"), "unpushed branch stays orphaned so the next sync asks again")
 	})

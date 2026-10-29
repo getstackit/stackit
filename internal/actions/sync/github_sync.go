@@ -8,8 +8,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/workpool"
 
-	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
@@ -27,10 +25,10 @@ type GitHubSyncResult struct {
 
 // syncGitHubPRInfo fetches PR info from GitHub (network operation only)
 // This is designed to run in parallel with other network operations. The bounded
-// remoteCtx governs every network call; the app context only supplies the
-// navigator, logger, and git runner.
-func syncGitHubPRInfo(remoteCtx context.Context, ctx *app.Context) (*GitHubSyncResult, error) {
-	nav := ctx.Navigator()
+// remoteCtx governs every network call; deps only supply the navigator, logger,
+// and git runner.
+func syncGitHubPRInfo(remoteCtx context.Context, deps Deps) (*GitHubSyncResult, error) {
+	nav := deps.Engine
 
 	setupStart := time.Now()
 	allBranches := nav.AllBranches()
@@ -40,7 +38,7 @@ func syncGitHubPRInfo(remoteCtx context.Context, ctx *app.Context) (*GitHubSyncR
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repository info: %w", err)
 	}
-	ctx.Logger.Info("github sync setup completed durationMs=%v branchCount=%v", time.Since(setupStart).Milliseconds(), len(branchNames))
+	deps.Log.Info("github sync setup completed durationMs=%v branchCount=%v", time.Since(setupStart).Milliseconds(), len(branchNames))
 
 	result := &GitHubSyncResult{
 		BranchNames: branchNames,
@@ -67,14 +65,14 @@ func syncGitHubPRInfo(remoteCtx context.Context, ctx *app.Context) (*GitHubSyncR
 
 	// Sync PR info from GitHub (this is already parallelized internally)
 	syncPrStart := time.Now()
-	if err := github.SyncPrInfoWithKnownPRNumbers(remoteCtx, ctx.GHRunner, branchNames, github.Repo{Owner: repo.Owner, Name: repo.Name}, knownPRNumbers, func(name string, prInfo *github.PullRequestInfo) {
+	if err := github.SyncPrInfoWithKnownPRNumbers(remoteCtx, deps.GHRunner, branchNames, github.Repo{Owner: repo.Owner, Name: repo.Name}, knownPRNumbers, func(name string, prInfo *github.PullRequestInfo) {
 		result.mu.Lock()
 		result.PRInfos[name] = prInfo
 		result.mu.Unlock()
 	}); err != nil {
 		return nil, fmt.Errorf("failed to sync PR info from GitHub: %w", err)
 	}
-	ctx.Logger.Info("sync pr info from github completed durationMs=%d prsUpdated=%d", time.Since(syncPrStart).Milliseconds(), len(result.PRInfos))
+	deps.Log.Info("sync pr info from github completed durationMs=%d prsUpdated=%d", time.Since(syncPrStart).Milliseconds(), len(result.PRInfos))
 
 	return result, nil
 }
@@ -83,16 +81,15 @@ func syncGitHubPRInfo(remoteCtx context.Context, ctx *app.Context) (*GitHubSyncR
 // This must run after syncGitHubPRInfo completes
 //
 //nolint:unparam // error return is for future error handling
-func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAnchors dirtyAnchorSet, handler Handler) error {
-	eng := ctx.PR()
-	nav := ctx.Navigator()
-	out := ctx.Output
+func processGitHubSyncResult(ctx context.Context, deps Deps, result *GitHubSyncResult, dirtyAnchors dirtyAnchorSet, handler Handler) error {
+	eng := deps.Engine
+	out := deps.Out
 
 	// Update local PR info from GitHub results, preserving lock reasons.
 	// Collect into a map first so we can write all updates in one atomic batch.
 	updates := make(map[string]*engine.PrInfo, len(result.PRInfos))
 	for name, prInfo := range result.PRInfos {
-		branch := nav.GetBranch(name)
+		branch := eng.GetBranch(name)
 
 		lockReason := engine.LockReasonNone
 		if existing, err := branch.PrInfo(); err == nil && existing != nil {
@@ -110,7 +107,7 @@ func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAn
 		}).WithLockReason(lockReason)
 	}
 
-	if err := eng.BatchUpsertPrInfo(ctx.Context, updates); err != nil {
+	if err := eng.BatchUpsertPrInfo(ctx, updates); err != nil {
 		out.Debug("Failed to update PR info: %v", err)
 	}
 	prsUpdated := len(updates)
@@ -131,8 +128,8 @@ func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAn
 	}
 
 	// Update PR body footers only for branches flagged as needing updates
-	if ctx.GitHub() != nil && result.RepoOwner != "" && result.RepoName != "" {
-		flaggedBranches := ctx.Engine.BranchesNeedingPRBodyUpdate()
+	if deps.GitHub() != nil && result.RepoOwner != "" && result.RepoName != "" {
+		flaggedBranches := eng.BranchesNeedingPRBodyUpdate()
 		if len(flaggedBranches) > 0 {
 			updateMetaStart := time.Now()
 			// Emit progress events for each branch being updated
@@ -144,8 +141,8 @@ func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAn
 					Message: fmt.Sprintf("Updating PR metadata for %s", branchName),
 				})
 			}
-			actions.UpdateStackPRMetadata(ctx, flaggedBranches)
-			ctx.Logger.Info("update stack pr metadata completed durationMs=%d branchCount=%d",
+			deps.PRSync.UpdateStack(ctx, flaggedBranches)
+			deps.Log.Info("update stack pr metadata completed durationMs=%d branchCount=%d",
 				time.Since(updateMetaStart).Milliseconds(), len(flaggedBranches))
 		}
 	}
@@ -153,9 +150,9 @@ func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAn
 	// Push local parent changes to GitHub PR bases
 	// Local metadata is authoritative - if local parent differs from GitHub PR base, update GitHub
 	parentsStart := time.Now()
-	if ctx.GitHub() != nil && result.RepoOwner != "" && result.RepoName != "" {
-		syncResult, err := PushParentsToGitHub(ctx, result, dirtyAnchors)
-		ctx.Logger.Info("sync parents to github completed durationMs=%d", time.Since(parentsStart).Milliseconds())
+	if deps.GitHub() != nil && result.RepoOwner != "" && result.RepoName != "" {
+		syncResult, err := PushParentsToGitHub(ctx, deps, result, dirtyAnchors)
+		deps.Log.Info("sync parents to github completed durationMs=%d", time.Since(parentsStart).Milliseconds())
 		if err != nil {
 			out.Debug("Failed to sync parents to GitHub: %v", err)
 		} else if len(syncResult.BranchesUpdated) > 0 {
@@ -173,11 +170,10 @@ type ParentsToGitHubResult struct {
 
 // PushParentsToGitHub pushes local parent relationships to GitHub PR bases.
 // Local metadata is authoritative - if local parent differs from GitHub PR base, update GitHub.
-func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchors dirtyAnchorSet) (*ParentsToGitHubResult, error) {
-	eng := ctx.Engine
-	out := ctx.Output
-	gctx := ctx.Context
-	githubClient := ctx.GitHub()
+func PushParentsToGitHub(ctx context.Context, deps Deps, result *GitHubSyncResult, dirtyAnchors dirtyAnchorSet) (*ParentsToGitHubResult, error) {
+	eng := deps.Engine
+	out := deps.Out
+	githubClient := deps.GitHub()
 
 	allBranches := eng.AllBranches()
 
@@ -195,7 +191,7 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 		}
 
 		// Skip branches in dirty stacks
-		if dirtyAnchors.includes(ctx, branch.Name()) {
+		if dirtyAnchors.includes(eng, branch.Name()) {
 			continue
 		}
 
@@ -233,7 +229,7 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 			Base: &u.localParentName,
 		}
 
-		if _, err := githubClient.UpdatePullRequest(gctx, u.prNumber, updateOpts); err != nil {
+		if _, err := githubClient.UpdatePullRequest(ctx, u.prNumber, updateOpts); err != nil {
 			out.Debug("Failed to update PR base for %s: %v", u.branchName, err)
 			return
 		}

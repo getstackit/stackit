@@ -4,12 +4,33 @@ import (
 	"os"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+func deps(s *scenario.Scenario) Deps {
+	return Deps{
+		Engine:       s.Context.Engine,
+		MutationDeps: actiondeps.Mutation(s.Context),
+		Log:          s.Context.Logger,
+		Verify:       s.Context.Verify,
+		Worktrees: worktree.BranchWorktrees{Deps: worktree.Deps{
+			Engine:   s.Context.Engine,
+			Out:      s.Context.Output,
+			Log:      s.Context.Logger,
+			RepoRoot: s.Context.RepoRoot,
+			Here:     actiondeps.Here(s.Context),
+			Config:   s.Context.Config,
+			Prompts:  s.Context.Prompts(),
+		}},
+	}
+}
 
 func TestCreateAction_Stdin(t *testing.T) {
 	// NOT parallel: this test swaps the process-global os.Stdin for a pipe. Under
@@ -38,7 +59,7 @@ func TestCreateAction_Stdin(t *testing.T) {
 		// Scenario already calls term.SetInteractive(false)
 
 		opts := Options{}
-		_, err = Action(s.Context, opts, nil)
+		_, err = Action(t.Context(), deps(s), opts, nil)
 		require.NoError(t, err)
 
 		// Verify branch was created with name generated from stdin message
@@ -63,7 +84,7 @@ func TestCreateAction_RefusesTrunkInManagedWorktree(t *testing.T) {
 		AnchorBranch: "feature-wt-anchor",
 	}
 
-	_, err := Action(s.Context, Options{BranchName: "new-branch", Message: "test"}, nil)
+	_, err := Action(t.Context(), deps(s), Options{BranchName: "new-branch", Message: "test"}, nil)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "cannot create a branch from trunk inside managed worktree feature-wt")
 }
@@ -82,7 +103,7 @@ func TestCreateAction_Insert(t *testing.T) {
 			BranchName: "child1",
 			Message:    "Add child1",
 		}
-		_, err = Action(s.Context, opts1, nil)
+		_, err = Action(t.Context(), deps(s), opts1, nil)
 		require.NoError(t, err)
 
 		// 2. Go back to main
@@ -97,7 +118,7 @@ func TestCreateAction_Insert(t *testing.T) {
 			Message:    "Add inserted",
 			Insert:     true,
 		}
-		_, err = Action(s.Context, opts2, nil)
+		_, err = Action(t.Context(), deps(s), opts2, nil)
 		require.NoError(t, err)
 
 		// 4. Verify metadata relationships
@@ -125,12 +146,12 @@ func TestCreateAction_Insert(t *testing.T) {
 		// 1. Create stack: main -> child1 -> child2
 		err := s.Scene.Repo.CreateChange("child1 content", "file1", false)
 		require.NoError(t, err)
-		_, err = Action(s.Context, Options{BranchName: "child1", Message: "Add child1"}, nil)
+		_, err = Action(t.Context(), deps(s), Options{BranchName: "child1", Message: "Add child1"}, nil)
 		require.NoError(t, err)
 
 		err = s.Scene.Repo.CreateChange("child2 content", "file2", false)
 		require.NoError(t, err)
-		_, err = Action(s.Context, Options{BranchName: "child2", Message: "Add child2"}, nil)
+		_, err = Action(t.Context(), deps(s), Options{BranchName: "child2", Message: "Add child2"}, nil)
 		require.NoError(t, err)
 
 		// 2. Go to child1
@@ -144,7 +165,7 @@ func TestCreateAction_Insert(t *testing.T) {
 		// 3. Insert 'inserted' after child1
 		err = s.Scene.Repo.CreateChange("inserted content", "file3", false)
 		require.NoError(t, err)
-		_, err = Action(s.Context, Options{
+		_, err = Action(t.Context(), deps(s), Options{
 			BranchName: "inserted",
 			Message:    "Add inserted",
 			Insert:     true,
@@ -176,7 +197,7 @@ func TestCreateAction_Insert(t *testing.T) {
 		// 1. Create two children from main: main -> child1, main -> child2
 		err := s.Scene.Repo.CreateChange("child1 content", "file1", false)
 		require.NoError(t, err)
-		_, err = Action(s.Context, Options{BranchName: "child1", Message: "Add child1"}, nil)
+		_, err = Action(t.Context(), deps(s), Options{BranchName: "child1", Message: "Add child1"}, nil)
 		require.NoError(t, err)
 
 		err = s.Scene.Repo.CheckoutBranch("main")
@@ -184,7 +205,7 @@ func TestCreateAction_Insert(t *testing.T) {
 
 		err = s.Scene.Repo.CreateChange("child2 content", "file2", false)
 		require.NoError(t, err)
-		_, err = Action(s.Context, Options{BranchName: "child2", Message: "Add child2"}, nil)
+		_, err = Action(t.Context(), deps(s), Options{BranchName: "child2", Message: "Add child2"}, nil)
 		require.NoError(t, err)
 
 		// 2. Go back to main
@@ -195,7 +216,7 @@ func TestCreateAction_Insert(t *testing.T) {
 		err = s.Scene.Repo.CreateChange("inserted content", "file3", false)
 		require.NoError(t, err)
 		// Non-interactive mode should move all children by default
-		_, err = Action(s.Context, Options{
+		_, err = Action(t.Context(), deps(s), Options{
 			BranchName: "inserted",
 			Message:    "Add inserted",
 			Insert:     true,
@@ -235,7 +256,7 @@ func TestCreateAction_Insert(t *testing.T) {
 		// 1. Create child1 on main
 		err := s.Scene.Repo.CreateChange("child1 content", "file1", false)
 		require.NoError(t, err)
-		_, err = Action(s.Context, Options{BranchName: "child1", Message: "Add child1"}, nil)
+		_, err = Action(t.Context(), deps(s), Options{BranchName: "child1", Message: "Add child1"}, nil)
 		require.NoError(t, err)
 
 		// 2. Go back to main
@@ -245,7 +266,7 @@ func TestCreateAction_Insert(t *testing.T) {
 		// 3. Insert 'inserted' branch with --insert
 		err = s.Scene.Repo.CreateChange("inserted content", "file2", false)
 		require.NoError(t, err)
-		_, err = Action(s.Context, Options{
+		_, err = Action(t.Context(), deps(s), Options{
 			BranchName: "inserted",
 			Message:    "Add inserted",
 			Insert:     true,
@@ -269,12 +290,12 @@ func TestCreateAction_Insert_Deep(t *testing.T) {
 		// 1. Create stack: main -> child1 -> grandchild
 		err := s.Scene.Repo.CreateChange("child1 content", "file1", false)
 		require.NoError(t, err)
-		_, err = Action(s.Context, Options{BranchName: "child1", Message: "Add child1"}, nil)
+		_, err = Action(t.Context(), deps(s), Options{BranchName: "child1", Message: "Add child1"}, nil)
 		require.NoError(t, err)
 
 		err = s.Scene.Repo.CreateChange("grandchild content", "file2", false)
 		require.NoError(t, err)
-		_, err = Action(s.Context, Options{BranchName: "grandchild", Message: "Add grandchild"}, nil)
+		_, err = Action(t.Context(), deps(s), Options{BranchName: "grandchild", Message: "Add grandchild"}, nil)
 		require.NoError(t, err)
 
 		// 2. Go back to main
@@ -286,7 +307,7 @@ func TestCreateAction_Insert_Deep(t *testing.T) {
 		// 3. Insert 'inserted' after main
 		err = s.Scene.Repo.CreateChange("inserted content", "file3", false)
 		require.NoError(t, err)
-		_, err = Action(s.Context, Options{
+		_, err = Action(t.Context(), deps(s), Options{
 			BranchName: "inserted",
 			Message:    "Add inserted",
 			Insert:     true,
@@ -328,7 +349,7 @@ func TestCreateAction_Worktree(t *testing.T) {
 			Message:    "Add feature",
 			Worktree:   true,
 		}
-		_, err = Action(s.Context, opts, nil)
+		_, err = Action(t.Context(), deps(s), opts, nil)
 		require.NoError(t, err)
 
 		// Verify we're back on trunk (main repo stays on trunk, worktree has the branch)
@@ -352,8 +373,8 @@ func TestCreateAction_Worktree(t *testing.T) {
 		require.Equal(t, stackRoot, eng.GetBranch("feature-branch").Parent().Name())
 
 		// Clean up worktree
-		_ = eng.RemoveWorktree(s.Context.Context, worktreeInfo.Path)
-		_ = eng.UnregisterWorktree(s.Context.Context, stackRoot)
+		_ = eng.RemoveWorktree(t.Context(), worktreeInfo.Path)
+		_ = eng.UnregisterWorktree(t.Context(), stackRoot)
 	})
 
 	t.Run("fails with -w flag when not on trunk", func(t *testing.T) {
@@ -364,7 +385,7 @@ func TestCreateAction_Worktree(t *testing.T) {
 		// Create a child branch first (without worktree)
 		err := s.Scene.Repo.CreateChange("child1 content", "file1", false)
 		require.NoError(t, err)
-		_, err = Action(s.Context, Options{BranchName: "child1", Message: "Add child1"}, nil)
+		_, err = Action(t.Context(), deps(s), Options{BranchName: "child1", Message: "Add child1"}, nil)
 		require.NoError(t, err)
 
 		// Now try to create another branch with -w from child1 (not trunk)
@@ -375,7 +396,7 @@ func TestCreateAction_Worktree(t *testing.T) {
 			Message:    "Add child2",
 			Worktree:   true,
 		}
-		_, err = Action(s.Context, opts, nil)
+		_, err = Action(t.Context(), deps(s), opts, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "only valid when creating a new stack from trunk")
 	})

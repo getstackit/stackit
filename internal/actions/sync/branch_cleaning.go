@@ -1,21 +1,21 @@
 package sync
 
 import (
+	"context"
 	"maps"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
 
 // cleanBranches handles cleaning merged/closed branches
-func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet, remoteStatuses engine.BranchRemoteStatuses, handler Handler, summary *Summary) (*actions.CleanBranchesResult, error) {
+func cleanBranches(ctx context.Context, deps Deps, opts *Options, dirtyAnchors dirtyAnchorSet, remoteStatuses engine.BranchRemoteStatuses, handler Handler, summary *Summary) (*actions.CleanBranchesResult, error) {
 	// Only emit phase start if we have branches that might need cleaning
-	allBranches := ctx.Engine.AllBranches()
+	allBranches := deps.Engine.AllBranches()
 	hasBranchesToCheck := false
 	for _, b := range allBranches {
 		if !b.IsTrunk() {
@@ -30,16 +30,16 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet,
 
 	// Get current branch name for worktree detection
 	currentBranchName := ""
-	if currentBranch := ctx.Engine.CurrentBranch(ctx.Context); currentBranch != nil {
+	if currentBranch := deps.Engine.CurrentBranch(ctx); currentBranch != nil {
 		currentBranchName = currentBranch.Name()
 	}
 
 	cleanStart := time.Now()
 
 	// Phase 1: Plan which branches to delete
-	plan, err := actions.PlanBranchDeletions(ctx, actions.CleanBranchesOptions{
+	plan, err := actions.PlanBranchDeletions(ctx, deps.Cleanup, actions.CleanBranchesOptions{
 		Force:             opts.Force,
-		InManagedWorktree: ctx.InManagedWorktree,
+		InManagedWorktree: deps.Here.InManagedWorktree,
 		CurrentBranch:     currentBranchName,
 		RemoteStatuses:    remoteStatuses,
 	})
@@ -49,7 +49,7 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet,
 
 	// Filter out branches in dirty stacks - don't delete them while worktree has uncommitted changes
 	for name := range plan.BranchesToDelete {
-		if dirtyAnchors.includes(ctx, name) {
+		if dirtyAnchors.includes(deps.Engine, name) {
 			delete(plan.BranchesToDelete, name)
 		}
 	}
@@ -65,7 +65,7 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet,
 			reason := plan.BranchesToDelete[name]
 			logDetails = append(logDetails, name+": "+reason)
 		}
-		ctx.Logger.Info("branches planned for deletion count=%d branches=[%s]",
+		deps.Log.Info("branches planned for deletion count=%d branches=[%s]",
 			len(plan.BranchesToDelete), strings.Join(logDetails, ", "))
 	}
 
@@ -87,7 +87,7 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet,
 			if plan.UtilityBranches[name] && !plan.UnpushedBranches[name] {
 				// Utility branch with no unpushed local changes - auto-confirm without prompting.
 				branchesToDelete[name] = true
-				ctx.Output.Info("Auto-deleting utility branch %s (%s)",
+				deps.Out.Info("Auto-deleting utility branch %s (%s)",
 					output.BranchName(name), reason)
 			} else {
 				// Regular branch - add to prompt list
@@ -111,7 +111,7 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet,
 	}
 
 	// Phase 3: Execute deletions
-	result, err := actions.ExecuteBranchDeletions(ctx, plan, branchesToDelete)
+	result, err := actions.ExecuteBranchDeletions(ctx, deps.Cleanup, plan, branchesToDelete)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet,
 	}
 	slices.Sort(result.SkippedUnpushed)
 
-	ctx.Logger.Info("clean branches completed durationMs=%d deletedCount=%d", time.Since(cleanStart).Milliseconds(), len(result.DeletedBranches))
+	deps.Log.Info("clean branches completed durationMs=%d deletedCount=%d", time.Since(cleanStart).Milliseconds(), len(result.DeletedBranches))
 
 	// Emit events for each deleted branch
 	for name, reason := range result.DeletedBranches {
@@ -139,20 +139,20 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet,
 
 	// Warn about branches that couldn't be deleted from worktree
 	for _, name := range result.SkippedInWorktree {
-		ctx.Output.Warn("Cannot delete %s from worktree. Run sync from the main repository to clean up.",
+		deps.Out.Warn("Cannot delete %s from worktree. Run sync from the main repository to clean up.",
 			output.CurrentBranch(name))
 	}
 
 	// Branches checked out in the main working tree cannot be freed by removing
 	// a worktree, so switching branches is the only way to clean them up.
 	for _, name := range result.SkippedCheckedOut {
-		ctx.Output.Warn("Cannot delete %s — it is checked out here. Switch branches, then sync again.",
+		deps.Out.Warn("Cannot delete %s — it is checked out here. Switch branches, then sync again.",
 			output.CurrentBranch(name))
 	}
 
 	// Warn about branches skipped due to unpushed changes
 	for _, name := range result.SkippedUnpushed {
-		ctx.Output.Warn("Skipped %s — has unpushed local changes. Push first or delete manually with 'git branch -D %s'.",
+		deps.Out.Warn("Skipped %s — has unpushed local changes. Push first or delete manually with 'git branch -D %s'.",
 			output.BranchName(name), name)
 	}
 

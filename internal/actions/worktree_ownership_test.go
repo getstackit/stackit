@@ -23,7 +23,7 @@ func TestEnsureCanModifyHere(t *testing.T) { //nolint:tparallel // subtests shar
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
 	t.Run("refuses managed stack mutation from main repository", func(t *testing.T) {
-		err := EnsureCanModifyHere(s.Context, s.Engine.GetBranch("feature"))
+		err := ensureCanModifyHere(s.Context, s.Engine.GetBranch("feature"))
 		require.Error(t, err)
 		require.ErrorContains(t, err, "belongs to worktree feature-wt")
 		require.ErrorContains(t, err, "cd "+worktreePath)
@@ -40,7 +40,7 @@ func TestEnsureCanModifyHere(t *testing.T) { //nolint:tparallel // subtests shar
 		missing := filepath.Join(t.TempDir(), "deleted-worktree")
 		require.NoError(t, gone.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(missing), Name: "feature-wt"}))
 
-		err := EnsureCanModifyHere(gone.Context, gone.Engine.GetBranch("feature"))
+		err := ensureCanModifyHere(gone.Context, gone.Engine.GetBranch("feature"))
 		require.Error(t, err)
 		require.ErrorContains(t, err, "no longer exists")
 		require.ErrorContains(t, err, "worktree detach feature-wt")
@@ -55,7 +55,7 @@ func TestEnsureCanModifyHere(t *testing.T) { //nolint:tparallel // subtests shar
 			Path:         engine.WorktreePath(worktreePath),
 			AnchorBranch: "feature",
 		}
-		require.NoError(t, EnsureCanModifyHere(&ctx, s.Engine.GetBranch("feature")))
+		require.NoError(t, ensureCanModifyHere(&ctx, s.Engine.GetBranch("feature")))
 	})
 
 	t.Run("refuses main stack mutation from a managed worktree", func(t *testing.T) {
@@ -67,7 +67,7 @@ func TestEnsureCanModifyHere(t *testing.T) { //nolint:tparallel // subtests shar
 			AnchorBranch: "feature",
 			MainRepoDir:  s.Context.RepoRoot,
 		}
-		err := EnsureCanModifyHere(&ctx, s.Engine.Trunk())
+		err := ensureCanModifyHere(&ctx, s.Engine.Trunk())
 		require.Error(t, err)
 		require.ErrorContains(t, err, "belongs to the main repository stack")
 	})
@@ -88,7 +88,7 @@ func TestEnsureCanModifyHereRefusesMalformedRegistration(t *testing.T) {
 	require.NoError(t, err)
 	s.RunGit("update-ref", "refs/stackit/worktrees/feature", sha)
 
-	err = EnsureCanModifyHere(s.Context, s.Engine.GetBranch("feature"))
+	err = ensureCanModifyHere(s.Context, s.Engine.GetBranch("feature"))
 	require.ErrorContains(t, err, "cannot determine worktree ownership for branch feature")
 	require.ErrorContains(t, err, "metadata anchor is elsewhere")
 }

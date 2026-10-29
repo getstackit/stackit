@@ -4,7 +4,9 @@ package branch
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
+	"github.com/getstackit/stackit/internal/actions/squash"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 )
@@ -45,7 +47,12 @@ Examples:
 				noEditFlag := noEdit || !edit
 
 				// Run squash action
-				return actions.SquashAction(ctx, actions.SquashOptions{
+				return squash.Action(ctx.Context, squash.Deps{
+					Engine:       ctx.Engine,
+					MutationDeps: actiondeps.Mutation(ctx),
+					Log:          ctx.Logger,
+					Verify:       ctx.Verify,
+				}, squash.Options{
 					Message: resolvedMessage,
 					NoEdit:  noEditFlag,
 				})

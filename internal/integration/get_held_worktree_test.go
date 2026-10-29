@@ -3,12 +3,16 @@ package integration
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
+	"github.com/getstackit/stackit/internal/actions/get"
+
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
 	worktreeaction "github.com/getstackit/stackit/internal/actions/worktree"
+	wtcli "github.com/getstackit/stackit/internal/cli/worktree"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -17,12 +21,12 @@ import (
 // the message explaining why. EmitEvent is only called from get's sequential
 // sync loop, so no locking is needed.
 type skipRecordingGetHandler struct {
-	actions.GetNullHandler
+	get.NullHandler
 	skipped map[string]string
 }
 
-func (h *skipRecordingGetHandler) EmitEvent(e actions.GetEvent) {
-	if e.Type != actions.GetEventSkipped {
+func (h *skipRecordingGetHandler) EmitEvent(e get.Event) {
+	if e.Type != get.EventSkipped {
 		return
 	}
 	if h.skipped == nil {
@@ -62,8 +66,8 @@ func TestGetSkipsBranchHeldByAnotherWorktree(t *testing.T) {
 			rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, config)
 			sh.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, config)
 
-			require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
-			require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+			require.NoError(t, submit.Action(sh.Context.Context, common.SubmitDeps(sh.Context), submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
+			require.NoError(t, syncaction.Action(sh.Context.Context, common.SyncDeps(sh.Context), syncaction.Options{}, nil))
 
 			// Park a in another worktree. Both a and b already exist locally,
 			// so get takes the update path for each and needs them at HEAD in
@@ -76,7 +80,7 @@ func TestGetSkipsBranchHeldByAnotherWorktree(t *testing.T) {
 			require.NoError(t, err)
 
 			handler := &skipRecordingGetHandler{}
-			require.NoError(t, actions.GetAction(sh.Context, "b", actions.GetOptions{Restack: false}, handler),
+			require.NoError(t, get.Action(t.Context(), getDeps(sh.Context), "b", get.Options{Restack: false}, handler),
 				"a branch held elsewhere must not fail the whole run")
 			sh.Rebuild()
 
@@ -112,7 +116,7 @@ func plainWorktreeHolder(t *testing.T, sh *scenario.Scenario) string {
 func managedWorktreeHolder(t *testing.T, sh *scenario.Scenario) string {
 	t.Helper()
 	require.NoError(t, sh.Scene.Repo.RunGitCommand("config", "--local", "stackit.worktree.basePath", t.TempDir()))
-	result, err := worktreeaction.AttachAction(sh.Context, worktreeaction.AttachOptions{Branch: "a"})
+	result, err := worktreeaction.AttachAction(sh.Context.Context, wtcli.DepsFrom(sh.Context), worktreeaction.AttachOptions{Branch: "a"})
 	require.NoError(t, err)
 	return result.Path.String()
 }

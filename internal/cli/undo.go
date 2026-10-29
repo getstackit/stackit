@@ -46,7 +46,12 @@ Examples:
 				}
 
 				// Run undo action
-				return undo.Action(ctx, undo.Options{
+				return undo.Action(ctx.Context, undo.Deps{
+					Engine:       ctx.Engine,
+					Out:          ctx.Output,
+					RepoRoot:     ctx.RepoRoot,
+					LinearStacks: ctx.Config != nil && ctx.Config.LinearStacks(),
+				}, undo.Options{
 					SnapshotID: snapshotID,
 					Force:      force,
 				}, handler)

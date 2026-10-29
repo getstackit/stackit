@@ -13,7 +13,6 @@ import (
 	"os"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/getstackit/stackit/internal/term"
 
@@ -26,10 +25,6 @@ import (
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 )
-
-// DefaultRemoteOperationTimeout bounds explicit remote operations launched by
-// commands when the parent command context does not already carry a deadline.
-const DefaultRemoteOperationTimeout = 5 * time.Minute
 
 // loggingDisabled reports whether STACKIT_NO_LOGGING is set to a truthy value.
 // Empty / unset / explicitly false-y values (0, false, ...) keep logging on,
@@ -86,20 +81,7 @@ type Context struct {
 // preserves an existing command deadline; otherwise it applies Stackit's
 // standard remote-operation timeout.
 func (c *Context) RemoteOperationContext() (context.Context, context.CancelFunc) {
-	return WithRemoteOperationTimeout(c.Context)
-}
-
-// WithRemoteOperationTimeout applies the default remote-operation timeout only
-// when the parent context has no deadline. The returned cancel function should
-// always be called by the caller.
-func WithRemoteOperationTimeout(parent context.Context) (context.Context, context.CancelFunc) {
-	if parent == nil {
-		parent = context.Background()
-	}
-	if _, ok := parent.Deadline(); ok {
-		return context.WithCancel(parent)
-	}
-	return context.WithTimeout(parent, DefaultRemoteOperationTimeout)
+	return git.WithRemoteOperationTimeout(c.Context)
 }
 
 // githubLazy holds the lazy-initialization state for the GitHub client.

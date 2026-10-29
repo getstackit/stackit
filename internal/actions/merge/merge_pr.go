@@ -9,7 +9,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/timeutil"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 )
@@ -88,27 +87,27 @@ func (d *defaultPRMergeAPI) mergePR(ctx context.Context, branchName string, meth
 // prMergeAPI methods reach GitHub's GraphQL API by shelling out to `gh` through
 // the git runner, not through the client, so injecting a mock client leaves
 // them talking to the real thing.
-var newPRMergeAPI = func(ctx *app.Context) prMergeAPI {
-	return &defaultPRMergeAPI{client: ctx.GitHub()}
+var newPRMergeAPI = func(deps Deps) prMergeAPI {
+	return &defaultPRMergeAPI{client: deps.GitHub()}
 }
 
 // MergePR merges one PR: it resolves the PR's GraphQL node ID, then runs the
 // 3-tier merge (direct merge → automerge → poll fallback) described on
 // orchestrateMerge. Progress is reported through handler.
-func MergePR(ctx *app.Context, opts MergePROptions, handler ProgressHandler) (MergePROutcome, error) {
-	prNodeID, err := GetPRNodeID(ctx, opts.PRNumber)
+func MergePR(ctx context.Context, deps Deps, opts MergePROptions, handler ProgressHandler) (MergePROutcome, error) {
+	prNodeID, err := GetPRNodeID(ctx, deps.GitHub(), opts.PRNumber)
 	if err != nil {
 		return 0, err
 	}
-	runner := ctx.GHRunner
-	return orchestrateMerge(ctx.Context, handler, runner, newPRMergeAPI(ctx), opts, prNodeID)
+	runner := deps.GHRunner
+	return orchestrateMerge(ctx, handler, runner, newPRMergeAPI(deps), opts, prNodeID)
 }
 
 // GetPRNodeID fetches the GraphQL node ID for a PR by number. The node ID is
 // what the GraphQL merge and automerge operations address a PR by.
-func GetPRNodeID(ctx *app.Context, prNumber git.PRNumber) (string, error) {
-	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
-	prInfo, err := ctx.GitHub().GetPullRequest(remoteCtx, prNumber)
+func GetPRNodeID(ctx context.Context, githubClient github.Client, prNumber git.PRNumber) (string, error) {
+	remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
+	prInfo, err := githubClient.GetPullRequest(remoteCtx, prNumber)
 	cancelRemote()
 	if err != nil {
 		return "", fmt.Errorf("failed to get PR #%d info: %w", prNumber, err)
@@ -121,16 +120,16 @@ func GetPRNodeID(ctx *app.Context, prNumber git.PRNumber) (string, error) {
 
 // EnableAutoMergeForPR enables GitHub auto-merge on a PR using the configured
 // merge method (prompting for one if none is configured).
-func EnableAutoMergeForPR(ctx *app.Context, prNumber git.PRNumber) error {
-	prNodeID, err := GetPRNodeID(ctx, prNumber)
+func EnableAutoMergeForPR(ctx context.Context, deps Deps, prNumber git.PRNumber) error {
+	prNodeID, err := GetPRNodeID(ctx, deps.GitHub(), prNumber)
 	if err != nil {
 		return err
 	}
-	mergeMethod, err := GetMergeMethod(ctx, ctx.Config, ctx.GitHub())
+	mergeMethod, err := GetMergeMethod(ctx, deps.Out, deps.Prompts, deps.Config, deps.GitHub())
 	if err != nil {
 		return fmt.Errorf("could not determine merge method: %w", err)
 	}
-	return github.EnableAutoMerge(ctx.Context, ctx.GHRunner, prNodeID, github.EnableAutoMergeOptions{MergeMethod: mergeMethod})
+	return github.EnableAutoMerge(ctx, deps.GHRunner, prNodeID, github.EnableAutoMergeOptions{MergeMethod: mergeMethod})
 }
 
 // orchestrateMerge implements a 3-tier merge strategy:

@@ -1,11 +1,11 @@
 package actions
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions/restack"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
@@ -18,33 +18,56 @@ type ContinueOptions struct {
 	AddAll bool
 }
 
+// ContinueEngine lists exactly the engine methods continue calls.
+type ContinueEngine interface {
+	engine.BranchLookup
+	IsRebaseInProgress(ctx context.Context) bool
+	CurrentBranch(ctx context.Context) *engine.Branch
+	Trunk() engine.Branch
+	StageAll(ctx context.Context) error
+	ContinueRebase(ctx context.Context, spec engine.ContinueRebaseSpec) (engine.ContinueRebaseResult, error)
+	CheckoutBranch(ctx context.Context, branch engine.Branch) error
+	ListWorktrees(ctx context.Context) (git.WorktreeList, error)
+}
+
+// ContinueDeps are the collaborators continue needs.
+type ContinueDeps struct {
+	Engine   ContinueEngine
+	Out      output.Output
+	RepoRoot string
+	// Restack resumes the branches the interrupted command still had queued.
+	Restack restack.Runner
+	// Conflicts prints the conflict status when the rebase stops again.
+	Conflicts *restack.ConflictReporter
+}
+
 // ContinueAction performs the continue operation
-func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
-	eng := ctx.Engine
-	out := ctx.Output
+func ContinueAction(ctx context.Context, deps ContinueDeps, opts ContinueOptions) error {
+	eng := deps.Engine
+	out := deps.Out
 
 	// Check if rebase is in progress
-	if !eng.IsRebaseInProgress(ctx.Context) {
+	if !eng.IsRebaseInProgress(ctx) {
 		// Clear any stale continuation state
-		_ = config.ClearContinuationState(ctx.RepoRoot)
+		_ = config.ClearContinuationState(deps.RepoRoot)
 		return errors.New("no rebase in progress. Nothing to continue")
 	}
 
 	// Load continuation state
-	continuation, err := config.GetContinuationState(ctx.RepoRoot)
+	continuation, err := config.GetContinuationState(deps.RepoRoot)
 	if err != nil {
 		// No continuation state - this is okay, we can still continue the rebase
 		// but we won't be able to resume restacking
 		out.Info("No continuation state found. Continuing rebase only.")
 		// Try to continue the rebase anyway (user might have started it manually)
 		// But we need a rebasedBranchBase - try to get it from current branch's parent
-		currentBranch := eng.CurrentBranch(ctx.Context)
+		currentBranch := eng.CurrentBranch(ctx)
 		if currentBranch == nil {
 			return errors.ErrNotOnBranch
 		}
 		parentName := currentBranch.ParentOrTrunk()
 		parentBranch := eng.GetBranch(parentName)
-		parentRev, err := parentBranch.Revision(ctx.Context)
+		parentRev, err := parentBranch.Revision(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get parent revision: %w", err)
 		}
@@ -53,7 +76,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 			BranchesToRestack:     []string{},
 			CurrentBranchOverride: currentBranch.Name(),
 		}
-		expectedBranchRevision, err := currentBranch.Revision(ctx.Context)
+		expectedBranchRevision, err := currentBranch.Revision(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get current branch revision: %w", err)
 		}
@@ -62,13 +85,13 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 
 	// Stage all changes if --all flag is set
 	if opts.AddAll {
-		if err := eng.StageAll(ctx.Context); err != nil {
+		if err := eng.StageAll(ctx); err != nil {
 			return fmt.Errorf("failed to stage changes: %w", err)
 		}
 	}
 
 	// Continue the rebase
-	result, err := eng.ContinueRebase(ctx.Context, engine.ContinueRebaseSpec{
+	result, err := eng.ContinueRebase(ctx, engine.ContinueRebaseSpec{
 		Branch:                 continuation.CurrentBranchOverride,
 		RebasedBranchBase:      continuation.RebasedBranchBase,
 		ExpectedBranchRevision: continuation.ExpectedBranchRevision,
@@ -80,22 +103,22 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	// Handle result
 	if result.Result == int(git.RebaseConflict) {
 		// Another conflict - persist state again
-		if err := config.PersistContinuationState(ctx.RepoRoot, continuation); err != nil {
+		if err := config.PersistContinuationState(deps.RepoRoot, continuation); err != nil {
 			return fmt.Errorf("failed to persist continuation: %w", err)
 		}
 		// Get current branch name for conflict status
 		branchName := result.BranchName
 		if branchName == "" {
-			currentBranch := eng.CurrentBranch(ctx.Context)
+			currentBranch := eng.CurrentBranch(ctx)
 			if currentBranch == nil {
 				return errors.ErrNotOnBranch
 			}
 			branchName = currentBranch.Name()
 		}
 		if result.RerereResolvedCount > 0 {
-			printRerereResolved(ctx, result.RerereResolvedCount)
+			out.Info("%s", restack.FormatRerereResolved(result.RerereResolvedCount))
 		}
-		if err := PrintConflictStatus(ctx, branchName); err != nil {
+		if err := deps.Conflicts.Print(ctx, branchName); err != nil {
 			return fmt.Errorf("failed to print conflict status: %w", err)
 		}
 		// PrintConflictStatus already told the user what to do; return the
@@ -113,9 +136,9 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	// the stack instead — but do not leave the user silently detached, which is
 	// where `git rebase` left HEAD and how commits get orphaned.
 	attached := true
-	if err := eng.CheckoutBranch(ctx.Context, eng.GetBranch(result.BranchName)); err != nil {
+	if err := eng.CheckoutBranch(ctx, eng.GetBranch(result.BranchName)); err != nil {
 		var otherWorktree engine.WorktreePath
-		if worktrees, listErr := eng.ListWorktrees(ctx.Context); listErr == nil {
+		if worktrees, listErr := eng.ListWorktrees(ctx); listErr == nil {
 			otherWorktree = worktrees.PathForBranch(result.BranchName)
 		}
 		if otherWorktree == "" {
@@ -132,14 +155,18 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		out.Info("Resolved rebase conflict for %s.", output.BranchName(result.BranchName))
 	}
 	if result.RerereResolvedCount > 0 {
-		printRerereResolved(ctx, result.RerereResolvedCount)
+		out.Info("%s", restack.FormatRerereResolved(result.RerereResolvedCount))
 	}
 	reportUnresetWorktree(out, result)
 
 	// Continue with remaining branches to restack
 	if len(continuation.BranchesToRestack) > 0 {
 		branches := engine.BranchesFromNames(eng, continuation.BranchesToRestack)
-		if err := restackBranchesWithPlan(ctx, branches, nil, nil, restack.ConflictEnterWorkflow, continuation); err != nil {
+		plan, err := deps.Restack.Planner.Plan(ctx, branches, nil)
+		if err != nil {
+			return err
+		}
+		if err := deps.Restack.Executor.Execute(ctx, plan, restack.ConflictEnterWorkflow, continuation); err != nil {
 			return err
 		}
 	}
@@ -151,7 +178,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	// you end up. Unset for every other command, which correctly leaves the
 	// user on the branch they just resolved.
 	if continuation.ReturnToBranch != "" && continuation.ReturnToBranch != result.BranchName {
-		if err := eng.CheckoutBranch(ctx.Context, eng.GetBranch(continuation.ReturnToBranch)); err == nil {
+		if err := eng.CheckoutBranch(ctx, eng.GetBranch(continuation.ReturnToBranch)); err == nil {
 			attached = true
 		} else {
 			out.Error("Failed to return to %s: %v", continuation.ReturnToBranch, err)
@@ -165,7 +192,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	// plainly where the user ended up instead of implying they are on a branch.
 	if !attached {
 		trunk := eng.Trunk()
-		if err := eng.CheckoutBranch(ctx.Context, trunk); err == nil {
+		if err := eng.CheckoutBranch(ctx, trunk); err == nil {
 			out.Info("Switched to %s; %s lives in its own worktree.",
 				output.BranchName(trunk.Name()), output.BranchName(result.BranchName))
 		} else {
@@ -174,7 +201,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	}
 
 	// Clear continuation state
-	if err := config.ClearContinuationState(ctx.RepoRoot); err != nil {
+	if err := config.ClearContinuationState(deps.RepoRoot); err != nil {
 		out.Debug("Failed to clear continuation state: %v", err)
 	}
 

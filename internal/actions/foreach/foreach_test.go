@@ -31,6 +31,10 @@ func (h *testHandler) Events() []foreach.Event {
 	return cp
 }
 
+func deps(s *scenario.Scenario) foreach.Deps {
+	return foreach.Deps{Engine: s.Engine, Out: s.Context.Output, RepoRoot: s.Context.RepoRoot}
+}
+
 func TestForeachAction(t *testing.T) {
 	t.Parallel()
 	t.Run("sequential execution on stack", func(t *testing.T) {
@@ -52,7 +56,7 @@ func TestForeachAction(t *testing.T) {
 			FailFast: true,
 		}
 
-		err := foreach.Action(s.Context, opts, handler)
+		err := foreach.Action(t.Context(), deps(s), opts, handler)
 		require.NoError(t, err)
 
 		events := handler.Events()
@@ -85,7 +89,7 @@ func TestForeachAction(t *testing.T) {
 			FailFast: true,
 		}
 
-		err := foreach.Action(s.Context, opts, handler)
+		err := foreach.Action(t.Context(), deps(s), opts, handler)
 		require.Error(t, err)
 
 		events := handler.Events()
@@ -122,7 +126,7 @@ func TestForeachAction(t *testing.T) {
 			FailFast: false,
 		}
 
-		err := foreach.Action(s.Context, opts, handler)
+		err := foreach.Action(t.Context(), deps(s), opts, handler)
 		require.NoError(t, err) // Should not return error if FailFast is false
 
 		events := handler.Events()
@@ -155,7 +159,7 @@ func TestForeachAction(t *testing.T) {
 			Jobs:     2,
 		}
 
-		err := foreach.Action(s.Context, opts, handler)
+		err := foreach.Action(t.Context(), deps(s), opts, handler)
 		require.NoError(t, err)
 
 		events := handler.Events()
@@ -192,7 +196,7 @@ func TestForeachAction(t *testing.T) {
 			Scope:   engine.StackRange{IncludeCurrent: true},
 		}
 
-		err := foreach.Action(s.Context, opts, handler)
+		err := foreach.Action(t.Context(), deps(s), opts, handler)
 		require.NoError(t, err)
 
 		events := handler.Events()
@@ -235,7 +239,7 @@ func TestForeachAction(t *testing.T) {
 					Command: "true",
 					Scope:   tc.scope,
 				}
-				err := foreach.Action(s.Context, opts, handler)
+				err := foreach.Action(t.Context(), deps(s), opts, handler)
 				require.NoError(t, err)
 
 				var executed []string
@@ -268,7 +272,7 @@ func TestForeachAction(t *testing.T) {
 			FailFast:   true,
 		}
 
-		err := foreach.Action(s.Context, opts, handler)
+		err := foreach.Action(t.Context(), deps(s), opts, handler)
 		require.NoError(t, err)
 
 		var executed []string
@@ -300,7 +304,7 @@ func TestForeachAction(t *testing.T) {
 			FailFast:   true,
 		}
 
-		err := foreach.Action(s.Context, opts, handler)
+		err := foreach.Action(t.Context(), deps(s), opts, handler)
 		require.NoError(t, err)
 
 		var executed []string
@@ -326,7 +330,7 @@ func TestForeachAction(t *testing.T) {
 			Scope:      engine.StackRange{IncludeCurrent: true},
 		}
 
-		err := foreach.Action(s.Context, opts, handler)
+		err := foreach.Action(t.Context(), deps(s), opts, handler)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "branch untracked is not tracked by stackit")
 	})
@@ -351,7 +355,7 @@ func TestForeachAction(t *testing.T) {
 			Jobs:             2,
 		}
 
-		err := foreach.Action(s.Context, opts, handler)
+		err := foreach.Action(t.Context(), deps(s), opts, handler)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "command failed at stack depth 2")
 

@@ -26,7 +26,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 		}
 
 		branch := s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), branch, opts, nil)
 		require.NoError(t, err)
 		require.True(t, metadata.IsDraft, "PR should be created as draft when --draft flag is set")
 	})
@@ -41,7 +41,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 		}
 
 		branch := s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), branch, opts, nil)
 		require.NoError(t, err)
 		require.False(t, metadata.IsDraft, "PR should be created as non-draft when --publish flag is set")
 	})
@@ -56,7 +56,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 		}
 
 		branch := s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), branch, opts, nil)
 		require.NoError(t, err)
 		require.False(t, metadata.IsDraft, "PR should default to published (not draft) when no flag is specified")
 	})
@@ -79,7 +79,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 		}
 
 		branch = s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), branch, opts, nil)
 		require.NoError(t, err)
 		require.True(t, metadata.IsDraft, "PR should preserve existing draft status")
 
@@ -91,7 +91,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 			WithIsDraft(false))
 		require.NoError(t, err)
 
-		metadata, err = submit.PreparePRMetadata(branch, opts, s.Context, nil)
+		metadata, err = submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), branch, opts, nil)
 		require.NoError(t, err)
 		require.False(t, metadata.IsDraft, "PR should preserve existing non-draft status")
 	})
@@ -114,7 +114,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 		}
 
 		branch = s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), branch, opts, nil)
 		require.NoError(t, err)
 		require.True(t, metadata.IsDraft, "PR should be marked as draft when --draft flag is set, even if existing PR is not draft")
 	})
@@ -137,7 +137,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 		}
 
 		branch = s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), branch, opts, nil)
 		require.NoError(t, err)
 		require.False(t, metadata.IsDraft, "PR should be marked as non-draft when --publish flag is set, even if existing PR is draft")
 	})
@@ -157,7 +157,7 @@ func TestPreparePRMetadata_InheritParentDraft(t *testing.T) {
 
 		// Child has no PR yet
 		childBranch := s.Engine.GetBranch("child")
-		metadata, err := submit.PreparePRMetadata(childBranch, submit.MetadataOptions{}, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), childBranch, submit.MetadataOptions{}, nil)
 		require.NoError(t, err)
 		require.True(t, metadata.IsDraft, "new PR should inherit draft status from parent PR")
 	})
@@ -172,7 +172,7 @@ func TestPreparePRMetadata_InheritParentDraft(t *testing.T) {
 		require.NoError(t, err)
 
 		childBranch := s.Engine.GetBranch("child")
-		metadata, err := submit.PreparePRMetadata(childBranch, submit.MetadataOptions{}, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), childBranch, submit.MetadataOptions{}, nil)
 		require.NoError(t, err)
 		require.False(t, metadata.IsDraft, "new PR should not be draft when parent PR is not draft")
 	})
@@ -187,7 +187,7 @@ func TestPreparePRMetadata_InheritParentDraft(t *testing.T) {
 		require.NoError(t, err)
 
 		childBranch := s.Engine.GetBranch("child")
-		metadata, err := submit.PreparePRMetadata(childBranch, submit.MetadataOptions{Publish: true}, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), childBranch, submit.MetadataOptions{Publish: true}, nil)
 		require.NoError(t, err)
 		require.False(t, metadata.IsDraft, "--publish should override parent draft status")
 	})
@@ -198,7 +198,7 @@ func TestPreparePRMetadata_InheritParentDraft(t *testing.T) {
 
 		// Parent has no PR info at all
 		childBranch := s.Engine.GetBranch("child")
-		metadata, err := submit.PreparePRMetadata(childBranch, submit.MetadataOptions{}, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), childBranch, submit.MetadataOptions{}, nil)
 		require.NoError(t, err)
 		require.False(t, metadata.IsDraft, "child should not be draft when parent has no PR")
 	})
@@ -213,7 +213,7 @@ func TestPreparePRMetadata_InheritParentDraft(t *testing.T) {
 		require.NoError(t, err)
 
 		childBranch := s.Engine.GetBranch("child")
-		metadata, err := submit.PreparePRMetadata(childBranch, submit.MetadataOptions{ConfigDraft: true}, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), childBranch, submit.MetadataOptions{ConfigDraft: true}, nil)
 		require.NoError(t, err)
 		require.True(t, metadata.IsDraft, "ConfigDraft should make PR draft even when parent is not draft")
 	})
@@ -224,7 +224,7 @@ func TestPreparePRMetadata_InheritParentDraft(t *testing.T) {
 
 		// Branch parented to trunk — no parent PR possible
 		branch := s.Engine.GetBranch("solo")
-		metadata, err := submit.PreparePRMetadata(branch, submit.MetadataOptions{}, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), branch, submit.MetadataOptions{}, nil)
 		require.NoError(t, err)
 		require.False(t, metadata.IsDraft, "trunk-parented branch should not be draft without config")
 	})
@@ -248,7 +248,7 @@ func TestPreparePRMetadata_NoEdit(t *testing.T) {
 		opts := submit.MetadataOptions{}
 
 		branch := s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), branch, opts, nil)
 		require.NoError(t, err)
 		require.NotEmpty(t, metadata.Title, "Title should be set from commit subject")
 		require.Equal(t, "feat: test feature", metadata.Title)
@@ -270,7 +270,7 @@ func TestPreparePRMetadata_DefaultsFromCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		branch := s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, submit.MetadataOptions{}, s.Context, nil)
+		metadata, err := submit.PreparePRMetadata(s.Context.Context, submit.DepsFrom(s.Context), branch, submit.MetadataOptions{}, nil)
 		require.NoError(t, err)
 		require.Equal(t, "feat: commit 1", metadata.Title, "title should use the oldest commit subject")
 		require.Equal(t, "- feat: commit 1\n- feat: commit 2", metadata.Body, "body should list all commit subjects")

@@ -4,6 +4,8 @@ package stack
 import (
 	"errors"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions/move"
@@ -54,13 +56,13 @@ If no --onto is specified, opens an interactive selector to choose the target.`,
 				ontoBranch := onto
 
 				// Create runner and handler
-				runner, handler := NewMoveUI(ctx.Output, ctx.Logger, ctx.Interactive)
+				runner, handler := NewMoveUI(ctx.Output, ctx.Engine, ctx.Interactive)
 				if runner != nil {
 					defer runner.Cleanup()
 				}
 
 				// Run move action
-				return move.Action(ctx, move.Options{
+				return move.Action(ctx.Context, move.Deps{Engine: ctx.Engine, MutationDeps: actiondeps.Mutation(ctx)}, move.Options{
 					Source:      sourceBranch,
 					Onto:        ontoBranch,
 					SkipConfirm: yes,

@@ -3,7 +3,7 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/state"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 )
@@ -30,7 +30,12 @@ Examples:
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				return actions.StateAction(ctx, actions.StateOptions{JSON: jsonOut})
+				return state.Action(ctx.Context, state.Deps{
+					Engine:   ctx.Engine,
+					Out:      ctx.Output,
+					GitHub:   ctx.GitHub(),
+					RepoRoot: ctx.RepoRoot,
+				}, state.Options{JSON: jsonOut})
 			})
 		},
 	}

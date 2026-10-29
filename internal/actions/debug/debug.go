@@ -1,24 +1,54 @@
-package actions
+// Package debug implements the debug command, which dumps stack, snapshot,
+// continuation, and remote metadata state as JSON for troubleshooting.
+package debug
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/output"
 )
 
-// DebugOptions contains options for the debug command
-type DebugOptions struct {
+// Engine lists exactly the engine methods debug calls.
+type Engine interface {
+	Snapshots() ([]engine.SnapshotInfo, error)
+	LoadSnapshot(snapshotID string) (*engine.Snapshot, error)
+	Trunk() engine.Branch
+	CurrentBranch(ctx context.Context) *engine.Branch
+	AllBranches() engine.Branches
+	GetBranch(branchName string) engine.Branch
+	Graph(ctx context.Context, strategy engine.SortStrategy) *engine.StackGraph
+	ListMetadataRefs(ctx context.Context) (map[string]string, error)
+	BatchReadMetadataRaw(ctx context.Context, branchNames []string) (engine.MetaMap, map[string]error)
+	BatchRevisions(ctx context.Context, branches engine.Branches) engine.RevisionMap
+	ReadBranchStatuses(ctx context.Context, branches engine.Branches) engine.BranchStatuses
+	GetRemoteURL(ctx context.Context) (string, error)
+	EnsureRemoteMetadata(ctx context.Context) error
+	LoadRemoteMetadataCache(ctx context.Context) error
+	RemoteMetadataCache() engine.RemoteMetadataView
+	IsRemoteSyncEnabled(ctx context.Context) bool
+}
+
+// Deps are the collaborators debug needs.
+type Deps struct {
+	Engine   Engine
+	Out      output.Output
+	RepoRoot string
+}
+
+// Options contains options for the debug command
+type Options struct {
 	Limit      int  // Limit number of recent commands to show (0 = all)
 	ShowRemote bool // Fetch and show remote metadata state
 }
 
-// DebugInfo represents the complete debugging information
-type DebugInfo struct {
+// Info represents the complete debugging information
+type Info struct {
 	Timestamp           time.Time                `json:"timestamp"`
 	RecentCommands      []CommandSnapshot        `json:"recent_commands"`
 	StackState          StackStateInfo           `json:"stack_state"`
@@ -94,10 +124,10 @@ type RepositoryInfo struct {
 	RepoRoot  string `json:"repo_root,omitempty"`
 }
 
-// DebugAction collects and outputs debugging information
-func DebugAction(ctx *app.Context, opts DebugOptions) error {
-	eng := ctx.Engine
-	repoRoot := ctx.RepoRoot
+// Action collects and outputs debugging information
+func Action(ctx context.Context, deps Deps, opts Options) error {
+	eng := deps.Engine
+	repoRoot := deps.RepoRoot
 
 	snapshotInfos, err := eng.Snapshots()
 	if err != nil {
@@ -126,20 +156,20 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 	}
 
 	trunk := eng.Trunk()
-	currentBranch := eng.CurrentBranch(ctx.Context)
+	currentBranch := eng.CurrentBranch(ctx)
 	allBranches := eng.AllBranches()
 
-	metadataRefs, err := eng.ListMetadataRefs(ctx.Context)
+	metadataRefs, err := eng.ListMetadataRefs(ctx)
 	if err != nil {
 		metadataRefs = make(map[string]string)
 	}
 
 	branchNames := allBranches.Names()
-	allMeta, _ := eng.BatchReadMetadataRaw(ctx.Context, branchNames)
-	revisions := eng.BatchRevisions(ctx.Context, allBranches)
-	statuses := eng.ReadBranchStatuses(ctx.Context, allBranches)
+	allMeta, _ := eng.BatchReadMetadataRaw(ctx, branchNames)
+	revisions := eng.BatchRevisions(ctx, allBranches)
+	statuses := eng.ReadBranchStatuses(ctx, allBranches)
 
-	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	branchInfos := make([]BranchInfo, 0, len(allBranches))
 	for _, branch := range allBranches {
 		branchName := branch.Name()
@@ -203,17 +233,17 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 	repoInfo := RepositoryInfo{
 		RepoRoot: repoRoot,
 	}
-	remoteURL, err := eng.GetRemoteURL(ctx.Context)
+	remoteURL, err := eng.GetRemoteURL(ctx)
 	if err == nil {
 		repoInfo.RemoteURL = remoteURL
 	}
 
 	var remoteMetadataState *RemoteMetadataStateInfo
 	if opts.ShowRemote {
-		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+		remoteCtx, cancelRemote := git.WithRemoteOperationTimeout(ctx)
 		if err := eng.EnsureRemoteMetadata(remoteCtx); err != nil {
-			ctx.Output.Debug("Failed to fetch remote metadata: %v", err)
-			_ = eng.LoadRemoteMetadataCache(ctx.Context)
+			deps.Out.Debug("Failed to fetch remote metadata: %v", err)
+			_ = eng.LoadRemoteMetadataCache(ctx)
 		}
 		cancelRemote()
 		remoteCache := eng.RemoteMetadataCache()
@@ -237,12 +267,12 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 		})
 
 		remoteMetadataState = &RemoteMetadataStateInfo{
-			RemoteStateAvailable: eng.IsRemoteSyncEnabled(ctx.Context),
+			RemoteStateAvailable: eng.IsRemoteSyncEnabled(ctx),
 			RemoteRefs:           remoteRefs,
 		}
 	}
 
-	debugInfo := DebugInfo{
+	debugInfo := Info{
 		Timestamp:      time.Now(),
 		RecentCommands: recentCommands,
 		StackState: StackStateInfo{
@@ -265,8 +295,8 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 		return fmt.Errorf("failed to marshal debug info: %w", err)
 	}
 
-	ctx.Output.Print(string(jsonData))
-	ctx.Output.Newline()
+	deps.Out.Print(string(jsonData))
+	deps.Out.Newline()
 
 	return nil
 }

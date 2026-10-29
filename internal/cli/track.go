@@ -1,8 +1,10 @@
 package cli
 
 import (
-	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
+
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+	"github.com/getstackit/stackit/internal/term"
 
 	"github.com/getstackit/stackit/internal/actions/track"
 	"github.com/getstackit/stackit/internal/app"
@@ -34,8 +36,16 @@ This command can also be used to fix corrupted stackit metadata.`,
 				}
 
 				// Execute track action
-				handler := stack.NewTrackUI(ctx.Output, term.IsInteractive())
-				return track.Action(ctx, track.Options{
+				handler := stack.NewTrackUI(ctx.Output, term.IsInteractive(), stack.ParentPicker{
+					Engine: ctx.Engine,
+					GitHub: ctx.GitHub,
+					Log:    ctx.Logger,
+				})
+				return track.Action(ctx.Context, track.Deps{
+					Engine: ctx.Engine,
+					Out:    ctx.Output,
+					Here:   actiondeps.Here(ctx),
+				}, track.Options{
 					BranchName: branchName,
 					Force:      force,
 					Parent:     parent,

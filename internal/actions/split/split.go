@@ -2,10 +2,11 @@
 package split
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
-	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
@@ -75,11 +76,29 @@ type Result struct {
 	BranchPoints []int    // Commit indices (0 = HEAD, 1 = HEAD~1, etc.)
 }
 
+// Engine lists the engine methods split calls across its modes.
+type Engine interface {
+	actions.OwnershipEngine
+	splitByHunkEngine
+	splitByFileEngine
+	splitByCommitEngine
+	splitStashEngine
+	config.UserNamer
+	TakeSnapshot(ctx context.Context, opts engine.SnapshotOptions) error
+}
+
+// Deps are the collaborators split needs. Adapters build them from their own
+// runtime state; the action never sees bootstrap types.
+type Deps struct {
+	Engine Engine
+	actions.MutationDeps
+	// Prompts asks the generic questions (pick files, commits, names).
+	Prompts handler.Prompter
+}
+
 // Action performs the split operation
-func Action(ctx *app.Context, opts Options, handler Handler) error {
-	eng := ctx.Engine
-	out := ctx.Output
-	context := ctx.Context
+func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error {
+	eng, out := deps.Engine, deps.Out
 
 	// Use null handler if none provided
 	if handler == nil {
@@ -90,7 +109,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// If wizard mode is requested and handler supports interactive prompts, use wizard flow
 	if opts.UseWizard {
 		if interactiveHandler, ok := handler.(InteractiveHandler); ok && interactiveHandler.IsInteractive() {
-			return RunWizard(ctx, interactiveHandler, WizardOptions{
+			return RunWizard(ctx, deps, interactiveHandler, WizardOptions{
 				Style:         opts.Style,
 				Direction:     opts.Direction,
 				HunkSelector:  opts.HunkSelector,
@@ -101,7 +120,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Get current branch
-	currentBranch := eng.CurrentBranch(ctx.Context)
+	currentBranch := eng.CurrentBranch(ctx)
 	if currentBranch == nil {
 		return errors.ErrNotOnBranch
 	}
@@ -109,12 +128,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if err := currentBranch.EnsureCanModify(); err != nil {
 		return err
 	}
-	if err := actions.EnsureCanModifyHere(ctx, *currentBranch); err != nil {
+	if err := actions.EnsureCanModify(ctx, deps.Engine, deps.Here, *currentBranch); err != nil {
 		return err
 	}
 
 	// Check for uncommitted tracked changes
-	hasUnstaged, err := eng.HasUnstagedChanges(context)
+	hasUnstaged, err := eng.HasUnstagedChanges(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check unstaged changes: %w", err)
 	}
@@ -127,7 +146,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if !currentBranchObj.IsTracked() {
 		// Auto-track the branch
 		parentName := currentBranch.ParentOrTrunk()
-		if err := eng.TrackBranch(context, currentBranch.Name(), parentName); err != nil {
+		if err := eng.TrackBranch(ctx, currentBranch.Name(), parentName); err != nil {
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 	}
@@ -136,7 +155,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	style := opts.Style
 	if style == "" {
 		// Check if there's more than one commit
-		commits, err := currentBranch.CommitIDs(ctx.Context)
+		commits, err := currentBranch.CommitIDs(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get commits: %w", err)
 		}
@@ -150,7 +169,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 			// Build type choices based on commit count
 			availableTypes := buildTypeChoices(true)
-			selectedStyle, err := interactiveHandler.PromptSplitType(ctx.Context, availableTypes)
+			selectedStyle, err := interactiveHandler.PromptSplitType(ctx, availableTypes)
 			if err != nil {
 				return err
 			}
@@ -170,7 +189,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		snapshotArgs = append(snapshotArgs, opts.Pathspecs...)
 	}
 
-	if err := eng.TakeSnapshot(ctx.Context, engine.SnapshotOptions{
+	if err := eng.TakeSnapshot(ctx, engine.SnapshotOptions{
 		Command: "split",
 		// split stages and commits whatever is in the working tree as it
 		// rebuilds the branch (git add -A), untracked files included, so
@@ -185,7 +204,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	var result *Result
 	switch style {
 	case StyleCommit:
-		result, err = splitByCommit(ctx, currentBranch.Name(), eng, out, opts.BranchPattern)
+		result, err = splitByCommit(ctx, deps, currentBranch.Name(), eng, out, opts.BranchPattern)
 	case StyleHunk:
 		// Use provided direction or default to below
 		direction := opts.Direction
@@ -203,7 +222,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		// If patch file is provided, we can run non-interactively
 		if opts.PatchFile != "" {
-			return splitByHunkWithHandler(ctx, *currentBranch, eng, out, nil, direction, hunkOpts)
+			return splitByHunkWithHandler(ctx, deps, *currentBranch, eng, out, nil, direction, hunkOpts)
 		}
 
 		// Interactive hunk split requires an interactive handler
@@ -211,12 +230,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if !isInteractive || !interactiveHandler.IsInteractive() {
 			return errors.New("hunk split requires interactive mode")
 		}
-		return splitByHunkWithHandler(ctx, *currentBranch, eng, out, interactiveHandler, direction, hunkOpts)
+		return splitByHunkWithHandler(ctx, deps, *currentBranch, eng, out, interactiveHandler, direction, hunkOpts)
 	case StyleFile:
 		pathspecs := opts.Pathspecs
 		// If no pathspecs provided, prompt interactively
 		if len(pathspecs) == 0 {
-			pathspecs, err = promptForFiles(context, ctx.Prompts(), *currentBranch, eng, out, opts.AsSibling, opts.Direction)
+			pathspecs, err = promptForFiles(ctx, deps.Prompts, *currentBranch, eng, out, opts.AsSibling, opts.Direction)
 			if err != nil {
 				return err
 			}
@@ -226,7 +245,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 		// splitByFile handles everything internally (creating branches, tracking, etc.)
 		// and updates the parent relationship (unless AsSibling is true)
-		fileResult, err := splitByFile(context, *currentBranch, pathspecs, eng, splitByFileOptions{
+		fileResult, err := splitByFile(ctx, *currentBranch, pathspecs, eng, splitByFileOptions{
 			AsSibling: opts.AsSibling,
 			Direction: opts.Direction,
 			Name:      opts.Name,
@@ -270,10 +289,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				IncludeCurrent:    false,
 				RecursiveChildren: true,
 			}
-			graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+			graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 			upstackBranches := graph.Range(*currentBranch, rng)
 			if len(upstackBranches) > 0 {
-				if err := actions.RestackBranches(ctx, upstackBranches); err != nil {
+				if err := deps.Restack.Restack(ctx, upstackBranches); err != nil {
 					return fmt.Errorf("failed to restack upstack branches: %w", err)
 				}
 			}
@@ -298,23 +317,23 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		IncludeCurrent:    false,
 		RecursiveChildren: true,
 	}
-	upstackGraph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
+	upstackGraph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	upstackBranches := upstackGraph.Range(*currentBranch, upstackRng)
 
 	// Apply the split
-	if err := eng.ApplySplitToCommits(context, engine.ApplySplitOptions{
+	if err := eng.ApplySplitToCommits(ctx, engine.ApplySplitOptions{
 		BranchToSplit: currentBranch.Name(),
 		BranchNames:   result.BranchNames,
 		BranchPoints:  result.BranchPoints,
 		AsSibling:     opts.AsSibling,
 	}); err != nil {
 		// Restore to original branch to avoid leaving user in detached HEAD
-		return actions.NewRewriteGuard(eng, *currentBranch).Restore(context, fmt.Errorf("failed to apply split: %w", err))
+		return actions.NewRewriteGuard(eng, *currentBranch).Restore(ctx, fmt.Errorf("failed to apply split: %w", err))
 	}
 
 	// Restack upstack branches
 	if len(upstackBranches) > 0 {
-		if err := actions.RestackBranches(ctx, upstackBranches); err != nil {
+		if err := deps.Restack.Restack(ctx, upstackBranches); err != nil {
 			return fmt.Errorf("failed to restack upstack branches: %w", err)
 		}
 	}

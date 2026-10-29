@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 )
 
@@ -67,7 +68,7 @@ func TestRemoteOperationContextAddsDefaultDeadline(t *testing.T) {
 
 	deadline, ok := remoteCtx.Deadline()
 	require.True(t, ok)
-	require.WithinDuration(t, time.Now().Add(DefaultRemoteOperationTimeout), deadline, time.Second)
+	require.WithinDuration(t, time.Now().Add(git.DefaultRemoteOperationTimeout), deadline, time.Second)
 }
 
 func TestRemoteOperationContextPreservesExistingDeadline(t *testing.T) {
@@ -77,7 +78,7 @@ func TestRemoteOperationContextPreservesExistingDeadline(t *testing.T) {
 	parent, parentCancel := context.WithDeadline(t.Context(), parentDeadline)
 	defer parentCancel()
 
-	remoteCtx, cancel := WithRemoteOperationTimeout(parent)
+	remoteCtx, cancel := git.WithRemoteOperationTimeout(parent)
 	defer cancel()
 
 	deadline, ok := remoteCtx.Deadline()

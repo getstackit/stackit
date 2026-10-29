@@ -18,7 +18,7 @@ func TestUndoAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		err := Action(s.Context, Options{}, nil)
+		err := Action(t.Context(), deps(s), Options{}, nil)
 		require.NoError(t, err) // Should not error, just show message
 	})
 
@@ -75,7 +75,7 @@ func TestUndoAction(t *testing.T) {
 		err := s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{Command: "test"})
 		require.NoError(t, err)
 
-		err = Action(s.Context, Options{
+		err = Action(t.Context(), deps(s), Options{
 			SnapshotID: "nonexistent-snapshot",
 		}, nil)
 		require.Error(t, err)
@@ -269,7 +269,16 @@ func TestUndoWarnsWhenLinearModeRestoresFork(t *testing.T) {
 	require.NoError(t, s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{Command: "move"}))
 	require.NoError(t, s.Engine.SetParent(s.Context, s.Engine.GetBranch("second"), s.Engine.GetBranch("main"), engine.DivergenceRecompute))
 
-	err = Action(s.Context, Options{Force: true}, nil)
+	err = Action(t.Context(), deps(s), Options{Force: true}, nil)
 	require.NoError(t, err)
 	require.Contains(t, s.Output.String(), "Undo restored a non-linear stack")
+}
+
+func deps(s *scenario.Scenario) Deps {
+	return Deps{
+		Engine:       s.Engine,
+		Out:          s.Context.Output,
+		RepoRoot:     s.Context.RepoRoot,
+		LinearStacks: s.Context.Config != nil && s.Context.Config.LinearStacks(),
+	}
 }

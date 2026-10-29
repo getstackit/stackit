@@ -48,7 +48,7 @@ If no --onto is specified, opens an interactive selector to choose the target.`,
 					if currentBranch == nil {
 						return errors.New("not on a branch and no source branch specified")
 					}
-					sourceBranch = currentBranch.GetName()
+					sourceBranch = currentBranch.Name()
 				}
 
 				ontoBranch := onto

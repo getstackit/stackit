@@ -39,9 +39,9 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*WorktreeResult, error)
 		return nil, fmt.Errorf("branch %s is not part of a stack (its parent must be trunk)", output.BranchName(opts.Branch))
 	}
 	stackRoot := eng.GetBranch(stackRootName)
-	originalParent := eng.Trunk().GetName()
-	if parent := stackRoot.GetParent(); parent != nil {
-		originalParent = parent.GetName()
+	originalParent := eng.Trunk().Name()
+	if parent := stackRoot.Parent(); parent != nil {
+		originalParent = parent.Name()
 	}
 	if eng.IsWorktreeAnchor(stackRoot) {
 		return nil, fmt.Errorf("branch %s is already a worktree anchor", output.BranchName(stackRootName))
@@ -75,7 +75,7 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*WorktreeResult, error)
 	if err != nil {
 		if needsCheckout && currentBranch != nil {
 			if restoreErr := eng.CheckoutBranch(ctx.Context, *currentBranch); restoreErr != nil {
-				out.Warn("Could not return to %s: %v", output.BranchName(currentBranch.GetName()), restoreErr)
+				out.Warn("Could not return to %s: %v", output.BranchName(currentBranch.Name()), restoreErr)
 			}
 		}
 		return nil, err

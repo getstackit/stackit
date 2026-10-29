@@ -68,7 +68,7 @@ func CollectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
 			Reason:       reason,
 		})
 	}
-	trunk := eng.Trunk().GetName()
+	trunk := eng.Trunk().Name()
 	if worktrees, err := eng.ListWorktrees(ctx.Context); err == nil {
 		for _, wt := range worktrees {
 			if wt.Branch == "" || report.blocksStack(wt.Branch) || wt.Branch == trunk {
@@ -130,7 +130,7 @@ func (r RestackWorktreeHoldReport) Filter(eng engine.Engine, branches engine.Bra
 		return branches
 	}
 	return branches.Filter(func(branch engine.Branch) bool {
-		return !r.blocks(branch.GetName(), eng.GetStackRootForBranch(branch))
+		return !r.blocks(branch.Name(), eng.GetStackRootForBranch(branch))
 	})
 }
 

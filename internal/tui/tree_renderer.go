@@ -161,7 +161,7 @@ func newStackTreeRendererInternal(ctx context.Context, eng engine.StackView, str
 		}
 		// Apply user-provided filter if any
 		if filter != nil {
-			return filter(b.GetName())
+			return filter(b.Name())
 		}
 		return true
 	}

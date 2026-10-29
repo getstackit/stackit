@@ -64,7 +64,7 @@ func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error
 	// Collect all names to untrack (descendants first for display, then the branch itself).
 	allNames := make([]string, 0, len(descendants)+1)
 	for _, d := range descendants {
-		allNames = append(allNames, d.GetName())
+		allNames = append(allNames, d.Name())
 	}
 	allNames = append(allNames, branchName)
 

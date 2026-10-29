@@ -66,7 +66,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 			// Use current branch
 			currentBranch := eng.CurrentBranch(ctx.Context)
 			if currentBranch != nil {
-				targetBranch = currentBranch.GetName()
+				targetBranch = currentBranch.Name()
 				out.Debug("merge wizard: using current branch: %s", targetBranch)
 			}
 		case MergeTypeScope:
@@ -209,7 +209,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	if isSimpleMerge && !opts.DryRun {
 		// Use simplified confirmation for single-branch merges
 		branch := plan.BranchesToMerge[0]
-		baseBranch := eng.Trunk().GetName()
+		baseBranch := eng.Trunk().Name()
 		out.Debug("merge wizard: simple single-branch merge detected, using simplified confirmation")
 
 		confirmed, err := handler.PromptSimpleMergeConfirm(branch, baseBranch)
@@ -307,7 +307,7 @@ func HandlePostMerge(ctx *app.Context, handler InteractiveHandler) error {
 
 	// Check for uncommitted changes
 	hasChanges := eng.HasUncommittedChanges(ctx.Context)
-	trunkName := eng.Trunk().GetName()
+	trunkName := eng.Trunk().Name()
 
 	action, err := handler.PromptPostMerge(hasChanges, trunkName)
 	if err != nil {

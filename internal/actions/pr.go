@@ -53,7 +53,7 @@ func OpenPRAction(ctx *app.Context, opts OpenPROptions) error {
 		}
 	}
 
-	prInfo, err := eng.GetBranch(branchName).GetPrInfo()
+	prInfo, err := eng.GetBranch(branchName).PrInfo()
 	if err != nil {
 		return fmt.Errorf("reading pull request info for %q: %w", branchName, err)
 	}
@@ -79,7 +79,7 @@ func resolvePRBranch(ctx context.Context, eng engine.Engine, target string) (str
 		if current == nil {
 			return "", errors.ErrNotOnBranch
 		}
-		return current.GetName(), nil
+		return current.Name(), nil
 	}
 
 	number, convErr := strconv.Atoi(target)

@@ -28,7 +28,7 @@ func EnsureCanModifyHere(ctx *app.Context, branches ...engine.Branch) error {
 
 	seen := make(map[string]struct{}, len(branches))
 	for _, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 		if branchName == "" {
 			continue
 		}

@@ -114,7 +114,7 @@ type nativeStackChainSkip struct {
 }
 
 func (s nativeStackChainSkip) Error() string {
-	return fmt.Sprintf("native GitHub Stack rooted at %q: %v", s.Chain.Root.GetName(), s.Reason)
+	return fmt.Sprintf("native GitHub Stack rooted at %q: %v", s.Chain.Root.Name(), s.Reason)
 }
 
 // nativeStackSyncPlan keeps valid chains separate from components that cannot
@@ -148,8 +148,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Check if target branch is untracked
-	if targetBranch.GetName() != "" && !targetBranch.IsTracked() && !targetBranch.IsTrunk() {
-		branchName := targetBranch.GetName()
+	if targetBranch.Name() != "" && !targetBranch.IsTracked() && !targetBranch.IsTrunk() {
+		branchName := targetBranch.Name()
 		if !handler.IsInteractive() {
 			// Non-interactive: inform and exit gracefully
 			ctx.Output.Info("Branch %s is not tracked by stackit.", branchName)
@@ -160,7 +160,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		// Interactive: prompt to track
 		message := fmt.Sprintf("Branch %s is not tracked. Track it with %s as parent?",
-			branchName, nav.Trunk().GetName())
+			branchName, nav.Trunk().Name())
 		shouldTrack, err := handler.Confirm(message, true)
 		if err != nil {
 			return err
@@ -172,10 +172,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 
 		// Track the branch
-		if err := eng.TrackBranch(ctx.Context, branchName, nav.Trunk().GetName()); err != nil {
+		if err := eng.TrackBranch(ctx.Context, branchName, nav.Trunk().Name()); err != nil {
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
-		ctx.Output.Info("Tracked %s with parent %s.", branchName, nav.Trunk().GetName())
+		ctx.Output.Info("Tracked %s with parent %s.", branchName, nav.Trunk().Name())
 	}
 
 	// Get branches to submit
@@ -193,7 +193,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			if cb := nav.CurrentBranch(ctx.Context); cb != nil && cb.IsTrunk() {
 				handler.OnEvent(CompletionEvent{
 					Outcome: OutcomeOnTrunk,
-					Message: fmt.Sprintf("You're on %s — nothing to submit from here.", cb.GetName()),
+					Message: fmt.Sprintf("You're on %s — nothing to submit from here.", cb.Name()),
 				})
 				return nil
 			}
@@ -208,7 +208,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	currentBranch := nav.CurrentBranch(ctx.Context)
 	currentBranchName := ""
 	if currentBranch != nil {
-		currentBranchName = currentBranch.GetName()
+		currentBranchName = currentBranch.Name()
 	}
 
 	// Build tree structure for display
@@ -242,7 +242,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	for i, branchName := range branches {
 		branch := branchObjs[i]
 		fixedMap[branchName] = statuses.IsUpToDate(branch)
-		scopeMap[branchName] = branch.GetScope().String()
+		scopeMap[branchName] = branch.Scope().String()
 
 		// Check if this branch belongs to a stack with a managed worktree.
 		stackRoot := ctx.Worktree().GetStackRootForBranch(branch)
@@ -251,7 +251,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
-	stackSnapshot := buildStackSnapshot(nav, branchObjs, currentBranchName, nav.Trunk().GetName(), fixedMap, scopeMap, worktreeMap)
+	stackSnapshot := buildStackSnapshot(nav, branchObjs, currentBranchName, nav.Trunk().Name(), fixedMap, scopeMap, worktreeMap)
 
 	// Display the stack
 	handler.OnEvent(StackDisplayEvent{
@@ -558,7 +558,7 @@ func publishGitHubStackMetadata(ctx *app.Context, chains []nativeStackChain, han
 	for _, chain := range chains {
 		stack, pullRequests, action, err := createGitHubStackMetadata(ctx, chain.Branches)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("native GitHub Stack rooted at %q: %w", chain.Root.GetName(), err))
+			errs = append(errs, fmt.Errorf("native GitHub Stack rooted at %q: %w", chain.Root.Name(), err))
 			continue
 		}
 		handler.OnEvent(GitHubStackSyncedEvent{Number: stack.Number, PullRequests: pullRequests, Action: action})
@@ -605,7 +605,7 @@ func partitionGitHubStackChains(ctx context.Context, eng engine.Engine, branches
 	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	selected := make(map[string]bool, len(branches))
 	for _, branch := range branches {
-		selected[branch.GetName()] = true
+		selected[branch.Name()] = true
 	}
 
 	chainsByRoot := make(map[string]int)
@@ -616,10 +616,10 @@ func partitionGitHubStackChains(ctx context.Context, eng engine.Engine, branches
 			root = eng.GetBranch(parentName)
 		}
 
-		index, ok := chainsByRoot[root.GetName()]
+		index, ok := chainsByRoot[root.Name()]
 		if !ok {
 			index = len(chains)
-			chainsByRoot[root.GetName()] = index
+			chainsByRoot[root.Name()] = index
 			chains = append(chains, nil)
 		}
 		chains[index] = append(chains[index], branch)
@@ -635,17 +635,17 @@ func partitionGitHubStackChains(ctx context.Context, eng engine.Engine, branches
 // Stack. Independent roots are partitioned before this validation runs.
 func validateGitHubStackChain(ctx context.Context, eng engine.Engine, branches engine.Branches) error {
 	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
-	trunk := eng.Trunk().GetName()
+	trunk := eng.Trunk().Name()
 	for i := 1; i < len(branches); i++ {
 		parent := graph.Parent(branches[i])
-		previous := branches[i-1].GetName()
+		previous := branches[i-1].Name()
 		if parent == previous {
 			continue
 		}
 		if parent == trunk {
-			return fmt.Errorf("branches %q and %q are in different stacks; native GitHub Stacks require a single linear chain", previous, branches[i].GetName())
+			return fmt.Errorf("branches %q and %q are in different stacks; native GitHub Stacks require a single linear chain", previous, branches[i].Name())
 		}
-		return fmt.Errorf("branch %q is stacked on %q, not on %q; native GitHub Stacks require a single linear chain", branches[i].GetName(), parent, previous)
+		return fmt.Errorf("branch %q is stacked on %q, not on %q; native GitHub Stacks require a single linear chain", branches[i].Name(), parent, previous)
 	}
 	return nil
 }
@@ -659,9 +659,9 @@ func createGitHubStackMetadata(ctx *app.Context, branches engine.Branches) (*git
 
 	pullRequests := make([]git.PRNumber, 0, len(branches))
 	for _, branch := range branches {
-		pr, err := branch.GetPrInfo()
+		pr, err := branch.PrInfo()
 		if err != nil || pr == nil || pr.Number() == nil {
-			return nil, nil, "", fmt.Errorf("branch %q has no submitted pull request", branch.GetName())
+			return nil, nil, "", fmt.Errorf("branch %q has no submitted pull request", branch.Name())
 		}
 		pullRequests = append(pullRequests, *pr.Number())
 	}
@@ -744,9 +744,9 @@ func buildStackSnapshot(
 	parentMap := make(map[string]string, len(branches))
 	branchNames := make([]string, len(branches))
 	for i, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 		branchNames[i] = branchName
-		parentMap[branchName] = resolveSubmitParent(nav, branch).GetName()
+		parentMap[branchName] = resolveSubmitParent(nav, branch).Name()
 	}
 
 	return StackSnapshot{
@@ -956,7 +956,7 @@ func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, handler Handl
 		Base:    submissionInfo.Base,
 		URL:     prURL,
 		IsDraft: submissionInfo.Metadata.IsDraft,
-	}).WithLockReason(branch.GetLockReason()).WithBaseSHA(submissionInfo.BaseSHA)); err != nil {
+	}).WithLockReason(branch.LockReason()).WithBaseSHA(submissionInfo.BaseSHA)); err != nil {
 		ctx.Output.Debug("Failed to store local PR info for %s: %v", submissionInfo.BranchName, err)
 	}
 
@@ -970,7 +970,7 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 
 	// Check if base changed
 	branch := nav.GetBranch(submissionInfo.BranchName)
-	prInfo, _ := branch.GetPrInfo()
+	prInfo, _ := branch.PrInfo()
 	baseChanged := prInfo != nil && prInfo.Base() != submissionInfo.Base
 
 	// Detect stale base.sha: base branch name is the same but the parent was rewritten
@@ -985,7 +985,7 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		isAncestor, err := ctx.Engine.IsAncestor(ctx.Context, prInfo.BaseSHA(), submissionInfo.BaseSHA)
 		parentRewritten = err == nil && !isAncestor
 	}
-	baseSHAStale := baseSHAIsStale(prInfo, submissionInfo, ctx.Engine.Trunk().GetName(), parentRewritten)
+	baseSHAStale := baseSHAIsStale(prInfo, submissionInfo, ctx.Engine.Trunk().Name(), parentRewritten)
 
 	updateOpts := github.UpdatePROptions{
 		Title:           &submissionInfo.Metadata.Title,
@@ -1039,7 +1039,7 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 	// base change, so the second change sets it to the current parent tip.
 	retargetedToTrunk := false
 	if baseSHAStale {
-		trunkName := ctx.Engine.Trunk().GetName()
+		trunkName := ctx.Engine.Trunk().Name()
 		trunkOpts := github.UpdatePROptions{Base: &trunkName}
 		if _, err := ctx.GitHub().UpdatePullRequest(ctx.Context, *submissionInfo.PRNumber, trunkOpts); err != nil {
 			ctx.Output.Debug("Failed to refresh stale base.sha for %s: %v", submissionInfo.BranchName, err)
@@ -1102,7 +1102,7 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 	}
 
 	// Get PR URL
-	prInfo, _ = branch.GetPrInfo()
+	prInfo, _ = branch.PrInfo()
 	var prURL string
 	if prInfo != nil && prInfo.URL() != "" {
 		prURL = prInfo.URL()
@@ -1122,7 +1122,7 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		Base:    baseToStore,
 		URL:     prURL,
 		IsDraft: submissionInfo.Metadata.IsDraft,
-	}).WithLockReason(branch.GetLockReason()).WithBaseSHA(baseSHAToStore)); err != nil {
+	}).WithLockReason(branch.LockReason()).WithBaseSHA(baseSHAToStore)); err != nil {
 		ctx.Output.Debug("Failed to store local PR info for %s: %v", submissionInfo.BranchName, err)
 	}
 

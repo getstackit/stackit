@@ -393,7 +393,7 @@ func (e *engineImpl) ListManagedWorktrees(ctx context.Context) ([]WorktreeInfo, 
 // The stack root is the first ancestor branch whose parent is trunk.
 // Returns empty string for trunk or untracked branches.
 func (e *engineImpl) GetStackRootForBranch(branch Branch) string {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	// Trunk has no stack root
 	e.mu.RLock()

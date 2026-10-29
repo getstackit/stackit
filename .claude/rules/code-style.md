@@ -52,8 +52,8 @@ const (
 ```go
 // BAD - N git processes for N branches
 for _, branch := range branches {
-    div, _ := eng.GetDivergencePoint(branch.GetName())
-    divPoints[branch.GetName()] = div
+    div, _ := eng.GetDivergencePoint(branch.Name())
+    divPoints[branch.Name()] = div
 }
 
 // GOOD - one batched, cache-backed pass

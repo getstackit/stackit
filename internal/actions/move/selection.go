@@ -36,7 +36,7 @@ func PrepareSelection(ctx *app.Context, source string) (*Selection, error) {
 		RecursiveParents:  false,
 	})
 
-	oldParent := sourceBranch.GetParent()
+	oldParent := sourceBranch.Parent()
 
 	// Match move.Action behavior: capture divergence point, allow empty fallback.
 	oldParentRev, _ := eng.GetDivergencePoint(source)

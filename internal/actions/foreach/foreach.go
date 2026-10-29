@@ -137,17 +137,17 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Describe the stack for display
 	currentBranchName := ""
 	if currentBranch != nil {
-		currentBranchName = currentBranch.GetName()
+		currentBranchName = currentBranch.Name()
 	}
 	stack := StackSnapshot{
 		Branches:      make([]string, len(nonTrunkBranches)),
 		CurrentBranch: currentBranchName,
-		TrunkBranch:   eng.Trunk().GetName(),
+		TrunkBranch:   eng.Trunk().Name(),
 		ParentMap:     make(map[string]string, len(nonTrunkBranches)),
 	}
 	for i, branch := range nonTrunkBranches {
-		stack.Branches[i] = branch.GetName()
-		stack.ParentMap[branch.GetName()] = branch.GetParentOrTrunk()
+		stack.Branches[i] = branch.Name()
+		stack.ParentMap[branch.Name()] = branch.ParentOrTrunk()
 	}
 
 	// Display the stack
@@ -161,7 +161,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	branchInfos := make([]BranchInfo, len(nonTrunkBranches))
 	for i, branch := range nonTrunkBranches {
 		branchInfos[i] = BranchInfo{
-			Name: branch.GetName(),
+			Name: branch.Name(),
 		}
 	}
 	handler.OnEvent(ExecutionStartEvent{Branches: branchInfos})
@@ -182,7 +182,7 @@ func foreachSequential(ctx *app.Context, opts Options, branches engine.Branches,
 	currentBranch := eng.CurrentBranch(ctx.Context)
 	originalBranchName := ""
 	if currentBranch != nil {
-		originalBranchName = currentBranch.GetName()
+		originalBranchName = currentBranch.Name()
 	}
 
 	defer func() {
@@ -200,7 +200,7 @@ func foreachSequential(ctx *app.Context, opts Options, branches engine.Branches,
 	var firstErr error
 	allResults := make([]BranchResult, 0, len(branches))
 	for _, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 
 		// Emit running event
 		handler.OnEvent(BranchProgressEvent{
@@ -402,7 +402,7 @@ func groupBranchesByDepth(branches engine.Branches, graph *engine.StackGraph) []
 	builders := make(map[int]*engine.BranchesBuilder)
 	for _, branch := range branches {
 		depth := 0
-		if node := graph.GetNode(branch.GetName()); node != nil {
+		if node := graph.GetNode(branch.Name()); node != nil {
 			depth = node.Depth
 		}
 
@@ -438,7 +438,7 @@ func runBranchesInWorktrees(ctx *app.Context, opts Options, branches engine.Bran
 		default:
 		}
 
-		branchName := branch.GetName()
+		branchName := branch.Name()
 		handler.OnEvent(BranchProgressEvent{
 			BranchName: branchName,
 			Status:     StatusRunning,
@@ -489,7 +489,7 @@ func runBranchesInWorktrees(ctx *app.Context, opts Options, branches engine.Bran
 
 	sortedResults := make([]BranchResult, 0, len(branches))
 	for _, branch := range branches {
-		if result, ok := resultMap[branch.GetName()]; ok {
+		if result, ok := resultMap[branch.Name()]; ok {
 			sortedResults = append(sortedResults, result)
 		}
 	}
@@ -513,12 +513,12 @@ func executeCommandOnBranch(ctx context.Context, appCtx *app.Context, branch eng
 		output     string
 		exitCode   int
 		err        error
-	}{branchName: branch.GetName()}
+	}{branchName: branch.Name()}
 
 	// Create a temporary directory for the worktree.
 	// Use SkipPrune variant since worktree execution pruned once before parallel execution.
 	var eng foreachEngine = appCtx.Engine
-	worktreePath, cleanup, err := eng.CreateTemporaryWorktree(ctx, branch.GetName(), "stackit-foreach-*", engine.WorktreePruneSkip)
+	worktreePath, cleanup, err := eng.CreateTemporaryWorktree(ctx, branch.Name(), "stackit-foreach-*", engine.WorktreePruneSkip)
 	if err != nil {
 		res.exitCode = -1
 		res.err = err
@@ -535,7 +535,7 @@ func executeCommandOnBranch(ctx context.Context, appCtx *app.Context, branch eng
 	cmd.Stderr = &output
 	cmd.Dir = worktreePath.String()
 	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, "STACKIT_BRANCH="+branch.GetName())
+	cmd.Env = append(cmd.Env, "STACKIT_BRANCH="+branch.Name())
 
 	if err := cmd.Run(); err != nil {
 		res.exitCode = exitCodeFromError(err)

@@ -72,13 +72,13 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	// Capture original stack ID to preserve on new branches
 	originalStackID := eng.GetStackID(branchToSplit)
 	// Get parent branch
-	parentBranchName := branchToSplit.GetParentOrTrunk()
+	parentBranchName := branchToSplit.ParentOrTrunk()
 	parentBranch := eng.GetBranch(parentBranchName)
 
 	// Generate new branch name
 	newBranchName := opts.Name
 	if newBranchName == "" {
-		newBranchName = branchToSplit.GetName() + splitSuffix
+		newBranchName = branchToSplit.Name() + splitSuffix
 	}
 	allBranches := eng.AllBranches()
 	branchNames := allBranches.Names()
@@ -92,7 +92,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 
 	// Get the diff between parent and branchToSplit (raw output for parsing)
-	diffOutput, err := eng.GetDiffBetween(ctx, git.RevRange{Base: parentBranchName, Head: branchToSplit.GetName()})
+	diffOutput, err := eng.GetDiffBetween(ctx, git.RevRange{Base: parentBranchName, Head: branchToSplit.Name()})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get diff: %w", err)
 	}
@@ -129,7 +129,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 	defaultCommitMessage := strings.Join(commitMessages, "\n\n")
 	if defaultCommitMessage == "" {
-		defaultCommitMessage = fmt.Sprintf("Split from %s", branchToSplit.GetName())
+		defaultCommitMessage = fmt.Sprintf("Split from %s", branchToSplit.Name())
 	}
 
 	commitMessage := opts.Message
@@ -183,7 +183,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	// Check if there are remaining changes (to keep on branchToSplit)
 
 	if !status.HasUnstagedChanges() {
-		return nil, fmt.Errorf("all changes were selected - nothing would remain on %s", branchToSplit.GetName())
+		return nil, fmt.Errorf("all changes were selected - nothing would remain on %s", branchToSplit.Name())
 	}
 
 	// Stash the staged changes (these will become the new parent branch content)
@@ -222,13 +222,13 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 
 	// Save original SHA before modifying branch ref (for recovery)
-	originalSHA, err := eng.GetCommitSHA(branchToSplit.GetName(), 0)
+	originalSHA, err := eng.GetCommitSHA(branchToSplit.Name(), 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get original commit SHA: %w", err)
 	}
 
 	// Update branchToSplit to point to this commit (contains remaining changes)
-	if err := eng.UpdateBranchRef(ctx, branchToSplit.GetName(), "HEAD"); err != nil {
+	if err := eng.UpdateBranchRef(ctx, branchToSplit.Name(), "HEAD"); err != nil {
 		return nil, fmt.Errorf("failed to update branch reference: %w", err)
 	}
 
@@ -283,7 +283,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 
 	// Update branchToSplit to have newBranch as its parent
 	if err := eng.SetParent(ctx, branchToSplit, newBranch, engine.DivergenceRecompute); err != nil {
-		return nil, fmt.Errorf("failed to update parent of %s: %w", branchToSplit.GetName(), err)
+		return nil, fmt.Errorf("failed to update parent of %s: %w", branchToSplit.Name(), err)
 	}
 
 	// The split is recorded; do not roll it back if the final checkout fails.
@@ -355,7 +355,7 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 	// Check if there are remaining changes (to keep on branchToSplit)
 
 	if !status.HasUnstagedChanges() {
-		return nil, fmt.Errorf("all changes were selected - nothing would remain on %s", branchToSplit.GetName())
+		return nil, fmt.Errorf("all changes were selected - nothing would remain on %s", branchToSplit.Name())
 	}
 
 	// Stash only the staged changes (what we want to extract to child)
@@ -394,13 +394,13 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 	}
 
 	// Save original SHA before modifying branch ref (for recovery)
-	originalSHA, err := eng.GetCommitSHA(branchToSplit.GetName(), 0)
+	originalSHA, err := eng.GetCommitSHA(branchToSplit.Name(), 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get original commit SHA: %w", err)
 	}
 
 	// Update branchToSplit to point to this commit (the "keep" content)
-	if err := eng.UpdateBranchRef(ctx, branchToSplit.GetName(), "HEAD"); err != nil {
+	if err := eng.UpdateBranchRef(ctx, branchToSplit.Name(), "HEAD"); err != nil {
 		return nil, fmt.Errorf("failed to update branch reference: %w", err)
 	}
 
@@ -455,7 +455,7 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 	}
 
 	// Track the child branch with parent = branchToSplit
-	if err := eng.TrackBranch(ctx, newBranchName, branchToSplit.GetName()); err != nil {
+	if err := eng.TrackBranch(ctx, newBranchName, branchToSplit.Name()); err != nil {
 		return nil, fmt.Errorf("failed to track child branch: %w", err)
 	}
 
@@ -468,7 +468,7 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 
 	// Re-parent existing children to the new child branch, preserving divergence
 	// points so children don't carry the split-out changes.
-	if err := eng.ReparentBranchesToParents(ctx, engine.MovesTo(existingChildren, childBranch.GetName()), engine.ReparentOpts{}); err != nil {
+	if err := eng.ReparentBranchesToParents(ctx, engine.MovesTo(existingChildren, childBranch.Name()), engine.ReparentOpts{}); err != nil {
 		return nil, fmt.Errorf("failed to reparent children: %w", err)
 	}
 
@@ -532,7 +532,7 @@ func splitByFileSibling(ctx context.Context, branchToSplit engine.Branch, parent
 	}
 
 	// Track the new branch
-	if err := eng.TrackBranch(ctx, newBranchName, parentBranch.GetName()); err != nil {
+	if err := eng.TrackBranch(ctx, newBranchName, parentBranch.Name()); err != nil {
 		return nil, fmt.Errorf("failed to track branch: %w", err)
 	}
 
@@ -577,22 +577,22 @@ func promptForFiles(ctx context.Context, prompter handlerBase.MultiSelector, bra
 		return nil, errors.New("file selection must be specified via pathspecs in non-interactive mode")
 	}
 	// Get the parent branch to compare against
-	parentBranchName := branchToSplit.GetParentOrTrunk()
+	parentBranchName := branchToSplit.ParentOrTrunk()
 
 	// Get merge base between branch and parent
-	mergeBase, err := eng.GetMergeBase(ctx, branchToSplit.GetName(), parentBranchName)
+	mergeBase, err := eng.GetMergeBase(ctx, branchToSplit.Name(), parentBranchName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get merge base: %w", err)
 	}
 
 	// Get list of changed files
-	changedFiles, err := eng.GetChangedFiles(ctx, git.RevRange{Base: mergeBase, Head: branchToSplit.GetName()})
+	changedFiles, err := eng.GetChangedFiles(ctx, git.RevRange{Base: mergeBase, Head: branchToSplit.Name()})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get changed files: %w", err)
 	}
 
 	if len(changedFiles) == 0 {
-		return nil, fmt.Errorf("no files changed in branch %s", branchToSplit.GetName())
+		return nil, fmt.Errorf("no files changed in branch %s", branchToSplit.Name())
 	}
 
 	if len(changedFiles) == 1 {
@@ -600,17 +600,17 @@ func promptForFiles(ctx context.Context, prompter handlerBase.MultiSelector, bra
 	}
 
 	// Show instructions based on mode
-	splog.Info("Splitting %s by file.", output.CurrentBranch(branchToSplit.GetName()))
+	splog.Info("Splitting %s by file.", output.CurrentBranch(branchToSplit.Name()))
 	switch {
 	case asSibling:
 		splog.Info("Select the files to extract to a new sibling branch.")
 		splog.Info("The original branch will remain unchanged.")
 	case direction == DirectionAbove:
 		splog.Info("Select the files to extract to a new child branch.")
-		splog.Info("The remaining files will stay on %s.", output.CurrentBranch(branchToSplit.GetName()))
+		splog.Info("The remaining files will stay on %s.", output.CurrentBranch(branchToSplit.Name()))
 	default:
 		splog.Info("Select the files to extract to a new parent branch.")
-		splog.Info("The remaining files will stay on %s.", output.CurrentBranch(branchToSplit.GetName()))
+		splog.Info("The remaining files will stay on %s.", output.CurrentBranch(branchToSplit.Name()))
 	}
 	splog.Info("")
 

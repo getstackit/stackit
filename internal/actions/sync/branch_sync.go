@@ -52,7 +52,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 			return context.Cause(gctx)
 		}
 
-		branchName := branch.GetName()
+		branchName := branch.Name()
 
 		// Skip trunk
 		if eng.IsTrunk(branch) {
@@ -123,7 +123,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 			return context.Cause(gctx)
 		}
 
-		branchName := branch.GetName()
+		branchName := branch.Name()
 
 		pullStart := time.Now()
 		var result engine.PullResult
@@ -149,7 +149,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStat
 // shared by the batched local-update path and the per-branch fetch fallback so
 // both behave identically.
 func applyBranchSyncResult(branch engine.Branch, result engine.PullResult, err error, handler Handler, summary *Summary) (synced bool) {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	if err != nil {
 		// Treat errors as conflicts - warn and continue

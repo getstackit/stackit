@@ -294,7 +294,7 @@ func TestLoadRemoteMetadataCache_LoadsEveryRefAndSkipsCorrupt(t *testing.T) {
 
 	require.NoError(t, sh.Engine.LoadRemoteMetadataCache(t.Context()))
 
-	cache := sh.Engine.GetRemoteMetadataCache()
+	cache := sh.Engine.RemoteMetadataCache()
 	require.Equal(t, 2, cache.Len())
 	for _, branch := range []string{"feature-a", "feature-b"} {
 		require.True(t, cache.Has(branch), branch)

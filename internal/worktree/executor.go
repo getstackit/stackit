@@ -67,7 +67,7 @@ type CreateSessionOptions struct {
 func (e *Executor) CreateSession(ctx context.Context, opts CreateSessionOptions) (*Session, error) {
 	ref := opts.Ref
 	if ref == "" {
-		ref = e.eng.Trunk().GetName()
+		ref = e.eng.Trunk().Name()
 	}
 
 	pattern := opts.NamePattern
@@ -127,7 +127,7 @@ func (s *Session) pullTrunk(ctx context.Context) error {
 	// user's main workspace. ResetHard updates the working tree to match trunk
 	// while keeping HEAD detached (since the worktree was created with --detach).
 	trunk := s.Engine.Trunk()
-	if err := s.Engine.ResetHard(ctx, trunk.GetName()); err != nil {
+	if err := s.Engine.ResetHard(ctx, trunk.Name()); err != nil {
 		return errors.FailedTo("reset to", "trunk in worktree", err)
 	}
 
@@ -141,7 +141,7 @@ func (s *Session) ResetToRef(ctx context.Context, ref string) error {
 
 // ResetToTrunk resets the worktree to trunk.
 func (s *Session) ResetToTrunk(ctx context.Context) error {
-	return s.Engine.ResetHard(ctx, s.Engine.Trunk().GetName())
+	return s.Engine.ResetHard(ctx, s.Engine.Trunk().Name())
 }
 
 // GetCurrentRevision returns the current commit SHA of the worktree.

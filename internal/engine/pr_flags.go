@@ -33,8 +33,8 @@ func (e *engineImpl) ClearNeedsPRBodyUpdate(ctx context.Context, branchName stri
 	return e.writeLocalMetadata(ctx, branchName, localMeta)
 }
 
-// GetBranchesNeedingPRBodyUpdate returns all branches that need PR body updates
-func (e *engineImpl) GetBranchesNeedingPRBodyUpdate() []string {
+// BranchesNeedingPRBodyUpdate returns all branches that need PR body updates
+func (e *engineImpl) BranchesNeedingPRBodyUpdate() []string {
 	allBranches := e.AllBranches()
 	branchNames := allBranches.Names()
 

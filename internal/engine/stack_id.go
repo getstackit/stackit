@@ -38,7 +38,7 @@ func (e *engineImpl) GetStackDescription(ctx context.Context, branch Branch) *gi
 // Returns an error if the branch is not tracked.
 func (e *engineImpl) SetStackDescription(ctx context.Context, branch Branch, desc *git.StackDescription) error {
 	if !e.IsTracked(branch) {
-		return fmt.Errorf("branch %s is not tracked", branch.GetName())
+		return fmt.Errorf("branch %s is not tracked", branch.Name())
 	}
 
 	// Ensure stack ID exists (creates lazily if needed)
@@ -130,7 +130,7 @@ func sanitizeBranchNameForStackID(branchName string) string {
 // Returns empty string for untracked branches or trunk.
 // For legacy branches without StackID, derives it from the stack root.
 func (e *engineImpl) GetStackID(branch Branch) string {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	// Trunk has no stack ID
 	if branchName == e.trunk {
@@ -180,7 +180,7 @@ func (e *engineImpl) EnsureStackID(ctx context.Context, branch Branch) (string, 
 	// Find the stack root to generate the ID.
 	rootName := e.GetStackRootForBranch(branch)
 	if rootName == "" {
-		return "", fmt.Errorf("cannot determine stack root for branch %s", branch.GetName())
+		return "", fmt.Errorf("cannot determine stack root for branch %s", branch.Name())
 	}
 
 	stackID := e.GenerateStackID(rootName)
@@ -263,7 +263,7 @@ func (e *engineImpl) AssignBranchesToNewStack(ctx context.Context, root Branch, 
 		return "", nil
 	}
 
-	stackID := e.GenerateStackID(root.GetName())
+	stackID := e.GenerateStackID(root.Name())
 	if err := e.writeNewStackMeta(ctx, stackID); err != nil {
 		return "", fmt.Errorf("failed to create stack ref: %w", err)
 	}
@@ -277,7 +277,7 @@ func (e *engineImpl) AssignBranchesToNewStack(ctx context.Context, root Branch, 
 func (e *engineImpl) SetStackID(ctx context.Context, branches Branches, stackID string) error {
 	names := make([]string, len(branches))
 	for i, b := range branches {
-		names[i] = b.GetName()
+		names[i] = b.Name()
 	}
 	return e.batchSetStackID(ctx, names, stackID)
 }
@@ -307,7 +307,7 @@ func (e *engineImpl) GetStackMeta(ctx context.Context, stackID string) (*git.Sta
 // Returns nil if the parent is trunk (keeps existing stack membership), the
 // parent has no stack ID (legacy branch), or the branch is already in sync.
 func (e *engineImpl) syncStackIDFromParent(ctx context.Context, branch Branch) error {
-	parent := branch.GetParent()
+	parent := branch.Parent()
 	if parent == nil || e.IsTrunk(*parent) {
 		return nil
 	}
@@ -326,7 +326,7 @@ func (e *engineImpl) syncStackIDFromParent(ctx context.Context, branch Branch) e
 
 	// Propagate to descendants so a cross-stack reparent moves the whole
 	// subtree under the new stack, not just the reparented branch.
-	return e.propagateStackID(ctx, branch.GetName(), parentStackID)
+	return e.propagateStackID(ctx, branch.Name(), parentStackID)
 }
 
 // GetStackIDsForBranches returns the unique stack IDs for the given branches.

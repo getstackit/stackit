@@ -234,7 +234,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 			if originalBranch != nil {
 				if checkoutErr := ctx.Engine.CheckoutBranch(ctx.Context, *originalBranch); checkoutErr != nil {
 					return fmt.Errorf("unexpected restack conflict on %s: aborted rebase but failed to restore branch %s: %w",
-						conflictBranch, originalBranch.GetName(), checkoutErr)
+						conflictBranch, originalBranch.Name(), checkoutErr)
 				}
 			} else if originalRev != "" {
 				if detachErr := ctx.Engine.Detach(ctx.Context, originalRev); detachErr != nil {
@@ -282,7 +282,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 // filtered apply set and the extended blocked list.
 func holdBackConflictedStacks(ctx context.Context, eng engine.BranchReader, success engine.Branches, conflicts, blocked []string) (engine.Branches, []string) {
 	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
-	trunk := eng.Trunk().GetName()
+	trunk := eng.Trunk().Name()
 	rootOf := func(name string) string {
 		cur := name
 		for {
@@ -301,8 +301,8 @@ func holdBackConflictedStacks(ctx context.Context, eng engine.BranchReader, succ
 
 	kept := engine.NewBranchesBuilder(len(success))
 	for _, branch := range success {
-		if conflictedRoots[rootOf(branch.GetName())] {
-			blocked = append(blocked, branch.GetName())
+		if conflictedRoots[rootOf(branch.Name())] {
+			blocked = append(blocked, branch.Name())
 			continue
 		}
 		kept.Add(branch)
@@ -329,7 +329,7 @@ func classifyValidatedBranches(branches engine.Branches, plan *engine.RestackPla
 	}
 	builder := engine.NewBranchesBuilder(len(branches))
 	for _, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 		if _, exists := plan.ApplyMap[branchName]; !exists {
 			continue
 		}
@@ -360,7 +360,7 @@ func getCurrentBranchName(ctx context.Context, eng engine.BranchReader) string {
 	if currentBranch == nil {
 		return ""
 	}
-	return currentBranch.GetName()
+	return currentBranch.Name()
 }
 
 // restackResultName returns the diagnostic string for a RestackResult.
@@ -394,7 +394,7 @@ func reportPlannedResults(ctx *app.Context, branches engine.Branches, plannedRes
 	logRestackResults(ctx, plannedResults)
 	currentBranchName := getCurrentBranchName(ctx.Context, ctx.Engine)
 	for _, branch := range branches {
-		result, ok := plannedResults[branch.GetName()]
+		result, ok := plannedResults[branch.Name()]
 		if !ok {
 			continue
 		}
@@ -403,7 +403,7 @@ func reportPlannedResults(ctx *app.Context, branches engine.Branches, plannedRes
 }
 
 func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.RestackBranchResult, currentBranchName string, callback RestackProgressCallback) {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	// Use the new revision the engine already captured during restack. Falling
 	// back to branch.GetRevision is fine if it's not set (RestackUnneeded
@@ -447,7 +447,7 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 
 	switch result.Result {
 	case engine.RestackDone:
-		parentName := branch.GetParentOrTrunk()
+		parentName := branch.ParentOrTrunk()
 		if result.Reparented && result.NewParent != "" {
 			parentName = result.NewParent
 		}
@@ -470,7 +470,7 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 			ctx.Output.Info("%s frozen", output.Branch(branchName, branchName == currentBranchName))
 		case !branch.CanModify():
 			if branch.IsLocked() {
-				ctx.Output.Info("%s locked: %s", output.Branch(branchName, branchName == currentBranchName), branch.GetLockReason())
+				ctx.Output.Info("%s locked: %s", output.Branch(branchName, branchName == currentBranchName), branch.LockReason())
 			} else {
 				ctx.Output.Info("%s frozen", output.Branch(branchName, branchName == currentBranchName))
 			}
@@ -567,8 +567,8 @@ func enterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 	foundConflict := false
 	for _, branch := range allBranches {
 		if foundConflict {
-			remainingBranches = append(remainingBranches, branch.GetName())
-		} else if branch.GetName() == firstConflict {
+			remainingBranches = append(remainingBranches, branch.Name())
+		} else if branch.Name() == firstConflict {
 			foundConflict = true
 		}
 	}
@@ -619,14 +619,14 @@ func validateBranchAncestry(ctx *app.Context, branches engine.Branches) error {
 			continue
 		}
 		revBranches = append(revBranches, branch)
-		if parent := branch.GetParent(); parent != nil {
+		if parent := branch.Parent(); parent != nil {
 			revBranches = append(revBranches, *parent)
 		}
 	}
 	revisions := ctx.Engine.BatchRevisions(revBranches)
 
 	for _, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 
 		// Trunk branches don't need validation
 		if branch.IsTrunk() {
@@ -641,9 +641,9 @@ func validateBranchAncestry(ctx *app.Context, branches engine.Branches) error {
 
 		// If branch has a parent, validate it only if it exists
 		// (missing parents will be handled by auto-reparenting logic)
-		parent := branch.GetParent()
+		parent := branch.Parent()
 		if parent != nil {
-			parentName := parent.GetName()
+			parentName := parent.Name()
 			parentRev, ok := revisions.Rev(parentName)
 			if !ok {
 				// Parent doesn't exist - this is OK, auto-reparenting will handle it
@@ -805,8 +805,8 @@ func PrintConflictStatus(ctx *app.Context, branchName string) error {
 	}
 
 	parentBranch := "the current base"
-	if branch := ctx.Engine.GetBranch(branchName); branch.GetName() != "" {
-		parentBranch = branch.GetParentOrTrunk()
+	if branch := ctx.Engine.GetBranch(branchName); branch.Name() != "" {
+		parentBranch = branch.ParentOrTrunk()
 	}
 
 	out.Info("%s", output.Yellow("To resolve:"))

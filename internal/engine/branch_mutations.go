@@ -109,7 +109,7 @@ func (e *engineImpl) PushBranches(ctx context.Context, remote string, specs []gi
 
 // DeleteBranch deletes a branch and its metadata
 func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	if e.IsTrunk(branch) {
 		return errors.New("cannot delete trunk branch")
 	}
@@ -137,7 +137,7 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	if branchName == e.currentBranch {
 		// Access trunk directly while holding the lock (avoid deadlock from e.Trunk() trying to acquire RLock)
 		trunkBranch := NewBranch(e.trunk, e)
-		if err := e.git.CheckoutBranch(ctx, trunkBranch.GetName()); err != nil {
+		if err := e.git.CheckoutBranch(ctx, trunkBranch.Name()); err != nil {
 			e.mu.Unlock()
 			return fmt.Errorf("failed to switch to trunk before deleting current branch: %w", err)
 		}
@@ -176,7 +176,7 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	// Reparent children to grandparent, preserving divergence points so
 	// children don't carry the deleted branch's commits after restacking.
 	parentBranch := e.GetBranch(parent)
-	reparentErr := e.ReparentBranchesToParents(ctx, MovesTo(children, parentBranch.GetName()), ReparentOpts{})
+	reparentErr := e.ReparentBranchesToParents(ctx, MovesTo(children, parentBranch.Name()), ReparentOpts{})
 
 	// Rebuild engine state from disk so callers don't need to track when to call
 	// eng.Rebuild() themselves. After this returns, GetBranch/GetParent/children
@@ -242,7 +242,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 	e.mu.Lock()
 	trunkName := e.trunk
 	for _, b := range branches {
-		name := b.GetName()
+		name := b.Name()
 		toDeleteSet[name] = true
 		if name == e.currentBranch {
 			needCheckoutTrunk = true
@@ -262,7 +262,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 	moves := make([]BranchParentMove, 0)
 	allSurvivingChildren := make(map[string]bool)
 	for _, b := range branches {
-		name := b.GetName()
+		name := b.Name()
 		for _, child := range childrenByBranch[name] {
 			if toDeleteSet[child] {
 				continue
@@ -292,7 +292,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 	// already-deleted head or absent local-metadata won't fail the batch.
 	refsToDelete := make([]string, 0, 3*len(branches))
 	for _, b := range branches {
-		name := b.GetName()
+		name := b.Name()
 		refsToDelete = append(refsToDelete,
 			"refs/heads/"+name,
 			git.MetadataRefPrefix+name,
@@ -337,7 +337,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 
 // CheckoutBranch checks out an existing branch
 func (e *engineImpl) CheckoutBranch(ctx context.Context, branch Branch) error {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	if err := e.git.CheckoutBranch(ctx, branchName); err != nil {
 		return err
 	}
@@ -355,7 +355,7 @@ func (e *engineImpl) UpdateBranchRef(ctx context.Context, branchName, revision s
 
 // CreateAndCheckoutBranch creates and checks out a new branch
 func (e *engineImpl) CreateAndCheckoutBranch(ctx context.Context, branch Branch) error {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	if err := e.git.CreateAndCheckoutBranch(ctx, branchName); err != nil {
 		return err
 	}
@@ -382,8 +382,8 @@ func (e *engineImpl) addKnownBranchLocked(branchName string) {
 
 // RenameBranch renames a branch and its metadata
 func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Branch) error {
-	oldName := oldBranch.GetName()
-	newName := newBranch.GetName()
+	oldName := oldBranch.Name()
+	newName := newBranch.Name()
 
 	e.mu.RLock()
 	// Get children before renaming anything

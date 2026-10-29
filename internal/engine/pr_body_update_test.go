@@ -22,7 +22,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		eng := s.Engine
 
 		// Initially no branches need update
-		needsUpdate := eng.GetBranchesNeedingPRBodyUpdate()
+		needsUpdate := eng.BranchesNeedingPRBodyUpdate()
 		require.Empty(t, needsUpdate)
 
 		// Mark branch as needing update
@@ -30,7 +30,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		require.NoError(t, err)
 
 		// Now it should be in the list
-		needsUpdate = eng.GetBranchesNeedingPRBodyUpdate()
+		needsUpdate = eng.BranchesNeedingPRBodyUpdate()
 		require.Contains(t, needsUpdate, "feature")
 	})
 
@@ -52,7 +52,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should no longer need update
-		needsUpdate := eng.GetBranchesNeedingPRBodyUpdate()
+		needsUpdate := eng.BranchesNeedingPRBodyUpdate()
 		require.NotContains(t, needsUpdate, "feature")
 	})
 
@@ -90,7 +90,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should still need update
-		needsUpdate := eng.GetBranchesNeedingPRBodyUpdate()
+		needsUpdate := eng.BranchesNeedingPRBodyUpdate()
 		require.Contains(t, needsUpdate, "feature")
 	})
 
@@ -112,7 +112,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		err := eng.MarkBranchesForPRBodyUpdate(t.Context(), []string{"feature-a"})
 		require.NoError(t, err)
 
-		needsUpdate := eng.GetBranchesNeedingPRBodyUpdate()
+		needsUpdate := eng.BranchesNeedingPRBodyUpdate()
 		require.Contains(t, needsUpdate, "feature-a")
 		require.NotContains(t, needsUpdate, "feature-b")
 
@@ -120,7 +120,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		err = eng.MarkBranchesForPRBodyUpdate(t.Context(), []string{"feature-b"})
 		require.NoError(t, err)
 
-		needsUpdate = eng.GetBranchesNeedingPRBodyUpdate()
+		needsUpdate = eng.BranchesNeedingPRBodyUpdate()
 		require.Contains(t, needsUpdate, "feature-a")
 		require.Contains(t, needsUpdate, "feature-b")
 
@@ -128,7 +128,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		err = eng.ClearNeedsPRBodyUpdate(t.Context(), "feature-a")
 		require.NoError(t, err)
 
-		needsUpdate = eng.GetBranchesNeedingPRBodyUpdate()
+		needsUpdate = eng.BranchesNeedingPRBodyUpdate()
 		require.NotContains(t, needsUpdate, "feature-a")
 		require.Contains(t, needsUpdate, "feature-b")
 	})
@@ -151,7 +151,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		err := eng.MarkBranchesForPRBodyUpdate(t.Context(), []string{"feature-a", "feature-b"})
 		require.NoError(t, err)
 
-		needsUpdate := eng.GetBranchesNeedingPRBodyUpdate()
+		needsUpdate := eng.BranchesNeedingPRBodyUpdate()
 		require.Contains(t, needsUpdate, "feature-a")
 		require.Contains(t, needsUpdate, "feature-b")
 	})

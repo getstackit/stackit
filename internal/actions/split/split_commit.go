@@ -67,7 +67,7 @@ func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngi
 	// Show initial info
 	splog.Info("Splitting the commits of %s into multiple branches.", output.CurrentBranch(branchToSplit))
 	branch := eng.GetBranch(branchToSplit)
-	prInfo, _ := branch.GetPrInfo()
+	prInfo, _ := branch.PrInfo()
 	if prInfo != nil && prInfo.Number() != nil {
 		splog.Info("If any of the new branches keeps the name %s, it will be linked to PR #%d.",
 			output.CurrentBranch(branchToSplit), *prInfo.Number())

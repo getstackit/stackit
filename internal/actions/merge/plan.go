@@ -251,7 +251,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 
 		// Check if target branch is tracked
 		if !targetBranch.IsTracked() {
-			return nil, fmt.Errorf("branch %s is not tracked by stackit", targetBranch.GetName())
+			return nil, fmt.Errorf("branch %s is not tracked by stackit", targetBranch.Name())
 		}
 
 		// 2. Collect branches from trunk to target
@@ -263,11 +263,11 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 		allBranches = make([]string, 0, len(parentBranches)+1)
 		for _, branch := range parentBranches {
 			if !branch.IsTrunk() {
-				allBranches = append(allBranches, branch.GetName())
+				allBranches = append(allBranches, branch.Name())
 			}
 		}
-		allBranches = append(allBranches, targetBranch.GetName())
-		planCurrentBranch = targetBranch.GetName()
+		allBranches = append(allBranches, targetBranch.Name())
+		planCurrentBranch = targetBranch.Name()
 	}
 
 	// 3. Identify upstack branches that need restacking (moved up for batch loading)
@@ -279,8 +279,8 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	if opts.Scope != "" {
 		// In scope mode, find all tracked branches with the scope that are not being merged
 		for _, branch := range eng.AllBranches() {
-			if branch.IsTracked() && eng.GetScope(branch).String() == opts.Scope && !mergedMap[branch.GetName()] {
-				upstackBranches = append(upstackBranches, branch.GetName())
+			if branch.IsTracked() && eng.GetScope(branch).String() == opts.Scope && !mergedMap[branch.Name()] {
+				upstackBranches = append(upstackBranches, branch.Name())
 			}
 		}
 	} else {
@@ -290,8 +290,8 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 		// Only get upstack of the current branch (the top of the stack being merged)
 		upstack := graph.Range(eng.GetBranch(planCurrentBranch), engine.StackRange{RecursiveChildren: true})
 		for _, ub := range upstack {
-			if ub.IsTracked() && !mergedMap[ub.GetName()] {
-				upstackBranches = append(upstackBranches, ub.GetName())
+			if ub.IsTracked() && !mergedMap[ub.Name()] {
+				upstackBranches = append(upstackBranches, ub.Name())
 			}
 		}
 	}
@@ -425,7 +425,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	// Pre-flight check: Check if trunk is in sync with remote
 	trunk := eng.Trunk()
 	if remoteStatuses.ForBranch(trunk).Diverged() {
-		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Trunk branch %s has diverged from remote. You may need to sync it manually or use --force during merge.", trunk.GetName()))
+		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Trunk branch %s has diverged from remote. You may need to sync it manually or use --force during merge.", trunk.Name()))
 	}
 
 	for i := range allBranches {
@@ -453,13 +453,13 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	}
 
 	for _, ancestor := range allBranches {
-		if ancestor == eng.Trunk().GetName() {
+		if ancestor == eng.Trunk().Name() {
 			continue
 		}
 		children := graph.ChildBranches(eng.GetBranch(ancestor))
 		for _, child := range children {
-			if !mergedSet[child.GetName()] {
-				validation.Infos = append(validation.Infos, fmt.Sprintf("Branch %s is not part of this merge and will be moved to %s", child.GetName(), eng.Trunk().GetName()))
+			if !mergedSet[child.Name()] {
+				validation.Infos = append(validation.Infos, fmt.Sprintf("Branch %s is not part of this merge and will be moved to %s", child.Name(), eng.Trunk().Name()))
 			}
 		}
 	}

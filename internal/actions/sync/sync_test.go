@@ -221,7 +221,7 @@ func TestSyncAction(t *testing.T) {
 
 		current := s.Engine.CurrentBranch(t.Context())
 		require.NotNil(t, current, "sync should restore original branch checkout")
-		require.Equal(t, "branch1", current.GetName())
+		require.Equal(t, "branch1", current.Name())
 	})
 }
 

@@ -181,7 +181,7 @@ func TestAnalysisResult_GetShippable(t *testing.T) {
 		},
 	}
 
-	shippable := result.GetShippable()
+	shippable := result.Shippable()
 	require.Len(t, shippable, 2)
 	require.Equal(t, "a", shippable[0].RootBranch())
 	require.Equal(t, "c", shippable[1].RootBranch())
@@ -198,7 +198,7 @@ func TestAnalysisResult_GetPending(t *testing.T) {
 		},
 	}
 
-	pending := result.GetPending()
+	pending := result.Pending()
 	require.Len(t, pending, 2)
 	require.Equal(t, "b", pending[0].RootBranch())
 	require.Equal(t, "c", pending[1].RootBranch())
@@ -214,7 +214,7 @@ func TestAnalysisResult_GetBlocked(t *testing.T) {
 		},
 	}
 
-	blocked := result.GetBlocked()
+	blocked := result.Blocked()
 	require.Len(t, blocked, 1)
 	require.Equal(t, "a", blocked[0].RootBranch())
 }
@@ -229,7 +229,7 @@ func TestAnalysisResult_GetIncomplete(t *testing.T) {
 		},
 	}
 
-	incomplete := result.GetIncomplete()
+	incomplete := result.Incomplete()
 	require.Len(t, incomplete, 1)
 	require.Equal(t, "a", incomplete[0].RootBranch())
 }

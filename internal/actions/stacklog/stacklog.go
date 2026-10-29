@@ -72,7 +72,7 @@ func Gather(ctx context.Context, src Source) (Result, error) {
 	}
 
 	res := Result{
-		TrunkName:   trunk.GetName(),
+		TrunkName:   trunk.Name(),
 		TrunkTipSHA: trunkTip,
 		Decorations: decorations,
 	}
@@ -94,9 +94,9 @@ func Gather(ctx context.Context, src Source) (Result, error) {
 	// so the two never desync (an empty subject can't shift the pairing).
 	commitsByBranch := src.BatchCommits(branches)
 
-	currentName := current.GetName()
+	currentName := current.Name()
 	for _, b := range branches {
-		name := b.GetName()
+		name := b.Name()
 		res.Branches = append(res.Branches, Branch{
 			Name:      name,
 			IsCurrent: name == currentName,

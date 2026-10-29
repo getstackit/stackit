@@ -51,7 +51,7 @@ func selectRestackBranches(graph *engine.StackGraph, eng engine.Engine, mode Res
 		if oldestModifiedBranch == currentBranchName {
 			filtered := make([]engine.Branch, 0, len(branches))
 			for _, branch := range branches {
-				if branch.GetName() == currentBranchName {
+				if branch.Name() == currentBranchName {
 					continue
 				}
 				filtered = append(filtered, branch)
@@ -67,7 +67,7 @@ func selectRestackBranches(graph *engine.StackGraph, eng engine.Engine, mode Res
 		branches := graph.Range(eng.GetBranch(oldestModifiedBranch), engine.StackRange{RecursiveChildren: true})
 		filtered := make([]engine.Branch, 0, len(branches))
 		for _, branch := range branches {
-			if branch.GetScope().Equal(currentScope) {
+			if branch.Scope().Equal(currentScope) {
 				filtered = append(filtered, branch)
 			}
 		}

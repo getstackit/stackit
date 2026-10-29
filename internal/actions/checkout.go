@@ -64,7 +64,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 
 	switch {
 	case opts.CheckoutTrunk:
-		branchName = eng.Trunk().GetName()
+		branchName = eng.Trunk().Name()
 	case opts.BranchName != "":
 		branchName, err = resolveBranchName(ctx.Context, eng, out, opts.BranchName)
 		if err != nil {
@@ -80,7 +80,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 			currentBranch := eng.CurrentBranch(ctx.Context)
 			currentBranchName := "trunk"
 			if currentBranch != nil {
-				currentBranchName = currentBranch.GetName()
+				currentBranchName = currentBranch.Name()
 			}
 			out.Info("No branch selected; staying on %s.", output.CurrentBranch(currentBranchName))
 			return CheckoutResult{}, nil
@@ -88,7 +88,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 	}
 
 	currentBranch := eng.CurrentBranch(ctx.Context)
-	if currentBranch != nil && branchName == currentBranch.GetName() {
+	if currentBranch != nil && branchName == currentBranch.Name() {
 		if !ctx.Quiet {
 			out.Info("Already on %s.", output.CurrentBranch(branchName))
 		}
@@ -129,7 +129,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 
 	previousBranch := "trunk"
 	if currentBranch != nil {
-		previousBranch = currentBranch.GetName()
+		previousBranch = currentBranch.Name()
 	}
 	ctx.Logger.Info("branch changed from=%v to=%v", previousBranch, branchName)
 
@@ -169,7 +169,7 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 	statuses := ctx.Engine.ReadBranchStatuses(engine.BranchesOf(branch).Append(downstackToCheck...))
 
 	if !statuses.IsUpToDate(branch) {
-		parent := branch.GetParentOrTrunk()
+		parent := branch.ParentOrTrunk()
 		ctx.Output.Info("This branch has fallen behind %s - you may want to %s.",
 			output.BranchName(parent),
 			output.Cyan("stackit restack --upstack"))
@@ -179,9 +179,9 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 	// Check nearest ancestors first (but limit to last maxDownstackChecks branches)
 	for _, ancestor := range downstackToCheck {
 		if !statuses.IsUpToDate(ancestor) {
-			parent := ancestor.GetParentOrTrunk()
+			parent := ancestor.ParentOrTrunk()
 			ctx.Output.Info("The downstack branch %s has fallen behind %s - you may want to %s.",
-				output.BranchName(ancestor.GetName()),
+				output.BranchName(ancestor.Name()),
 				output.BranchName(parent),
 				output.Cyan("stackit restack"))
 			return
@@ -293,7 +293,7 @@ func resolveBranchName(ctx context.Context, eng engine.Engine, out output.Output
 	}
 	if len(scopeBranches) > 0 {
 		sorted := eng.SortBranchesTopologically(ctx, scopeBranches)
-		topmost := sorted[len(sorted)-1].GetName()
+		topmost := sorted[len(sorted)-1].Name()
 		out.Info("Matched scope %s.", output.Dim(input))
 		return topmost, nil
 	}

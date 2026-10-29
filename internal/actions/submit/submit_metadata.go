@@ -69,7 +69,7 @@ func GetReviewersWithPrompt(prompter handler.TextInputPrompter, reviewersFlag st
 // PreparePRMetadata prepares PR metadata for a branch. current holds PR content
 // prefetched in bulk; a PR missing from it (or a nil map) is fetched directly.
 func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Context, current map[git.PRNumber]github.PRContent) (*PRMetadata, error) {
-	prInfo, _ := branch.GetPrInfo()
+	prInfo, _ := branch.PrInfo()
 	nav := ctx.Navigator()
 
 	metadata := &PRMetadata{
@@ -189,7 +189,7 @@ func pendingPrInfo(branch engine.Branch, metadata *PRMetadata) *engine.PrInfo {
 		Title:   metadata.Title,
 		Body:    metadata.Body,
 		IsDraft: metadata.IsDraft,
-	}).WithLockReason(branch.GetLockReason())
+	}).WithLockReason(branch.LockReason())
 }
 
 // MetadataOptions contains options for PR metadata collection
@@ -223,11 +223,11 @@ type PRMetadata struct {
 // isParentPRDraft returns true if the branch's parent has a draft PR.
 // Returns false for trunk-parented branches, branches with no parent PR, or on errors.
 func isParentPRDraft(branch engine.Branch) bool {
-	parent := branch.GetParent()
+	parent := branch.Parent()
 	if parent == nil {
 		return false
 	}
-	prInfo, err := parent.GetPrInfo()
+	prInfo, err := parent.PrInfo()
 	if err != nil || prInfo == nil {
 		return false
 	}

@@ -61,9 +61,9 @@ func TestPopAction(t *testing.T) {
 
 		// Verify branch2's parent is now main
 		branch := s.Engine.GetBranch("branch2")
-		parent := branch.GetParent()
+		parent := branch.Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "main", parent.GetName())
+		require.Equal(t, "main", parent.Name())
 
 		// Verify branch1 is deleted
 		branches, err := s.Git.GetAllBranchNames(t.Context())

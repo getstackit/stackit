@@ -62,10 +62,10 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	}
 
 	// Ensure branch is tracked
-	currentBranchObj := eng.GetBranch(currentBranch.GetName())
+	currentBranchObj := eng.GetBranch(currentBranch.Name())
 	if !currentBranchObj.IsTracked() {
-		parentName := currentBranch.GetParentOrTrunk()
-		if err := eng.TrackBranch(ctx.Context, currentBranch.GetName(), parentName); err != nil {
+		parentName := currentBranch.ParentOrTrunk()
+		if err := eng.TrackBranch(ctx.Context, currentBranch.Name(), parentName); err != nil {
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 	}
@@ -104,10 +104,10 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 
 			// Build context for direction prompt
 			parentName := ""
-			if parent := currentBranch.GetParent(); parent != nil {
-				parentName = parent.GetName()
+			if parent := currentBranch.Parent(); parent != nil {
+				parentName = parent.Name()
 			} else {
-				parentName = eng.Trunk().GetName()
+				parentName = eng.Trunk().Name()
 			}
 
 			// Get children of current branch
@@ -116,7 +116,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 
 			dirCtx := DirectionContext{
 				Engine:        eng,
-				CurrentBranch: currentBranch.GetName(),
+				CurrentBranch: currentBranch.Name(),
 				ParentBranch:  parentName,
 				Children:      childNames,
 			}
@@ -142,7 +142,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	}
 
 	// Start handler with branch info and style
-	handler.Start(currentBranch.GetName(), style)
+	handler.Start(currentBranch.Name(), style)
 
 	// Take snapshot before any modifications
 	snapshotArgs := []string{string(style), string(direction)}
@@ -190,7 +190,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		commitMsgCtx := CommitMessageContext{
 			Files:                 pathspecs,
 			Direction:             direction,
-			CurrentBranch:         currentBranch.GetName(),
+			CurrentBranch:         currentBranch.Name(),
 			OriginalCommitMessage: originalCommitMessage,
 		}
 		commitMessage, err := handler.PromptCommitMessageWithContext(commitMsgCtx)
@@ -206,12 +206,12 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		}
 		if opts.BranchPattern == "" || err != nil {
 			// Fallback to simpler default if pattern fails
-			defaultBranchName = currentBranch.GetName() + splitSuffix
+			defaultBranchName = currentBranch.Name() + splitSuffix
 		}
 
 		// Prompt for branch name
 		handler.OnStep(StepBranchName, handlerBase.StatusStarted, "Enter branch name")
-		branchName, err := handler.PromptBranchName(defaultBranchName, []string{}, eng.BranchNames(), currentBranch.GetName())
+		branchName, err := handler.PromptBranchName(defaultBranchName, []string{}, eng.BranchNames(), currentBranch.Name())
 		if err != nil {
 			return err
 		}
@@ -245,7 +245,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		}
 
 		handler.Complete(ActionResult{
-			OriginalBranch: currentBranch.GetName(),
+			OriginalBranch: currentBranch.Name(),
 			NewBranches:    fileResult.BranchNames,
 			Style:          style,
 		})

@@ -91,7 +91,7 @@ func (idx *WorktreeIndex) apply(eng stackRootResolver, branch engine.Branch, ann
 	if idx == nil {
 		return
 	}
-	if wt, ok := idx.Empty[branch.GetName()]; ok {
+	if wt, ok := idx.Empty[branch.Name()]; ok {
 		ann.IsEmptyWorktree = true
 		ann.WorktreePath = wt.Path
 		return

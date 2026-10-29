@@ -15,7 +15,7 @@ type StackNavigator interface {
 	CurrentBranch(ctx context.Context) *Branch
 	// CurrentBranchName returns the current branch name, or "" when HEAD is not
 	// on a branch (e.g. a detached-HEAD server mirror). Nil-safe alternative to
-	// CurrentBranch().GetName().
+	// CurrentBranch().Name().
 	CurrentBranchName(ctx context.Context) string
 	Trunk() Branch
 	GetBranch(branchName string) Branch
@@ -38,7 +38,7 @@ type StackNavigator interface {
 	GetScope(branch Branch) Scope
 	GetRemote(ctx context.Context) string
 	GetRepoInfo(ctx context.Context) (git.RemoteRepository, error)
-	GetRepoRoot() string
+	RepoRoot() string
 	GetUserName(ctx context.Context) (string, error)
 	// GitVersion reports the installed Git's version, for diagnostics.
 	GitVersion(ctx context.Context) (git.Version, error)
@@ -228,7 +228,7 @@ type BranchTracking interface {
 	// ClearNeedsPRBodyUpdate clears the PR body update flag for a branch
 	ClearNeedsPRBodyUpdate(ctx context.Context, branchName string) error
 	// GetBranchesNeedingPRBodyUpdate returns all branches that need PR body updates
-	GetBranchesNeedingPRBodyUpdate() []string
+	BranchesNeedingPRBodyUpdate() []string
 
 	// MarkBranchesSubmitPending records that a submit is about to push these
 	// branches and write their pull requests, so an interrupted submit is

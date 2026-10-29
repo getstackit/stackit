@@ -118,7 +118,7 @@ func TestRestackModeValidate(t *testing.T) {
 func branchNames(branches []engine.Branch) []string {
 	names := make([]string, 0, len(branches))
 	for _, branch := range branches {
-		names = append(names, branch.GetName())
+		names = append(names, branch.Name())
 	}
 	return names
 }

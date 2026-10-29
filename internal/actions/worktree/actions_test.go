@@ -253,7 +253,7 @@ func TestCreateAction(t *testing.T) {
 
 		// Verify parent is trunk (worktree should be created from trunk regardless of current branch)
 		anchorBranch := s.Engine.GetBranch(result.AnchorBranch)
-		parent := anchorBranch.GetParent()
+		parent := anchorBranch.Parent()
 		require.NotNil(t, parent)
 		require.True(t, parent.IsTrunk())
 
@@ -332,7 +332,7 @@ func TestCreateAction(t *testing.T) {
 		require.True(t, anchorBranch.IsWorktreeAnchor())
 
 		// Verify parent is trunk
-		parent := anchorBranch.GetParent()
+		parent := anchorBranch.Parent()
 		require.NotNil(t, parent)
 		require.True(t, parent.IsTrunk())
 
@@ -398,7 +398,7 @@ func TestRepairAction(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, canonicalWorktreeDir, canonicalRepairedPath)
 		require.True(t, s.Engine.GetBranch(result.Repaired[0].AnchorBranch).IsWorktreeAnchor())
-		require.Equal(t, result.Repaired[0].AnchorBranch, s.Engine.GetBranch("feature").GetParent().GetName())
+		require.Equal(t, result.Repaired[0].AnchorBranch, s.Engine.GetBranch("feature").Parent().Name())
 
 		_ = s.Engine.UnregisterWorktree(s.Context, result.Repaired[0].AnchorBranch)
 	})

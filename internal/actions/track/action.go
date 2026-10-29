@@ -50,7 +50,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if branchName == "" {
 		currentBranch := eng.CurrentBranch(ctx.Context)
 		if currentBranch != nil {
-			branchName = currentBranch.GetName()
+			branchName = currentBranch.Name()
 		}
 	}
 	if branchName != "" {
@@ -71,7 +71,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if opts.Parent != "" {
 		parent := opts.Parent
 		// Validate parent exists
-		if parent != eng.Trunk().GetName() && !eng.BranchNames().Contains(parent) {
+		if parent != eng.Trunk().Name() && !eng.BranchNames().Contains(parent) {
 			return fmt.Errorf("parent branch %s does not exist", parent)
 		}
 
@@ -156,7 +156,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 		// Try auto-detection (single unambiguous non-trunk tracked ancestor)
 		var parentBranch string
 		ancestors, err := eng.FindMostRecentTrackedAncestors(ctx.Context, branchName)
-		if err == nil && len(ancestors) == 1 && ancestors[0] != eng.Trunk().GetName() {
+		if err == nil && len(ancestors) == 1 && ancestors[0] != eng.Trunk().Name() {
 			candidate := ancestors[0]
 			candidateBranch := eng.GetBranch(candidate)
 			// Skip worktree anchors for auto-detection
@@ -216,7 +216,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 		}
 		candidates := make([]indexedCandidate, 0, len(allBranches))
 		for _, candidateBranch := range allBranches {
-			if candidateBranch.GetName() == branchName {
+			if candidateBranch.Name() == branchName {
 				continue
 			}
 			candidates = append(candidates, indexedCandidate{index: len(candidates), candidate: candidateBranch})
@@ -224,7 +224,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 
 		isChild := make([]bool, len(candidates))
 		workpool.Run(candidates, func(item indexedCandidate) {
-			mergeBase, err := eng.GetMergeBase(ctx.Context, item.candidate.GetName(), branchName)
+			mergeBase, err := eng.GetMergeBase(ctx.Context, item.candidate.Name(), branchName)
 			if err != nil {
 				return
 			}
@@ -234,7 +234,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 
 		for _, item := range candidates {
 			if isChild[item.index] {
-				untrackedChildren = append(untrackedChildren, item.candidate.GetName())
+				untrackedChildren = append(untrackedChildren, item.candidate.Name())
 			}
 		}
 	}

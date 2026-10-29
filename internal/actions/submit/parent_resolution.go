@@ -5,11 +5,11 @@ import "github.com/getstackit/stackit/internal/engine"
 // resolveSubmitParent returns the nearest non-worktree-anchor ancestor.
 // If no tracked non-anchor parent exists, trunk is returned.
 func resolveSubmitParent(nav engine.StackNavigator, branch engine.Branch) engine.Branch {
-	parent := branch.GetParent()
+	parent := branch.Parent()
 	visited := make(map[string]bool)
 
 	for parent != nil {
-		parentName := parent.GetName()
+		parentName := parent.Name()
 		if visited[parentName] {
 			break
 		}
@@ -18,7 +18,7 @@ func resolveSubmitParent(nav engine.StackNavigator, branch engine.Branch) engine
 		if !parent.IsWorktreeAnchor() {
 			return *parent
 		}
-		parent = parent.GetParent()
+		parent = parent.Parent()
 	}
 
 	return nav.Trunk()

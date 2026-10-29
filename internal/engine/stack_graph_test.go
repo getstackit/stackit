@@ -90,7 +90,7 @@ func TestStackGraphFilterPrunesSubtrees(t *testing.T) {
 		})
 
 	graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, func(b engine.Branch) bool {
-		return b.GetName() != "b"
+		return b.Name() != "b"
 	})
 
 	branches := graph.Range(s.Engine.Trunk(), engine.StackRange{

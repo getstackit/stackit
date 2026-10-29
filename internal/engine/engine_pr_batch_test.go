@@ -92,7 +92,7 @@ func TestBatchUpsertPrInfo(t *testing.T) {
 		require.NoError(t, eng.BatchUpsertPrInfo(t.Context(), updates))
 
 		for name, want := range updates {
-			got, err := eng.GetBranch(name).GetPrInfo()
+			got, err := eng.GetBranch(name).PrInfo()
 			require.NoError(t, err)
 			require.NotNil(t, got, "branch %s should have PR info", name)
 			require.Equal(t, want.Title(), got.Title(), "branch %s title", name)
@@ -114,13 +114,13 @@ func TestBatchUpsertPrInfo(t *testing.T) {
 			testhelpers.NewTestPrInfoFull(200, "original title", "body", "OPEN", "main", "https://example.com", false)))
 
 		// Batch upsert only updates MergeBranch; other fields should be preserved
-		prInfo, err := branch.GetPrInfo()
+		prInfo, err := branch.PrInfo()
 		require.NoError(t, err)
 		require.NoError(t, eng.BatchUpsertPrInfo(t.Context(), map[string]*engine.PrInfo{
 			"A": prInfo.WithMergeBranch("my-consolidation"),
 		}))
 
-		got, err := branch.GetPrInfo()
+		got, err := branch.PrInfo()
 		require.NoError(t, err)
 		require.Equal(t, "original title", got.Title())
 		require.Equal(t, "my-consolidation", got.MergeBranch())

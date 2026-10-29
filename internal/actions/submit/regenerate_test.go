@@ -24,11 +24,11 @@ type regenerationEngine struct {
 func (e *regenerationEngine) BatchGetPRSubmissionStatus(_ context.Context, branches engine.Branches, _ engine.BranchRemoteStatuses) (map[string]engine.PRSubmissionStatus, error) {
 	statuses := make(map[string]engine.PRSubmissionStatus)
 	for _, branch := range branches {
-		pr, err := branch.GetPrInfo()
+		pr, err := branch.PrInfo()
 		if err != nil {
 			return nil, err
 		}
-		statuses[branch.GetName()] = engine.PRSubmissionStatus{
+		statuses[branch.Name()] = engine.PRSubmissionStatus{
 			Action: engine.SubmitActionUpdate, PRInfo: pr, PRNumber: pr.Number(), NeedsUpdate: false,
 		}
 	}
@@ -75,7 +75,7 @@ func TestRegeneratePlanningAndEmptyBody(t *testing.T) {
 	require.Empty(t, preview[0].Metadata.Body)
 	require.True(t, preview[0].Metadata.IsDraft, "regeneration preserves draft state")
 	require.Zero(t, eng.writes, "dry-run must not save replacement text")
-	stored, err := branch.GetPrInfo()
+	stored, err := branch.PrInfo()
 	require.NoError(t, err)
 	require.Equal(t, old.Title(), stored.Title())
 	require.Equal(t, old.Body(), stored.Body())

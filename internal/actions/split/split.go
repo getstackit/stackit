@@ -123,11 +123,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Ensure branch is tracked
-	currentBranchObj := eng.GetBranch(currentBranch.GetName())
+	currentBranchObj := eng.GetBranch(currentBranch.Name())
 	if !currentBranchObj.IsTracked() {
 		// Auto-track the branch
-		parentName := currentBranch.GetParentOrTrunk()
-		if err := eng.TrackBranch(context, currentBranch.GetName(), parentName); err != nil {
+		parentName := currentBranch.ParentOrTrunk()
+		if err := eng.TrackBranch(context, currentBranch.Name(), parentName); err != nil {
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 	}
@@ -162,7 +162,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Start handler with branch info and style
-	handler.Start(currentBranch.GetName(), style)
+	handler.Start(currentBranch.Name(), style)
 
 	// Take snapshot before any modifications
 	snapshotArgs := []string{string(style)}
@@ -185,7 +185,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	var result *Result
 	switch style {
 	case StyleCommit:
-		result, err = splitByCommit(ctx, currentBranch.GetName(), eng, out, opts.BranchPattern)
+		result, err = splitByCommit(ctx, currentBranch.Name(), eng, out, opts.BranchPattern)
 	case StyleHunk:
 		// Use provided direction or default to below
 		direction := opts.Direction
@@ -241,7 +241,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if opts.DryRun {
 			out.Info("Dry Run - Split Preview")
 			out.Info("========================")
-			out.Info("Current branch: %s", currentBranch.GetName())
+			out.Info("Current branch: %s", currentBranch.Name())
 			switch {
 			case opts.Direction == DirectionAbove:
 				out.Info("New child branch: %s", fileResult.BranchNames[0])
@@ -279,7 +279,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			}
 		}
 		handler.Complete(ActionResult{
-			OriginalBranch: currentBranch.GetName(),
+			OriginalBranch: currentBranch.Name(),
 			NewBranches:    fileResult.BranchNames,
 			Style:          style,
 		})
@@ -303,7 +303,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Apply the split
 	if err := eng.ApplySplitToCommits(context, engine.ApplySplitOptions{
-		BranchToSplit: currentBranch.GetName(),
+		BranchToSplit: currentBranch.Name(),
 		BranchNames:   result.BranchNames,
 		BranchPoints:  result.BranchPoints,
 		AsSibling:     opts.AsSibling,
@@ -320,7 +320,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	handler.Complete(ActionResult{
-		OriginalBranch: currentBranch.GetName(),
+		OriginalBranch: currentBranch.Name(),
 		NewBranches:    result.BranchNames,
 		Style:          style,
 	})

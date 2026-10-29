@@ -84,7 +84,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		// Verify your main workspace remains on main
 		currentBranch := s.Engine.CurrentBranch(t.Context())
 		require.NotNil(t, currentBranch)
-		require.Equal(t, "main", currentBranch.GetName())
+		require.Equal(t, "main", currentBranch.Name())
 	})
 
 	t.Run("deletes branch that is checked out in a separate worktree", func(t *testing.T) {

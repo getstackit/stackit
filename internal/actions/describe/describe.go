@@ -66,13 +66,13 @@ func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error
 
 	// Check if branch is tracked
 	if !currentBranch.IsTracked() {
-		return fmt.Errorf("branch %s is not tracked; use 'stackit track' first", currentBranch.GetName())
+		return fmt.Errorf("branch %s is not tracked; use 'stackit track' first", currentBranch.Name())
 	}
 
 	// Get stack root for display
 	stackRoot := eng.GetStackRootForBranch(*currentBranch)
 	if stackRoot == "" {
-		return fmt.Errorf("branch %s is not part of a tracked stack", currentBranch.GetName())
+		return fmt.Errorf("branch %s is not part of a tracked stack", currentBranch.Name())
 	}
 
 	// Handle --show

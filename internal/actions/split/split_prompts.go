@@ -45,7 +45,7 @@ func promptBranchName(prompter handlerBase.TextInputPrompter, existingNames []st
 	// but don't allow other existing branch names
 	if branchName != originalBranchName {
 		for _, b := range eng.AllBranches() {
-			if b.GetName() == branchName {
+			if b.Name() == branchName {
 				return "", fmt.Errorf("branch name %s is already in use", branchName)
 			}
 		}

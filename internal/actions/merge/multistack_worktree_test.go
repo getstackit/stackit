@@ -17,17 +17,17 @@ func TestMultiStackWorktreeExecutor_ConflictingStackResetsState(t *testing.T) {
 
 	// stack1 modifies test.txt to "stack1"
 	s.CreateBranchQuiet("stack1").
-		TrackBranch("stack1", s.Engine.Trunk().GetName())
+		TrackBranch("stack1", s.Engine.Trunk().Name())
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("stack1", ""))
 	s.Rebuild().
-		CheckoutQuiet(s.Engine.Trunk().GetName())
+		CheckoutQuiet(s.Engine.Trunk().Name())
 
 	// stack2 modifies the same file differently to force a conflict when merged after stack1
 	s.CreateBranchQuiet("stack2").
-		TrackBranch("stack2", s.Engine.Trunk().GetName())
+		TrackBranch("stack2", s.Engine.Trunk().Name())
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("stack2", ""))
 	s.Rebuild().
-		Checkout(s.Engine.Trunk().GetName())
+		Checkout(s.Engine.Trunk().Name())
 
 	executor := NewMultiStackWorktreeExecutor(s.Engine, s.Context.Output)
 	result, err := executor.ExecuteInWorktree(t.Context(), []MultiStackInfo{
@@ -58,13 +58,13 @@ func TestMultiStackWorktreeExecutor_PullsTrunkBeforeMerge(t *testing.T) {
 
 	// Create a new commit on trunk and push it to the remote, then rewind local to make it stale
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("remote-change", "remote"))
-	require.NoError(t, s.Scene.Repo.PushBranch("origin", s.Engine.Trunk().GetName()))
+	require.NoError(t, s.Scene.Repo.PushBranch("origin", s.Engine.Trunk().Name()))
 
-	latestRemoteSHA, err := s.Scene.Repo.GetRevision("origin/" + s.Engine.Trunk().GetName())
+	latestRemoteSHA, err := s.Scene.Repo.GetRevision("origin/" + s.Engine.Trunk().Name())
 	require.NoError(t, err)
 
 	// Reset local trunk to previous commit to simulate stale trunk
-	prevSHA, err := s.Scene.Repo.GetRevision(s.Engine.Trunk().GetName() + "~1")
+	prevSHA, err := s.Scene.Repo.GetRevision(s.Engine.Trunk().Name() + "~1")
 	require.NoError(t, err)
 	require.NoError(t, s.Scene.Repo.RunGitCommand("reset", "--hard", prevSHA))
 	s.Rebuild()
@@ -89,7 +89,7 @@ func TestMultiStackWorktreeExecutor_OctopusMergeCreatesSingleCommit(t *testing.T
 	// Create a stack with 3 branches: branch1 -> branch2 -> branch3
 	// Each branch modifies different files to avoid conflicts
 	s.CreateBranchQuiet("branch1").
-		TrackBranch("branch1", s.Engine.Trunk().GetName())
+		TrackBranch("branch1", s.Engine.Trunk().Name())
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("branch1-content", "file1"))
 	branch1SHA, err := s.Scene.Repo.GetRevision("branch1")
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestMultiStackWorktreeExecutor_OctopusMergeCreatesSingleCommit(t *testing.T
 	branch3SHA, err := s.Scene.Repo.GetRevision("branch3")
 	require.NoError(t, err)
 	s.Rebuild().
-		CheckoutQuiet(s.Engine.Trunk().GetName())
+		CheckoutQuiet(s.Engine.Trunk().Name())
 
 	// Execute octopus merge
 	executor := NewMultiStackWorktreeExecutor(s.Engine, s.Context.Output)
@@ -167,7 +167,7 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 
 	// Create stack1 with 2 branches modifying different files
 	s.CreateBranchQuiet("stack1-branch1").
-		TrackBranch("stack1-branch1", s.Engine.Trunk().GetName())
+		TrackBranch("stack1-branch1", s.Engine.Trunk().Name())
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("stack1-b1", "s1file1"))
 	stack1Branch1SHA, err := s.Scene.Repo.GetRevision("stack1-branch1")
 	require.NoError(t, err)
@@ -179,11 +179,11 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 	stack1Branch2SHA, err := s.Scene.Repo.GetRevision("stack1-branch2")
 	require.NoError(t, err)
 	s.Rebuild().
-		CheckoutQuiet(s.Engine.Trunk().GetName())
+		CheckoutQuiet(s.Engine.Trunk().Name())
 
 	// Create stack2 with 2 branches modifying different files (no conflicts with stack1)
 	s.CreateBranchQuiet("stack2-branch1").
-		TrackBranch("stack2-branch1", s.Engine.Trunk().GetName())
+		TrackBranch("stack2-branch1", s.Engine.Trunk().Name())
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("stack2-b1", "s2file1"))
 	stack2Branch1SHA, err := s.Scene.Repo.GetRevision("stack2-branch1")
 	require.NoError(t, err)
@@ -195,7 +195,7 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 	stack2Branch2SHA, err := s.Scene.Repo.GetRevision("stack2-branch2")
 	require.NoError(t, err)
 	s.Rebuild().
-		CheckoutQuiet(s.Engine.Trunk().GetName())
+		CheckoutQuiet(s.Engine.Trunk().Name())
 
 	// Execute multi-stack merge
 	executor := NewMultiStackWorktreeExecutor(s.Engine, s.Context.Output)
@@ -214,7 +214,7 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 
 	// Verify we have exactly ONE merge commit (global octopus) by counting first-parent commits
 	// First-parent traversal shows just the merge commits on the mainline
-	logOutput, err := worktreeRepo.RunGitCommandAndGetOutput("rev-list", "--count", "--first-parent", s.Engine.Trunk().GetName()+"..HEAD")
+	logOutput, err := worktreeRepo.RunGitCommandAndGetOutput("rev-list", "--count", "--first-parent", s.Engine.Trunk().Name()+"..HEAD")
 	require.NoError(t, err)
 	require.Equal(t, "1", logOutput, "should have exactly 1 merge commit on first-parent path (global octopus)")
 

@@ -35,7 +35,7 @@ func TestFailedSnapshotClearsPreviousBinding(t *testing.T) {
 	require.NoError(t, os.Remove(dir))
 	require.NoError(t, os.Rename(dir+"-saved", dir))
 	require.Empty(t, s.Engine.LastSnapshotID())
-	snapshots, err := s.Engine.GetSnapshots()
+	snapshots, err := s.Engine.Snapshots()
 	require.NoError(t, err)
 	require.Len(t, snapshots, 1, "the earlier snapshot should remain available for explicit undo")
 }
@@ -129,7 +129,7 @@ func TestTakeSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify snapshot was created
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		require.Len(t, snapshots, 1)
 
@@ -169,7 +169,7 @@ func TestTakeSnapshot(t *testing.T) {
 		err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test"))
 		require.NoError(t, err)
 
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		snapshot, err := s.Engine.LoadSnapshot(snapshots[0].ID)
 		require.NoError(t, err)
@@ -184,7 +184,7 @@ func TestGetSnapshots(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		require.Empty(t, snapshots)
 	})
@@ -204,7 +204,7 @@ func TestGetSnapshots(t *testing.T) {
 		err = s.Engine.TakeSnapshot(t.Context(), snapshotOpts("third"))
 		require.NoError(t, err)
 
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		require.Len(t, snapshots, 3)
 
@@ -232,7 +232,7 @@ func TestGetSnapshots(t *testing.T) {
 		err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("move", "branch-a", "onto", "branch-b"))
 		require.NoError(t, err)
 
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		require.Len(t, snapshots, 1)
 		require.Contains(t, snapshots[0].DisplayName, "[MOVE]")
@@ -255,7 +255,7 @@ func TestLoadSnapshot(t *testing.T) {
 		err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test", "arg"))
 		require.NoError(t, err)
 
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 
 		snapshot, err := s.Engine.LoadSnapshot(snapshots[0].ID)
@@ -313,7 +313,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		require.NotEqual(t, initialFeatureSHA, newFeatureSHA)
 
 		// Restore snapshot
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		err = s.Engine.RestoreSnapshot(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
@@ -350,12 +350,12 @@ func TestRestoreSnapshot(t *testing.T) {
 		allBranches := s.Engine.AllBranches()
 		branches := make([]string, len(allBranches))
 		for i, b := range allBranches {
-			branches[i] = b.GetName()
+			branches[i] = b.Name()
 		}
 		require.Contains(t, branches, "new-branch")
 
 		// Restore snapshot
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		err = s.Engine.RestoreSnapshot(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
@@ -365,7 +365,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		allBranches2 := s.Engine.AllBranches()
 		branches = make([]string, len(allBranches2))
 		for i, b := range allBranches2 {
-			branches[i] = b.GetName()
+			branches[i] = b.Name()
 		}
 		require.NotContains(t, branches, "new-branch")
 	})
@@ -394,7 +394,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Restore snapshot
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		err = s.Engine.RestoreSnapshot(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
@@ -424,7 +424,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		require.Equal(t, "feature", currentBranch)
 
 		// Restore snapshot
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		err = s.Engine.RestoreSnapshot(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
@@ -454,7 +454,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Restore snapshot - should recreate the branch
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		err = s.Engine.RestoreSnapshot(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
@@ -464,7 +464,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		allBranches := s.Engine.AllBranches()
 		branches := make([]string, len(allBranches))
 		for i, b := range allBranches {
-			branches[i] = b.GetName()
+			branches[i] = b.Name()
 		}
 		require.Contains(t, branches, "feature")
 	})
@@ -486,7 +486,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Restore snapshot - this will recreate the feature branch
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		err = s.Engine.RestoreSnapshot(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
@@ -504,7 +504,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		allBranches := s.Engine.AllBranches()
 		branches := make([]string, len(allBranches))
 		for i, b := range allBranches {
-			branches[i] = b.GetName()
+			branches[i] = b.Name()
 		}
 		require.Contains(t, branches, "feature")
 	})
@@ -525,7 +525,7 @@ func TestEnforceMaxStackDepth(t *testing.T) {
 		}
 
 		// Should only have 10 snapshots (max depth)
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		require.LessOrEqual(t, len(snapshots), 10)
 
@@ -559,7 +559,7 @@ func TestSnapshotFileFormat(t *testing.T) {
 		require.Equal(t, ".json", filepath.Ext(snapshotFile))
 
 		// Verify it's valid JSON by loading it
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		_, err = s.Engine.LoadSnapshot(snapshots[0].ID)
 		require.NoError(t, err)
@@ -585,7 +585,7 @@ func TestSnapshotWorktreeCapture(t *testing.T) {
 
 		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
 
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		require.Len(t, snapshots, 1)
 
@@ -624,7 +624,7 @@ func TestSnapshotWorktreeCapture(t *testing.T) {
 
 		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
 
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		snapshot, err := s.Engine.LoadSnapshot(snapshots[0].ID)
 		require.NoError(t, err)
@@ -653,7 +653,7 @@ func TestSnapshotWorktreeCapture(t *testing.T) {
 		// must not overwrite content that is currently on disk.
 		require.NoError(t, os.WriteFile(freshPath, []byte("newer content"), 0600))
 
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		_, err = s.Engine.RestoreWorktree(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
@@ -675,7 +675,7 @@ func TestSnapshotWorktreeCapture(t *testing.T) {
 
 		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), snapshotOpts("restack")))
 
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		snapshot, err := s.Engine.LoadSnapshot(snapshots[0].ID)
 		require.NoError(t, err)
@@ -694,7 +694,7 @@ func TestSnapshotWorktreeCapture(t *testing.T) {
 
 		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
 
-		snapshots, err := s.Engine.GetSnapshots()
+		snapshots, err := s.Engine.Snapshots()
 		require.NoError(t, err)
 		snapshot, err := s.Engine.LoadSnapshot(snapshots[0].ID)
 		require.NoError(t, err)
@@ -714,7 +714,7 @@ func TestSnapshotWorktreeCapture(t *testing.T) {
 			require.NoError(t, s.Scene.Repo.CreateChange("wip "+strconv.Itoa(i), "wip", true))
 			require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
 			if i == 0 {
-				snapshots, err := s.Engine.GetSnapshots()
+				snapshots, err := s.Engine.Snapshots()
 				require.NoError(t, err)
 				require.Len(t, snapshots, 1)
 				oldestID = snapshots[0].ID

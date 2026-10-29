@@ -56,7 +56,7 @@ the --to flag is used to specify a target branch to navigate towards.`,
 				graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 
 				// Traverse up the specified number of steps
-				targetBranch := currentBranch.GetName()
+				targetBranch := currentBranch.Name()
 				for i := range steps {
 					children := navigation.FlattenThroughAnchors(graph.ChildBranches(ctx.Engine.GetBranch(targetBranch)), graph)
 					if len(children) == 0 {
@@ -71,7 +71,7 @@ the --to flag is used to specify a target branch to navigate towards.`,
 					var nextBranch string
 					var err error
 					if len(children) == 1 {
-						nextBranch = children[0].GetName()
+						nextBranch = children[0].Name()
 					} else {
 						// Multiple children, decide which way to go
 						if toBranch != "" {
@@ -80,8 +80,8 @@ the --to flag is used to specify a target branch to navigate towards.`,
 							for _, child := range children {
 								upstack := graph.Range(child, engine.StackRange{RecursiveChildren: true})
 								upstackNames := upstack.Names()
-								if child.GetName() == toBranch || slices.Contains(upstackNames, toBranch) {
-									candidates = append(candidates, child.GetName())
+								if child.Name() == toBranch || slices.Contains(upstackNames, toBranch) {
+									candidates = append(candidates, child.Name())
 								}
 							}
 
@@ -112,7 +112,7 @@ the --to flag is used to specify a target branch to navigate towards.`,
 				}
 
 				// Check if we actually moved
-				if targetBranch == currentBranch.GetName() {
+				if targetBranch == currentBranch.Name() {
 					return nil
 				}
 

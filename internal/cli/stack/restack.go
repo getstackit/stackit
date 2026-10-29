@@ -76,7 +76,7 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 					if currentBranch == nil {
 						return errors.New("not on a branch and --branch not specified")
 					}
-					targetBranch = currentBranch.GetName()
+					targetBranch = currentBranch.Name()
 				}
 
 				// Determine scope based on flags

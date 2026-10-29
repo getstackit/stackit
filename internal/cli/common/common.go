@@ -97,7 +97,7 @@ func ResolveBranchArg(ctx *app.Context, args []string, missingErr error) (string
 	if currentBranch == nil {
 		return "", missingErr
 	}
-	return currentBranch.GetName(), nil
+	return currentBranch.Name(), nil
 }
 
 // HandleCommandError formats known error types for user display.

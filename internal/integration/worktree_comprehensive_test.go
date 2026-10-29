@@ -950,7 +950,7 @@ func TestWorktreeComplexScenarios(t *testing.T) {
 		sh.Checkout("main").Run("sync")
 
 		// Merged branch should be deleted
-		branches, _ := sh.Scene().Repo.GetLocalBranches()
+		branches, _ := sh.Scene().Repo.LocalBranches()
 		for _, b := range branches {
 			if b == "to-be-merged" {
 				t.Error("Merged branch should be deleted")

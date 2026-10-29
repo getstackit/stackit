@@ -138,9 +138,9 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 
 		// CRITICAL: Local parent should be PRESERVED (not changed by sync)
 		branchC := s.Engine.GetBranch("branch-c")
-		parentC := branchC.GetParent()
+		parentC := branchC.Parent()
 		require.NotNil(t, parentC)
-		require.Equal(t, "branch-a", parentC.GetName(), "branch-c local parent should remain branch-a")
+		require.Equal(t, "branch-a", parentC.Name(), "branch-c local parent should remain branch-a")
 
 		// Verify the expected structure is preserved
 		s.ExpectStackStructure(map[string]string{
@@ -340,9 +340,9 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 
 		// VERIFICATION: Local parent should be PRESERVED (branch-a, not changed to main)
 		branchB := s.Engine.GetBranch("branch-b")
-		parent := branchB.GetParent()
+		parent := branchB.Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "branch-a", parent.GetName(), "branch-b local parent should remain branch-a (local is authoritative)")
+		require.Equal(t, "branch-a", parent.Name(), "branch-b local parent should remain branch-a (local is authoritative)")
 	})
 }
 

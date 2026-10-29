@@ -47,7 +47,7 @@ func RunTree(ctx *app.Context, opts actions.TreeOptions) error {
 
 func printTreeJSON(ctx *app.Context, opts actions.TreeOptions) error {
 	req := actions.TreeJSONRequest{Style: opts.Style}
-	if opts.BranchName != ctx.Engine.Trunk().GetName() || opts.Steps != nil {
+	if opts.BranchName != ctx.Engine.Trunk().Name() || opts.Steps != nil {
 		// Scope the JSON to exactly what the text view would draw, before any
 		// expensive enrichment runs.
 		_, _, req.Branches = resolveVisibleTree(ctx.Context, ctx.Engine, opts)
@@ -165,7 +165,7 @@ func buildTreeAnnotations(ctx *app.Context, opts actions.TreeOptions, visibleBra
 	}
 	built := make([]tree.BranchAnnotation, len(visibleBranches))
 	workpool.Run(items, func(item indexedBranch) {
-		name := item.branch.GetName()
+		name := item.branch.Name()
 		if opts.Style != actions.TreeStyleShort {
 			built[item.index] = tui.TreeAnnotation(stackview.FullAnnotation(eng, item.branch, stats[name], enrichment, stackview.AnnotationOptions{
 				SkipCommitMessages: true,
@@ -182,7 +182,7 @@ func buildTreeAnnotations(ctx *app.Context, opts actions.TreeOptions, visibleBra
 
 	annotations := make(map[string]tree.BranchAnnotation, len(visibleBranches))
 	for i, b := range visibleBranches {
-		annotations[b.GetName()] = built[i]
+		annotations[b.Name()] = built[i]
 	}
 	return annotations
 }
@@ -224,7 +224,7 @@ func treeSummaryLines(eng engine.BranchReader, annotations map[string]tree.Branc
 func visibleTreeBranches(renderer *tree.StackTreeRenderer, branchName string, opts tree.RenderOptions, branches engine.Branches) engine.Branches {
 	branchByName := make(map[string]engine.Branch, len(branches))
 	for _, b := range branches {
-		branchByName[b.GetName()] = b
+		branchByName[b.Name()] = b
 	}
 
 	rendered := renderer.RenderStackDetailed(branchName, opts)

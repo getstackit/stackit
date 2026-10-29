@@ -48,9 +48,9 @@ func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error
 	// Get current branch
 	currentBranch := ""
 	if cb := eng.CurrentBranch(ctx); cb != nil {
-		currentBranch = cb.GetName()
+		currentBranch = cb.Name()
 	}
-	isOnTrunk := currentBranch == eng.Trunk().GetName() || currentBranch == ""
+	isOnTrunk := currentBranch == eng.Trunk().Name() || currentBranch == ""
 
 	// Handle Show
 	if opts.Show {
@@ -58,7 +58,7 @@ func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error
 			return errors.ErrNotOnBranch
 		}
 		currentBranchObj := eng.GetBranch(currentBranch)
-		explicitScope := currentBranchObj.GetExplicitScope()
+		explicitScope := currentBranchObj.ExplicitScope()
 		resolvedScope := eng.GetScope(currentBranchObj)
 
 		switch {

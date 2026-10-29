@@ -64,7 +64,7 @@ func TestBranches(t *testing.T) {
 		t.Parallel()
 
 		branches := BranchesOf(main, feature, bugfix).Filter(func(branch Branch) bool {
-			return branch.GetName() != "feature"
+			return branch.Name() != "feature"
 		})
 
 		require.Equal(t, []string{"main", "bugfix"}, branches.Names())

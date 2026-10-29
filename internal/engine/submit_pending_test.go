@@ -61,10 +61,10 @@ func TestSubmitPendingFlag(t *testing.T) {
 		require.NoError(t, s.Engine.MarkBranchesForPRBodyUpdate(t.Context(), []string{"feature"}))
 
 		require.NoError(t, s.Engine.MarkBranchesSubmitPending(t.Context(), []string{"feature"}))
-		require.Contains(t, s.Engine.GetBranchesNeedingPRBodyUpdate(), "feature")
+		require.Contains(t, s.Engine.BranchesNeedingPRBodyUpdate(), "feature")
 
 		require.NoError(t, s.Engine.ClearBranchesSubmitPending(t.Context(), []string{"feature"}))
-		require.Contains(t, s.Engine.GetBranchesNeedingPRBodyUpdate(), "feature")
+		require.Contains(t, s.Engine.BranchesNeedingPRBodyUpdate(), "feature")
 		require.False(t, pending(t, s, "feature"))
 	})
 }

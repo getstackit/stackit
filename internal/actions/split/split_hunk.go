@@ -84,12 +84,12 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 	defaultCommitMessage := strings.Join(commitMessages, "\n\n")
 
 	// Show instructions
-	splog.Info("Splitting %s into multiple single-commit branches.", output.CurrentBranch(branchToSplit.GetName()))
-	branch := eng.GetBranch(branchToSplit.GetName())
-	prInfo, _ := branch.GetPrInfo()
+	splog.Info("Splitting %s into multiple single-commit branches.", output.CurrentBranch(branchToSplit.Name()))
+	branch := eng.GetBranch(branchToSplit.Name())
+	prInfo, _ := branch.PrInfo()
 	if prInfo != nil && prInfo.Number() != nil {
 		splog.Info("If any of the new branches keeps the name %s, it will be linked to PR #%d.",
-			output.CurrentBranch(branchToSplit.GetName()), *prInfo.Number())
+			output.CurrentBranch(branchToSplit.Name()), *prInfo.Number())
 	}
 	splog.Info("")
 	splog.Info("For each branch you'd like to create:")
@@ -181,8 +181,8 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 		// Prompt for branch name BEFORE creating commit (so we can validate first)
 		handler.OnStep(StepBranchName, handlerBase.StatusStarted, "Enter branch name")
 
-		defaultName := generateDefaultBranchName(branchToSplit.GetName(), branchNames)
-		branchName, err := handler.PromptBranchName(defaultName, branchNames, existingBranchNames, branchToSplit.GetName())
+		defaultName := generateDefaultBranchName(branchToSplit.Name(), branchNames)
+		branchName, err := handler.PromptBranchName(defaultName, branchNames, existingBranchNames, branchToSplit.Name())
 		if err != nil {
 			return err
 		}
@@ -221,7 +221,7 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 	}
 
 	// Update branchToSplit to point to the last commit we created
-	if err := eng.UpdateBranchRef(gitCtx, branchToSplit.GetName(), "HEAD"); err != nil {
+	if err := eng.UpdateBranchRef(gitCtx, branchToSplit.Name(), "HEAD"); err != nil {
 		return fmt.Errorf("failed to update branch reference: %w", err)
 	}
 
@@ -242,7 +242,7 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 
 	// Apply the split to commits
 	if err := eng.ApplySplitToCommits(gitCtx, engine.ApplySplitOptions{
-		BranchToSplit: branchToSplit.GetName(),
+		BranchToSplit: branchToSplit.Name(),
 		BranchNames:   result.BranchNames,
 		BranchPoints:  result.BranchPoints,
 		AsSibling:     false,
@@ -258,7 +258,7 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 	}
 
 	handler.Complete(ActionResult{
-		OriginalBranch: branchToSplit.GetName(),
+		OriginalBranch: branchToSplit.Name(),
 		NewBranches:    result.BranchNames,
 		Style:          StyleHunk,
 	})
@@ -308,9 +308,9 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	gitCtx := ctx.Context
 
 	// Get the original parent before we modify anything
-	originalParent := branchToSplit.GetParent()
+	originalParent := branchToSplit.Parent()
 	if originalParent == nil {
-		return fmt.Errorf("cannot split branch %s: it has no parent", branchToSplit.GetName())
+		return fmt.Errorf("cannot split branch %s: it has no parent", branchToSplit.Name())
 	}
 
 	// Get default commit message
@@ -327,7 +327,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	// Determine new parent branch name
 	newParentName := opts.name
 	if newParentName == "" {
-		newParentName = generateDefaultBranchName(branchToSplit.GetName(), branchSet.Names())
+		newParentName = generateDefaultBranchName(branchToSplit.Name(), branchSet.Names())
 	}
 	// Validate branch name doesn't already exist
 	if branchSet.Contains(newParentName) {
@@ -379,7 +379,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 
 	// Check if there are unstaged changes or untracked files (to keep on branchToSplit)
 	if !status.HasUnstagedChanges() {
-		return fmt.Errorf("all changes were staged from patch - nothing would remain on %s", branchToSplit.GetName())
+		return fmt.Errorf("all changes were staged from patch - nothing would remain on %s", branchToSplit.Name())
 	}
 
 	// Stash the staged changes (these will become the new parent branch content)
@@ -417,13 +417,13 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	}
 
 	// Update branchToSplit to point to this commit (contains remaining changes)
-	if err := eng.UpdateBranchRef(gitCtx, branchToSplit.GetName(), "HEAD"); err != nil {
+	if err := eng.UpdateBranchRef(gitCtx, branchToSplit.Name(), "HEAD"); err != nil {
 		cleanupStash()
 		return fmt.Errorf("failed to update branch reference: %w", err)
 	}
 
 	// Reset to original parent to create the new parent branch
-	if err := eng.ResetHard(gitCtx, originalParent.GetName()); err != nil {
+	if err := eng.ResetHard(gitCtx, originalParent.Name()); err != nil {
 		cleanupStash()
 		return fmt.Errorf("failed to reset to original parent: %w", err)
 	}
@@ -453,18 +453,18 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 
 	// Track the new parent branch with originalParent as its parent
 	newParentBranch := eng.GetBranch(newParentName)
-	if err := eng.TrackBranch(gitCtx, newParentName, originalParent.GetName()); err != nil {
+	if err := eng.TrackBranch(gitCtx, newParentName, originalParent.Name()); err != nil {
 		return fmt.Errorf("failed to track parent branch: %w", err)
 	}
 
 	// Update branchToSplit to have newParentBranch as its parent
 	if err := eng.SetParent(gitCtx, branchToSplit, newParentBranch, engine.DivergenceRecompute); err != nil {
-		return fmt.Errorf("failed to update parent of %s: %w", branchToSplit.GetName(), err)
+		return fmt.Errorf("failed to update parent of %s: %w", branchToSplit.Name(), err)
 	}
 
 	// Restack branchToSplit onto the new parent
 	if err := actions.RestackBranches(ctx, engine.BranchesOf(branchToSplit)); err != nil {
-		return fmt.Errorf("failed to restack %s: %w", branchToSplit.GetName(), err)
+		return fmt.Errorf("failed to restack %s: %w", branchToSplit.Name(), err)
 	}
 
 	// Checkout branchToSplit (we end up on the original branch)
@@ -472,7 +472,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 		return fmt.Errorf("failed to checkout original branch: %w", err)
 	}
 
-	splog.Info("Created branch %s as parent of %s", output.CurrentBranch(newParentName), output.CurrentBranch(branchToSplit.GetName()))
+	splog.Info("Created branch %s as parent of %s", output.CurrentBranch(newParentName), output.CurrentBranch(branchToSplit.Name()))
 
 	guard.Release()
 	return nil
@@ -520,10 +520,10 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 
 	// Show instructions (only for interactive mode)
 	if handler != nil {
-		splog.Info("Splitting %s - extracting changes to a new child branch.", output.CurrentBranch(branchToSplit.GetName()))
+		splog.Info("Splitting %s - extracting changes to a new child branch.", output.CurrentBranch(branchToSplit.Name()))
 		splog.Info("")
 		splog.Info("Stage the changes you want to EXTRACT to the new child branch.")
-		splog.Info("The remaining changes will stay on %s.", output.CurrentBranch(branchToSplit.GetName()))
+		splog.Info("The remaining changes will stay on %s.", output.CurrentBranch(branchToSplit.Name()))
 		splog.Info("")
 		handler.OnStep(StepStagingHunks, handlerBase.StatusStarted, "Stage changes to extract")
 	}
@@ -606,7 +606,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	// Check if there are unstaged changes or untracked files (to keep on current)
 
 	if !status.HasUnstagedChanges() {
-		return fmt.Errorf("all changes were staged - nothing would remain on %s", branchToSplit.GetName())
+		return fmt.Errorf("all changes were staged - nothing would remain on %s", branchToSplit.Name())
 	}
 
 	if handler != nil {
@@ -621,7 +621,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		// Non-interactive mode: use provided name/message or generate defaults
 		childBranchName = opts.name
 		if childBranchName == "" {
-			childBranchName = generateDefaultBranchName(branchToSplit.GetName(), existingBranches.Names())
+			childBranchName = generateDefaultBranchName(branchToSplit.Name(), existingBranches.Names())
 		}
 		// Validate branch name doesn't already exist
 		if existingBranches.Contains(childBranchName) {
@@ -636,9 +636,9 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		// Interactive mode: prompt for branch name and commit message
 		handler.OnStep(StepBranchName, handlerBase.StatusStarted, "Enter child branch name")
 
-		defaultName := generateDefaultBranchName(branchToSplit.GetName(), existingBranches.Names())
+		defaultName := generateDefaultBranchName(branchToSplit.Name(), existingBranches.Names())
 		var err error
-		childBranchName, err = handler.PromptBranchName(defaultName, []string{}, existingBranches, branchToSplit.GetName())
+		childBranchName, err = handler.PromptBranchName(defaultName, []string{}, existingBranches, branchToSplit.Name())
 		if err != nil {
 			return err
 		}
@@ -701,7 +701,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	}
 
 	// Update the original branch ref to point to this new commit (the "keep" content)
-	if err := eng.UpdateBranchRef(gitCtx, branchToSplit.GetName(), "HEAD"); err != nil {
+	if err := eng.UpdateBranchRef(gitCtx, branchToSplit.Name(), "HEAD"); err != nil {
 		cleanupStash()
 		return fmt.Errorf("failed to update branch reference: %w", err)
 	}
@@ -751,7 +751,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	}
 
 	// Track the child branch with parent = branchToSplit
-	if err := eng.TrackBranch(gitCtx, childBranchName, branchToSplit.GetName()); err != nil {
+	if err := eng.TrackBranch(gitCtx, childBranchName, branchToSplit.Name()); err != nil {
 		return fmt.Errorf("failed to track child branch: %w", err)
 	}
 
@@ -761,7 +761,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 
 	// Re-parent existing children to the new child branch, preserving divergence
 	// points so children don't carry the split-out changes.
-	if err := eng.ReparentBranchesToParents(gitCtx, engine.MovesTo(existingChildren, childBranch.GetName()), engine.ReparentOpts{}); err != nil {
+	if err := eng.ReparentBranchesToParents(gitCtx, engine.MovesTo(existingChildren, childBranch.Name()), engine.ReparentOpts{}); err != nil {
 		return fmt.Errorf("failed to reparent children: %w", err)
 	}
 
@@ -775,13 +775,13 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 
 	if handler != nil {
 		handler.Complete(ActionResult{
-			OriginalBranch: branchToSplit.GetName(),
+			OriginalBranch: branchToSplit.Name(),
 			NewBranches:    []string{childBranchName},
 			Style:          StyleHunk,
 		})
 	} else {
 		// Non-interactive mode (patch file): print completion message
-		splog.Info("Created branch %s as child of %s", output.CurrentBranch(childBranchName), output.CurrentBranch(branchToSplit.GetName()))
+		splog.Info("Created branch %s as child of %s", output.CurrentBranch(childBranchName), output.CurrentBranch(branchToSplit.Name()))
 	}
 
 	guard.Release()

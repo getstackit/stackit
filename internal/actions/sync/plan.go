@@ -102,7 +102,7 @@ func PlanDryRun(ctx context.Context, eng PlanEngine, req PlanRequest) DryRunPlan
 		// want of a merge base, not because trunk is current.
 		plan.TrunkStateUnknown = true
 	case remoteStatus.Behind():
-		plan.PullBranch = trunk.GetName()
+		plan.PullBranch = trunk.Name()
 		plan.PullRevision = git.ShortRevision(remoteStatus.RemoteSha, 0)
 	}
 
@@ -123,12 +123,12 @@ func PlanDryRun(ctx context.Context, eng PlanEngine, req PlanRequest) DryRunPlan
 		if branch.IsTrunk() || !branch.IsTracked() {
 			continue
 		}
-		candidateNames = append(candidateNames, branch.GetName())
+		candidateNames = append(candidateNames, branch.Name())
 
 		if req.Restack && !statuses.IsUpToDate(branch) {
 			plan.Restack = append(plan.Restack, DryRunRestackItem{
-				Branch: branch.GetName(),
-				Parent: branch.GetParentOrTrunk(),
+				Branch: branch.Name(),
+				Parent: branch.ParentOrTrunk(),
 			})
 			if root := eng.GetStackRootForBranch(branch); root != "" {
 				restackRootSet[root] = struct{}{}

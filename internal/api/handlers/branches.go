@@ -59,11 +59,11 @@ func (h *BranchesHandler) listBranches(ctx context.Context, w http.ResponseWrite
 
 	responses := make([]httpcontract.BranchResponse, 0, len(branches))
 	for _, branch := range branches {
-		node := graph.GetNode(branch.GetName())
+		node := graph.GetNode(branch.Name())
 		if node == nil {
 			continue
 		}
-		responses = append(responses, httpcontract.MapBranch(ctx, entry.Engine, httpcontract.NewBranchInput(node, checksMap.Get(branch.GetName()), data)))
+		responses = append(responses, httpcontract.MapBranch(ctx, entry.Engine, httpcontract.NewBranchInput(node, checksMap.Get(branch.Name()), data)))
 	}
 
 	writeJSON(w, responses)

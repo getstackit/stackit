@@ -54,10 +54,10 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 	remoteStatuses := eng.ReadBranchRemoteStatuses(remoteCtx, branches)
 	cancelRemote()
 	for _, b := range branches.WithoutTrunk() {
-		status := remoteStatuses[b.GetName()]
+		status := remoteStatuses[b.Name()]
 		if !status.Matches() {
 			if status.Ahead() || status.MissingRemote() || status.Diverged() {
-				unpushedBranches = append(unpushedBranches, b.GetName())
+				unpushedBranches = append(unpushedBranches, b.Name())
 			}
 		}
 	}
@@ -74,7 +74,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 				StackRange: engine.StackRangeDownstack(engine.IncludeCurrentBranch),
 				Confirm:    false,
 			}
-			submitHandler := handler.GetSubmitHandler()
+			submitHandler := handler.SubmitHandler()
 			if err := submit.Action(ctx, submitOpts, submitHandler); err != nil {
 				return fmt.Errorf("failed to submit before locking: %w", err)
 			}
@@ -85,7 +85,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 	branchesToLock := engine.Branches{}
 	for _, b := range branches.WithoutTrunk() {
 		if b.IsLocked() {
-			out.Info("Branch %s is already locked.", output.Branch(b.GetName(), b.GetName() == branchName))
+			out.Info("Branch %s is already locked.", output.Branch(b.Name(), b.Name() == branchName))
 			continue
 		}
 		branchesToLock = branchesToLock.Append(b)
@@ -166,7 +166,7 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 	branchesToUnlock := engine.Branches{}
 	for _, b := range branches.WithoutTrunk() {
 		if !b.IsLocked() {
-			out.Info("Branch %s is already unlocked.", output.Branch(b.GetName(), b.GetName() == branchName))
+			out.Info("Branch %s is already unlocked.", output.Branch(b.Name(), b.Name() == branchName))
 			continue
 		}
 		branchesToUnlock = branchesToUnlock.Append(b)

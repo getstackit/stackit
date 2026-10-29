@@ -51,10 +51,10 @@ func TestWorktreeResetBlocker(t *testing.T) {
 		return s.Repo.CreateChangeAndCommit("base", "base")
 	})
 	repo := scene.Repo
-	baseRev, err := repo.GetCurrentSHA()
+	baseRev, err := repo.CurrentSHA()
 	require.NoError(t, err)
 	require.NoError(t, repo.CreateChangeAndCommit("incoming", "incoming"))
-	incomingRev, err := repo.GetCurrentSHA()
+	incomingRev, err := repo.CurrentSHA()
 	require.NoError(t, err)
 	require.NoError(t, repo.RunGitCommand("reset", "--hard", baseRev))
 

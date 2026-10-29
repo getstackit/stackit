@@ -202,7 +202,7 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 	recordGroupFailure := func(group restackPlannedGroup, err error) error {
 		for _, b := range group.sortedBranches {
 			tally.record(RestackProgress{
-				Branch:    b.GetName(),
+				Branch:    b.Name(),
 				Result:    engine.RestackConflict,
 				Conflict:  true,
 				StackRoot: group.rootBranch,
@@ -214,7 +214,7 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 	err := workpool.RunAll(groups, numJobs, func(group restackPlannedGroup) error {
 		// Create a temporary worktree for this group. PruneSkip because we
 		// pruned once above and don't want N workers racing on prune.
-		wtPath, cleanup, err := eng.CreateTemporaryWorktree(ctx.Context, eng.Trunk().GetName(), "stackit-restack-*", engine.WorktreePruneSkip)
+		wtPath, cleanup, err := eng.CreateTemporaryWorktree(ctx.Context, eng.Trunk().Name(), "stackit-restack-*", engine.WorktreePruneSkip)
 		if err != nil {
 			wrappedErr := fmt.Errorf("stack %s: create worktree: %w", group.rootBranch, err)
 			ctx.Logger.Warn("failed to create worktree for parallel restack: %v", wrappedErr)
@@ -259,7 +259,7 @@ func restackGroupsParallel(ctx *app.Context, jobs int, groups []restackPlannedGr
 
 	// Rebuild the main engine's cache so it sees the ref changes made by the
 	// worktree engines (they share the same .git directory).
-	if err := eng.Rebuild(ctx.Context, eng.Trunk().GetName()); err != nil {
+	if err := eng.Rebuild(ctx.Context, eng.Trunk().Name()); err != nil {
 		ctx.Logger.Warn("failed to rebuild engine after parallel restack: %v", err)
 	}
 

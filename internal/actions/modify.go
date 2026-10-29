@@ -48,7 +48,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 	if err := validation.ModifyBranchChain(ctx.Context, eng, "modify").Validate(); err != nil {
 		return err
 	}
-	originalBranchName := eng.CurrentBranch(ctx.Context).GetName()
+	originalBranchName := eng.CurrentBranch(ctx.Context).Name()
 
 	if opts.Into != "" && opts.InteractiveRebase {
 		return errors.New("--into cannot be combined with --interactive-rebase")
@@ -296,16 +296,16 @@ func interactiveRebaseAction(ctx *app.Context) error {
 	currentBranch := eng.CurrentBranch(ctx.Context)
 
 	// Get the parent branch to determine rebase base
-	parent := currentBranch.GetParent()
+	parent := currentBranch.Parent()
 	parentName := ""
 	if parent == nil {
-		parentName = eng.Trunk().GetName()
+		parentName = eng.Trunk().Name()
 	} else {
-		parentName = parent.GetName()
+		parentName = parent.Name()
 	}
 
 	out.Info("Starting interactive rebase for %s onto %s...",
-		output.CurrentBranch(currentBranch.GetName()),
+		output.CurrentBranch(currentBranch.Name()),
 		output.BranchName(parentName))
 
 	// Run interactive rebase

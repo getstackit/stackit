@@ -39,7 +39,7 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 	ancestryRanges := make([]git.RevRange, 0, len(branches))
 	remoteRefs := make([]string, 0)
 	for _, branch := range branches {
-		name := branch.GetName()
+		name := branch.Name()
 		if branch.IsFrozen() {
 			remoteRefs = append(remoteRefs, e.git.GetRemote(ctx)+"/"+name)
 			continue
@@ -140,7 +140,7 @@ func frozenRestack(branch, parent, parentRevision, remoteRevision string) Restac
 // branch derives one decision without mutating the plan's indexes.
 func (p *restackPlanner) branch(ctx context.Context, branch Branch) (RestackPlanItem, bool) {
 	e := p.engine
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	item := RestackPlanItem{Branch: branchName, Action: RestackPlanApplyValidated}
 
 	lockReason := e.GetLockReason(branch)
@@ -151,7 +151,7 @@ func (p *restackPlanner) branch(ctx context.Context, branch Branch) (RestackPlan
 		}), true
 	}
 
-	parent := branch.GetParent()
+	parent := branch.Parent()
 	parentName := e.trunk
 	e.mu.RLock()
 	state := e.readState(branchName)
@@ -160,7 +160,7 @@ func (p *restackPlanner) branch(ctx context.Context, branch Branch) (RestackPlan
 		parentName = state.Parent
 	}
 	if parent != nil {
-		parentName = parent.GetName()
+		parentName = parent.Name()
 		if _, ok := e.planRev(p.revisions, parentName); !ok {
 			if ancestors, ancestorErr := e.FindMostRecentTrackedAncestors(ctx, branchName); ancestorErr == nil && len(ancestors) > 0 {
 				parentName = ancestors[0]

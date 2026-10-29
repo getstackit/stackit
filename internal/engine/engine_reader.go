@@ -74,7 +74,7 @@ func (e *engineImpl) CurrentBranch(ctx context.Context) *Branch {
 // where a missing current branch should be absent rather than an error.
 func (e *engineImpl) CurrentBranchName(ctx context.Context) string {
 	if cb := e.CurrentBranch(ctx); cb != nil {
-		return cb.GetName()
+		return cb.Name()
 	}
 	return ""
 }
@@ -85,7 +85,7 @@ func (e *engineImpl) ValidateOnBranch(ctx context.Context) (string, error) {
 	if currentBranch == nil {
 		return "", errors.ErrNotOnBranch
 	}
-	return currentBranch.GetName(), nil
+	return currentBranch.Name(), nil
 }
 
 // Trunk returns the trunk branch
@@ -102,11 +102,11 @@ func (e *engineImpl) GetBranch(branchName string) Branch {
 
 // GetParent returns the parent branch (nil if no parent)
 func (e *engineImpl) GetParent(branch Branch) *Branch {
-	e.ensureBranchSharedLoaded(branch.GetName())
+	e.ensureBranchSharedLoaded(branch.Name())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	if state := e.readState(branch.GetName()); state != nil {
+	if state := e.readState(branch.Name()); state != nil {
 		b := NewBranch(state.Parent, e)
 		return &b
 	}
@@ -121,11 +121,11 @@ func (e *engineImpl) GetParent(branch Branch) *Branch {
 func (e *engineImpl) FindNearestNonExcludedAncestor(startParent string, isExcluded func(name string) bool) string {
 	current := startParent
 	for isExcluded(current) {
-		parent := e.GetBranch(current).GetParent()
+		parent := e.GetBranch(current).Parent()
 		if parent == nil {
-			return e.Trunk().GetName()
+			return e.Trunk().Name()
 		}
-		current = parent.GetName()
+		current = parent.Name()
 	}
 	return current
 }
@@ -253,18 +253,18 @@ func (e *engineImpl) SortBranchesTopologically(ctx context.Context, branches Bra
 	graph := e.Graph(ctx, SortStrategyAlphabetical)
 	depth := make(map[string]int, len(branches))
 	for _, b := range branches {
-		if node := graph.GetNode(b.GetName()); node != nil {
-			depth[b.GetName()] = node.Depth
+		if node := graph.GetNode(b.Name()); node != nil {
+			depth[b.Name()] = node.Depth
 		}
 	}
 
 	result := make([]Branch, len(branches))
 	copy(result, branches)
 	slices.SortFunc(result, func(a, b Branch) int {
-		if c := cmp.Compare(depth[a.GetName()], depth[b.GetName()]); c != 0 {
+		if c := cmp.Compare(depth[a.Name()], depth[b.Name()]); c != 0 {
 			return c
 		}
-		return cmp.Compare(a.GetName(), b.GetName())
+		return cmp.Compare(a.Name(), b.Name())
 	})
 
 	return result
@@ -300,7 +300,7 @@ func (e *engineImpl) BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, in
 			return true
 		}
 
-		visit(startBranch.GetName(), 0)
+		visit(startBranch.Name(), 0)
 	}
 }
 

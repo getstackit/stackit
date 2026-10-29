@@ -16,7 +16,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 
 		// Create a branch and push it
 		s.CreateBranchQuiet("feature1").
-			TrackBranch("feature1", s.Engine.Trunk().GetName())
+			TrackBranch("feature1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("feature1-content", "file1"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "feature1"))
 		s.Rebuild()
@@ -36,7 +36,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 
 		// Create a branch and push it
 		s.CreateBranchQuiet("feature1").
-			TrackBranch("feature1", s.Engine.Trunk().GetName())
+			TrackBranch("feature1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("feature1-content", "file1"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "feature1"))
 		s.Rebuild()
@@ -63,7 +63,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 
 		// Create first branch and push
 		s.CreateBranchQuiet("feature1").
-			TrackBranch("feature1", s.Engine.Trunk().GetName())
+			TrackBranch("feature1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("feature1-content", "file1"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "feature1"))
 		s.Rebuild()
@@ -99,15 +99,15 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 
 		// Create stack1
 		s.CreateBranchQuiet("stack1-b1").
-			TrackBranch("stack1-b1", s.Engine.Trunk().GetName())
+			TrackBranch("stack1-b1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("s1-content", "s1file"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "stack1-b1"))
 		s.Rebuild().
-			CheckoutQuiet(s.Engine.Trunk().GetName())
+			CheckoutQuiet(s.Engine.Trunk().Name())
 
 		// Create stack2
 		s.CreateBranchQuiet("stack2-b1").
-			TrackBranch("stack2-b1", s.Engine.Trunk().GetName())
+			TrackBranch("stack2-b1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("s2-content", "s2file"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "stack2-b1"))
 		s.Rebuild()
@@ -128,15 +128,15 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 
 		// Create stack1 - will match remote
 		s.CreateBranchQuiet("stack1-b1").
-			TrackBranch("stack1-b1", s.Engine.Trunk().GetName())
+			TrackBranch("stack1-b1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("s1-content", "s1file"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "stack1-b1"))
 		s.Rebuild().
-			CheckoutQuiet(s.Engine.Trunk().GetName())
+			CheckoutQuiet(s.Engine.Trunk().Name())
 
 		// Create stack2 - will differ from remote
 		s.CreateBranchQuiet("stack2-b1").
-			TrackBranch("stack2-b1", s.Engine.Trunk().GetName())
+			TrackBranch("stack2-b1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("s2-content", "s2file"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "stack2-b1"))
 		s.Rebuild()
@@ -162,7 +162,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 
 		// Create a branch but don't push it
 		s.CreateBranchQuiet("feature1").
-			TrackBranch("feature1", s.Engine.Trunk().GetName())
+			TrackBranch("feature1", s.Engine.Trunk().Name())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("feature1-content", "file1"))
 		s.Rebuild()
 

@@ -360,7 +360,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		actualParent := result.NewParent
 		if actualParent == "" {
 			branch := eng.GetBranch(step.BranchName)
-			actualParent = branch.GetParentOrTrunk()
+			actualParent = branch.ParentOrTrunk()
 		}
 
 		switch result.Result {
@@ -386,7 +386,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 			currentBranch := eng.CurrentBranch(ctx.Context)
 			currentBranchName := ""
 			if currentBranch != nil {
-				currentBranchName = currentBranch.GetName()
+				currentBranchName = currentBranch.Name()
 			}
 			continuation := &config.ContinuationState{
 				RebasedBranchBase:      result.RebasedBranchBase,

@@ -103,13 +103,13 @@ func TestCreateAction_Insert(t *testing.T) {
 		// 4. Verify metadata relationships
 		eng := s.Context.Engine
 		branchparentInserted := eng.GetBranch("inserted")
-		parentInserted := branchparentInserted.GetParent()
+		parentInserted := branchparentInserted.Parent()
 		require.NotNil(t, parentInserted)
-		require.Equal(t, "main", parentInserted.GetName())
+		require.Equal(t, "main", parentInserted.Name())
 		branchparentChild1 := eng.GetBranch("child1")
-		parentChild1 := branchparentChild1.GetParent()
+		parentChild1 := branchparentChild1.Parent()
 		require.NotNil(t, parentChild1)
-		require.Equal(t, "inserted", parentChild1.GetName())
+		require.Equal(t, "inserted", parentChild1.Name())
 
 		// 5. Verify physical relationship (child1 should have been restacked onto inserted)
 		isAncestor, err := s.Scene.Repo.IsAncestor("inserted", "child1")
@@ -138,7 +138,7 @@ func TestCreateAction_Insert(t *testing.T) {
 		require.NoError(t, err)
 
 		// Rebuild engine to ensure it knows we're on child1
-		err = s.Context.Engine.Rebuild(t.Context(), s.Context.Engine.Trunk().GetName())
+		err = s.Context.Engine.Rebuild(t.Context(), s.Context.Engine.Trunk().Name())
 		require.NoError(t, err)
 
 		// 3. Insert 'inserted' after child1
@@ -154,13 +154,13 @@ func TestCreateAction_Insert(t *testing.T) {
 		// 4. Verify relationships
 		eng := s.Context.Engine
 		branchparentInserted := eng.GetBranch("inserted")
-		parentInserted := branchparentInserted.GetParent()
+		parentInserted := branchparentInserted.Parent()
 		require.NotNil(t, parentInserted)
-		require.Equal(t, "child1", parentInserted.GetName())
+		require.Equal(t, "child1", parentInserted.Name())
 		branchparentChild2 := eng.GetBranch("child2")
-		parentChild2 := branchparentChild2.GetParent()
+		parentChild2 := branchparentChild2.Parent()
 		require.NotNil(t, parentChild2)
-		require.Equal(t, "inserted", parentChild2.GetName())
+		require.Equal(t, "inserted", parentChild2.Name())
 
 		// 5. Verify physical relationship
 		isAncestor, err := s.Scene.Repo.IsAncestor("inserted", "child2")
@@ -205,17 +205,17 @@ func TestCreateAction_Insert(t *testing.T) {
 		// 4. Verify relationships
 		eng := s.Context.Engine
 		branchparentInserted := eng.GetBranch("inserted")
-		parentInserted := branchparentInserted.GetParent()
+		parentInserted := branchparentInserted.Parent()
 		require.NotNil(t, parentInserted)
-		require.Equal(t, "main", parentInserted.GetName())
+		require.Equal(t, "main", parentInserted.Name())
 		branchparentChild1 := eng.GetBranch("child1")
-		parentChild1 := branchparentChild1.GetParent()
+		parentChild1 := branchparentChild1.Parent()
 		require.NotNil(t, parentChild1)
-		require.Equal(t, "inserted", parentChild1.GetName())
+		require.Equal(t, "inserted", parentChild1.Name())
 		branchparentChild2 := eng.GetBranch("child2")
-		parentChild2 := branchparentChild2.GetParent()
+		parentChild2 := branchparentChild2.Parent()
 		require.NotNil(t, parentChild2)
-		require.Equal(t, "inserted", parentChild2.GetName())
+		require.Equal(t, "inserted", parentChild2.Name())
 
 		// 5. Verify physical relationships
 		isAncestor, err := s.Scene.Repo.IsAncestor("inserted", "child1")
@@ -295,9 +295,9 @@ func TestCreateAction_Insert_Deep(t *testing.T) {
 
 		// 4. Verify relationships
 		eng := s.Context.Engine
-		require.Equal(t, "main", eng.GetBranch("inserted").GetParent().GetName())
-		require.Equal(t, "inserted", eng.GetBranch("child1").GetParent().GetName())
-		require.Equal(t, "child1", eng.GetBranch("grandchild").GetParent().GetName())
+		require.Equal(t, "main", eng.GetBranch("inserted").Parent().Name())
+		require.Equal(t, "inserted", eng.GetBranch("child1").Parent().Name())
+		require.Equal(t, "child1", eng.GetBranch("grandchild").Parent().Name())
 
 		// 5. Verify physical relationships (deep restack)
 		// grandchild should have been restacked and thus should have 'inserted' in its ancestry
@@ -349,7 +349,7 @@ func TestCreateAction_Worktree(t *testing.T) {
 		require.Contains(t, worktreeInfo.Path.String(), "feature-branch")
 
 		require.True(t, eng.GetBranch(stackRoot).IsWorktreeAnchor())
-		require.Equal(t, stackRoot, eng.GetBranch("feature-branch").GetParent().GetName())
+		require.Equal(t, stackRoot, eng.GetBranch("feature-branch").Parent().Name())
 
 		// Clean up worktree
 		_ = eng.RemoveWorktree(s.Context.Context, worktreeInfo.Path)

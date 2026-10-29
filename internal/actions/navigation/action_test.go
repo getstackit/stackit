@@ -182,7 +182,7 @@ func TestFlattenThroughAnchorsPromotesGrandchildren(t *testing.T) {
 	flattened := FlattenThroughAnchors(children, graph)
 	names := make([]string, len(flattened))
 	for i, b := range flattened {
-		names[i] = b.GetName()
+		names[i] = b.Name()
 	}
 	require.ElementsMatch(t, []string{"child1", "child2"}, names)
 }

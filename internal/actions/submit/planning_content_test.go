@@ -124,7 +124,7 @@ func TestPlanningBatchesMissingPRContent(t *testing.T) {
 				number := git.PRNumber(i + 1)
 				info := engine.NewPrInfo(engine.PrInfoFields{Number: &number, Title: "local title", State: git.PRStateOpen, Base: "main"})
 				require.NoError(t, s.Engine.UpsertPrInfo(s.Context, b, info))
-				statuses[b.GetName()] = engine.PRSubmissionStatus{
+				statuses[b.Name()] = engine.PRSubmissionStatus{
 					Action: engine.SubmitActionUpdate, PRNumber: &number, PRInfo: info,
 					NeedsUpdate: !tt.allSkipped && i < 2, Reason: "unchanged",
 				}

@@ -47,7 +47,7 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	require.NoError(t, err)
 	err = remoteScene.Repo.CreateChangeAndCommit("feature change", "feature")
 	require.NoError(t, err)
-	featureSha, err := remoteScene.Repo.GetCurrentSHA()
+	featureSha, err := remoteScene.Repo.CurrentSHA()
 	require.NoError(t, err)
 
 	err = remoteScene.Repo.CheckoutBranch("main")
@@ -56,7 +56,7 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	err = remoteScene.Repo.RunGitCommand("merge", "--no-ff", "feature", "-m", "Merge PR #1")
 	require.NoError(t, err)
 
-	newRemoteSha, err := remoteScene.Repo.GetCurrentSHA()
+	newRemoteSha, err := remoteScene.Repo.CurrentSHA()
 	require.NoError(t, err)
 	t.Logf("New remote SHA: %s (Feature was %s)", newRemoteSha, featureSha)
 
@@ -223,7 +223,7 @@ func TestResolveExternallyCreatedCommits(t *testing.T) {
 	// Create a new commit directly via git command (outside the runner's cache)
 	err = scene.Repo.CreateChangeAndCommit("new change", "new")
 	require.NoError(t, err)
-	newSha, err := scene.Repo.GetCurrentSHA()
+	newSha, err := scene.Repo.CurrentSHA()
 	require.NoError(t, err)
 
 	// SHAs created outside the runner resolve by falling through to git. The
@@ -270,7 +270,7 @@ func TestPullBranch_FetchResolvesNewCommits(t *testing.T) {
 	// 3. Add a commit to remote
 	err = remoteScene.Repo.CreateChangeAndCommit("remote change", "remote")
 	require.NoError(t, err)
-	remoteSha, err := remoteScene.Repo.GetCurrentSHA()
+	remoteSha, err := remoteScene.Repo.CurrentSHA()
 	require.NoError(t, err)
 	err = remoteScene.Repo.PushBranch("upstream", "main")
 	require.NoError(t, err)

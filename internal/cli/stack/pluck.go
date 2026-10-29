@@ -49,7 +49,7 @@ would occur, the pluck will abort without making any changes.`,
 					if currentBranch == nil {
 						return errors.New("not on a branch and no source branch specified")
 					}
-					sourceBranch = currentBranch.GetName()
+					sourceBranch = currentBranch.Name()
 				}
 
 				// Handle interactive selection for onto if not provided

@@ -40,7 +40,7 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) ([]string, er
 			branch := nav.GetBranch(name)
 
 			lockReason := engine.LockReasonNone
-			if existing, err := branch.GetPrInfo(); err == nil && existing != nil {
+			if existing, err := branch.PrInfo(); err == nil && existing != nil {
 				lockReason = existing.LockReason()
 			}
 
@@ -105,10 +105,10 @@ func validateBaseRevisions(branches []string, eng engine.BranchReader, ctx *app.
 			seen := make(map[string]bool)
 			for _, branchName := range branches {
 				parent := resolveSubmitParent(nav, eng.GetBranch(branchName))
-				if seen[parent.GetName()] {
+				if seen[parent.Name()] {
 					continue
 				}
-				seen[parent.GetName()] = true
+				seen[parent.Name()] = true
 				parentBranches = parentBranches.Append(parent)
 			}
 			remoteCtx, cancelRemote := ctx.RemoteOperationContext()
@@ -132,7 +132,7 @@ func validateBaseRevisions(branches []string, eng engine.BranchReader, ctx *app.
 	for _, branchName := range branches {
 		branch := eng.GetBranch(branchName)
 		parentBranch := resolveSubmitParent(nav, branch)
-		parentBranchName := parentBranch.GetName()
+		parentBranchName := parentBranch.Name()
 		switch {
 		case prunedBranches[parentBranchName]:
 			// Parent was pruned from this submission; the child cannot be

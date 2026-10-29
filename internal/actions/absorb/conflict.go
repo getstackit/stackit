@@ -132,10 +132,10 @@ func ShowConflict(ctx *app.Context) error {
 	out.Info("Stack (bottom to top):")
 	for _, branch := range slices.Backward(downstackBranches) {
 		marker := "  "
-		if branch.GetName() == currentBranchObj.GetName() {
+		if branch.Name() == currentBranchObj.Name() {
 			marker = "* "
 		}
-		out.Info("%s%s", marker, branch.GetName())
+		out.Info("%s%s", marker, branch.Name())
 	}
 	out.Info("")
 

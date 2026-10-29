@@ -69,11 +69,11 @@ func (d *demoGitRunner) IsInsideRepo() bool {
 	return true
 }
 
-func (d *demoGitRunner) GetRepoRoot() string {
+func (d *demoGitRunner) RepoRoot() string {
 	return "/demo/repo"
 }
 
-func (d *demoGitRunner) GetGitCommonDir() (string, error) {
+func (d *demoGitRunner) GitCommonDir() (string, error) {
 	return "/demo/repo/.git", nil
 }
 

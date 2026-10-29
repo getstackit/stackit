@@ -152,7 +152,7 @@ func (h *TUISplitHandler) PromptSplitType(ctx context.Context, availableTypes []
 	}
 
 	if m, ok := finalModel.(*splitcomp.Model); ok {
-		result := m.GetResult()
+		result := m.Result()
 		if result.Canceled {
 			return "", errors.ErrCanceled
 		}
@@ -381,13 +381,13 @@ func (h *TUISplitHandler) StartWizard(ctx context.Context, eng engine.Engine, br
 	// Build existing branch names for validation
 	existingNames := make(map[string]bool)
 	for _, b := range eng.AllBranches() {
-		existingNames[b.GetName()] = true
+		existingNames[b.Name()] = true
 	}
 	h.model.SetExistingBranchNames(existingNames)
-	h.model.SetOriginalBranchName(branch.GetName())
+	h.model.SetOriginalBranchName(branch.Name())
 }
 
-// GetModel returns the underlying split model for testing/inspection
-func (h *TUISplitHandler) GetModel() *splitcomp.Model {
+// Model returns the underlying split model for testing/inspection
+func (h *TUISplitHandler) Model() *splitcomp.Model {
 	return h.model
 }

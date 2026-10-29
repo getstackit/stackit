@@ -23,7 +23,7 @@ func TestResolveSubmitParentNameSkipsWorktreeAnchors(t *testing.T) {
 	require.NoError(t, err)
 
 	parent := resolveSubmitParent(s.Engine, s.Engine.GetBranch("feature"))
-	require.Equal(t, "main", parent.GetName())
+	require.Equal(t, "main", parent.Name())
 }
 
 func TestResolveSubmitParentNamePreservesNormalParents(t *testing.T) {
@@ -36,7 +36,7 @@ func TestResolveSubmitParentNamePreservesNormalParents(t *testing.T) {
 		})
 
 	parent := resolveSubmitParent(s.Engine, s.Engine.GetBranch("child"))
-	require.Equal(t, "parent", parent.GetName())
+	require.Equal(t, "parent", parent.Name())
 }
 
 func TestResolveSubmitParentNameSkipsNestedWorktreeAnchors(t *testing.T) {
@@ -57,5 +57,5 @@ func TestResolveSubmitParentNameSkipsNestedWorktreeAnchors(t *testing.T) {
 	require.NoError(t, err)
 
 	parent := resolveSubmitParent(s.Engine, s.Engine.GetBranch("feature"))
-	require.Equal(t, "main", parent.GetName())
+	require.Equal(t, "main", parent.Name())
 }

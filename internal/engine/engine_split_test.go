@@ -69,19 +69,19 @@ func TestApplySplitToCommits(t *testing.T) {
 
 		// Verify parent relationships using public API
 		branch1 := eng.GetBranch("branch1")
-		parent1 := branch1.GetParent()
+		parent1 := branch1.Parent()
 		require.NotNil(t, parent1)
-		require.Equal(t, "main", parent1.GetName())
+		require.Equal(t, "main", parent1.Name())
 
 		branch2 := eng.GetBranch("branch2")
-		parent2 := branch2.GetParent()
+		parent2 := branch2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "branch1", parent2.GetName())
+		require.Equal(t, "branch1", parent2.Name())
 
 		feature := eng.GetBranch("feature")
-		parentFeature := feature.GetParent()
+		parentFeature := feature.Parent()
 		require.NotNil(t, parentFeature)
-		require.Equal(t, "branch2", parentFeature.GetName())
+		require.Equal(t, "branch2", parentFeature.Name())
 
 		// Verify commit counts
 		// branch1 should have 1 commit from main (c1)
@@ -135,11 +135,11 @@ func TestApplySplitToCommits(t *testing.T) {
 
 		err = repo.CreateChangeAndCommit("new c1", "file1")
 		require.NoError(t, err)
-		c1SHA, _ := repo.GetCurrentSHA()
+		c1SHA, _ := repo.CurrentSHA()
 
 		err = repo.CreateChangeAndCommit("new c2", "file2")
 		require.NoError(t, err)
-		c2SHA, _ := repo.GetCurrentSHA()
+		c2SHA, _ := repo.CurrentSHA()
 
 		// Update feature ref to point to the new tip (the fix!)
 		err = git.NewRunnerWithPath(scene.Dir, nil).UpdateBranchRef(t.Context(), "feature", c2SHA)
@@ -251,19 +251,19 @@ func TestApplySplitToCommits(t *testing.T) {
 
 		// Verify ALL branches have main as parent (siblings)
 		branch1 := eng.GetBranch("branch1")
-		parent1 := branch1.GetParent()
+		parent1 := branch1.Parent()
 		require.NotNil(t, parent1)
-		require.Equal(t, "main", parent1.GetName(), "branch1 should have main as parent")
+		require.Equal(t, "main", parent1.Name(), "branch1 should have main as parent")
 
 		branch2 := eng.GetBranch("branch2")
-		parent2 := branch2.GetParent()
+		parent2 := branch2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName(), "branch2 should have main as parent (sibling)")
+		require.Equal(t, "main", parent2.Name(), "branch2 should have main as parent (sibling)")
 
 		feature := eng.GetBranch("feature")
-		parentFeature := feature.GetParent()
+		parentFeature := feature.Parent()
 		require.NotNil(t, parentFeature)
-		require.Equal(t, "main", parentFeature.GetName(), "feature should have main as parent (sibling)")
+		require.Equal(t, "main", parentFeature.Name(), "feature should have main as parent (sibling)")
 	})
 
 	t.Run("rejects sibling splits below a non-trunk branch in linear mode", func(t *testing.T) {
@@ -366,14 +366,14 @@ func TestApplySplitToCommits(t *testing.T) {
 
 		// Verify branches are siblings (both have main as parent)
 		branch1 := eng.GetBranch("branch1")
-		require.Equal(t, "main", branch1.GetParent().GetName())
+		require.Equal(t, "main", branch1.Parent().Name())
 
 		feature := eng.GetBranch("feature")
-		require.Equal(t, "main", feature.GetParent().GetName())
+		require.Equal(t, "main", feature.Parent().Name())
 
 		// Verify child is still on feature (the last branch in the list)
 		child := eng.GetBranch("child")
-		require.Equal(t, "feature", child.GetParent().GetName())
+		require.Equal(t, "feature", child.Parent().Name())
 	})
 }
 

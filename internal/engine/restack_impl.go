@@ -150,7 +150,7 @@ type restackSnapshot struct {
 // applied in the validated plan, its descendants must be held; its worktree
 // must not be reset in either case.
 func (e *engineImpl) untrackedCollisionHold(ctx context.Context, branch Branch, snap *restackSnapshot) string {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	worktreePath := snap.worktrees.PathForBranch(branchName)
 	if worktreePath == "" {
 		return ""
@@ -195,7 +195,7 @@ func (e *engineImpl) untrackedCollisionHold(ctx context.Context, branch Branch, 
 // protection from the reset that follows its ref update.
 // It returns the reason the branch is held, or "" when it is free to move.
 func (e *engineImpl) holdBranchInOwnWorktree(ctx context.Context, branch Branch, snap *restackSnapshot) string {
-	if reason := snap.heldReasons[branch.GetName()]; reason != "" {
+	if reason := snap.heldReasons[branch.Name()]; reason != "" {
 		return reason
 	}
 	return e.untrackedCollisionHold(ctx, branch, snap)
@@ -217,7 +217,7 @@ func (e *engineImpl) holdBranch(ctx context.Context, branch Branch, snap *restac
 // branchHeldBack returns why branch cannot move — its own worktree, or a held
 // ancestor this pass is also applying — or "" when nothing holds it.
 func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) string {
-	start := branch.GetName()
+	start := branch.Name()
 	current := start
 	visited := make(map[string]bool)
 	// Metadata should be acyclic, but cap the walk as a second line of defense
@@ -269,7 +269,7 @@ func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) string
 // being *written* (a RefUpdate's NewSHA) must be read live — see
 // restackWorktreeAnchor.
 func (e *engineImpl) branchRev(snap *restackSnapshot, branch Branch) (string, error) {
-	if rev, ok := snap.revs.Rev(branch.GetName()); ok && rev != "" {
+	if rev, ok := snap.revs.Rev(branch.Name()); ok && rev != "" {
 		return rev, nil
 	}
 	return branch.GetRevision()
@@ -289,7 +289,7 @@ func (e *engineImpl) restackWorktreeAnchor(
 	if !e.IsWorktreeAnchor(branch) {
 		return RestackBranchResult{}, false, nil
 	}
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	// Read live, not from snap.revs: trunkRev is written as the anchor ref's
 	// NewSHA below. A stale cached value would point the anchor at an old trunk
@@ -342,7 +342,7 @@ func (e *engineImpl) restackWorktreeAnchor(
 
 	// If the anchor branch is currently checked out in this context, reset the working tree
 	current := e.CurrentBranch(ctx)
-	if current != nil && current.GetName() == branchName {
+	if current != nil && current.Name() == branchName {
 		if err := e.git.HardReset(ctx, "HEAD"); err != nil {
 			return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to reset working tree for anchor %s: %w", branchName, err)
 		}
@@ -370,7 +370,7 @@ func (e *engineImpl) restackBranch(
 	snap *restackSnapshot,
 	squashCache *git.SquashMergeCache,
 ) (RestackBranchResult, error) {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	if e.IsTrunk(branch) {
 		return RestackBranchResult{Result: RestackUnneeded}, nil
 	}
@@ -492,7 +492,7 @@ func (e *engineImpl) restackBranch(
 
 			// If the branch is currently checked out in this context, reset the working tree
 			current := e.CurrentBranch(ctx)
-			if current != nil && current.GetName() == branchName {
+			if current != nil && current.Name() == branchName {
 				if err := e.git.HardReset(ctx, "HEAD"); err != nil {
 					return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to reset working tree for frozen branch %s: %w", branchName, err)
 				}
@@ -757,7 +757,7 @@ func (e *engineImpl) restackBranchWithValidatedRebase(
 	plan *RestackPlan,
 	snap *restackSnapshot,
 ) (RestackBranchResult, error) {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	if e.IsTrunk(branch) {
 		return RestackBranchResult{Result: RestackUnneeded}, nil
 	}
@@ -792,7 +792,7 @@ func (e *engineImpl) applyValidatedRestack(
 	item RestackPlanItem,
 	snap *restackSnapshot,
 ) (RestackBranchResult, error) {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	newRev := ""
 	if validation != nil && validation.NewSHAs != nil {
 		newRev = validation.NewSHAs[branchName]
@@ -864,7 +864,7 @@ func (e *engineImpl) applyMetadataRefresh(
 	item RestackPlanItem,
 	snap *restackSnapshot,
 ) (RestackBranchResult, error) {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	// Metadata records the parent SHA consumed by later planning, so advancing
 	// it past a held parent would create the same phantom-parent state as a ref
 	// move. A held branch and every descendant must remain completely unchanged.
@@ -919,7 +919,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 	parentRev string,
 	snap *restackSnapshot,
 ) (RestackBranchResult, error) {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	// See the matching guard in restackBranch: moving the ref without resetting
 	// the worktree leaves a staged revert that the next `modify -a` commits, and

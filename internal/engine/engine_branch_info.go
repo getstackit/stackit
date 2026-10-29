@@ -10,14 +10,14 @@ import (
 
 // GetCommitDate returns the commit date for a branch
 func (e *engineImpl) GetCommitDate(branch Branch) (time.Time, error) {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	info, err := e.git.ReadCommitInfo(context.Background(), "refs/heads/"+branchName).One()
 	return info.Date, err
 }
 
 // GetCommitAuthor returns the commit author for a branch
 func (e *engineImpl) GetCommitAuthor(branch Branch) (string, error) {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	info, err := e.git.ReadCommitInfo(context.Background(), "refs/heads/"+branchName).One()
 	return info.Author, err
 }
@@ -27,7 +27,7 @@ func (e *engineImpl) GetCommitAuthor(branch Branch) (string, error) {
 func (e *engineImpl) BatchCommitInfo(branches Branches) map[string]git.CommitInfo {
 	names := make([]string, len(branches))
 	for i, b := range branches {
-		names[i] = "refs/heads/" + b.GetName()
+		names[i] = "refs/heads/" + b.Name()
 	}
 	data := e.git.ReadCommitInfo(context.Background(), names...)
 	result := make(map[string]git.CommitInfo, len(branches))
@@ -41,7 +41,7 @@ func (e *engineImpl) BatchCommitInfo(branches Branches) map[string]git.CommitInf
 
 // GetRevision returns the SHA of a branch
 func (e *engineImpl) GetRevision(branch Branch) (string, error) {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	return e.git.ReadRevisions(context.Background(), branchName).One()
 }
 

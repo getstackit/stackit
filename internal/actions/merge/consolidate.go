@@ -171,7 +171,7 @@ func (c *ConsolidateMergeExecutor) createMergeBranch(ctx context.Context) (strin
 
 	splog.Info("📋 Creating merge branch: %s", branchName)
 
-	trunkName := c.engine.Trunk().GetName()
+	trunkName := c.engine.Trunk().Name()
 
 	// Create branch directly at trunk (avoids creating at HEAD then resetting)
 	if err := c.engine.CreateBranch(ctx, branchName, trunkName); err != nil {
@@ -229,7 +229,7 @@ func (c *ConsolidateMergeExecutor) createConsolidationPR(ctx context.Context, br
 		Title: content.Title,
 		Body:  content.Body,
 		Head:  branchName,
-		Base:  c.engine.Trunk().GetName(),
+		Base:  c.engine.Trunk().Name(),
 		Draft: false,
 	}
 
@@ -326,7 +326,7 @@ func lockAndMarkConsolidating(ctx *app.Context, eng consolidatingLockEngine, bra
 
 	lockNames := make([]string, len(branchesToLock))
 	for i, b := range branchesToLock {
-		lockNames[i] = b.GetName()
+		lockNames[i] = b.Name()
 	}
 	allMeta, metaErrs := eng.BatchReadMetadataRaw(lockNames)
 

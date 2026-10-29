@@ -56,7 +56,7 @@ func HasFlattenWork(ctx *app.Context, opts Options) (bool, error) {
 	branches := graph.FullStack(branch)
 	trunk := eng.Trunk()
 	for _, b := range branches {
-		if !b.IsTrunk() && b.GetName() != trunk.GetName() {
+		if !b.IsTrunk() && b.Name() != trunk.Name() {
 			return true, nil
 		}
 	}
@@ -105,7 +105,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	trunk := eng.Trunk()
 	featureBranches := engine.Branches{}
 	for _, b := range sortedBranches {
-		if !b.IsTrunk() && b.GetName() != trunk.GetName() {
+		if !b.IsTrunk() && b.Name() != trunk.Name() {
 			featureBranches = featureBranches.Append(b)
 		}
 	}
@@ -267,7 +267,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			RecursiveParents:  false,
 		})
 		for _, branch := range descendants {
-			name := branch.GetName()
+			name := branch.Name()
 			if seenRestackBranches[name] {
 				continue
 			}
@@ -309,7 +309,7 @@ func collectAllBranchesToRestack(eng engine.BranchLookup, graph *engine.StackGra
 		})
 
 		for _, b := range descendants {
-			name := b.GetName()
+			name := b.Name()
 			if !seen[name] {
 				seen[name] = true
 				result = append(result, name)
@@ -334,7 +334,7 @@ func buildRebaseSpecsForAll(eng flattenEngine, plan *flattenPlan, branches engin
 	divergence := eng.BatchDivergencePoints(branches)
 	parents := make(engine.Branches, 0, len(branches))
 	for _, b := range branches {
-		if parent := b.GetParent(); parent != nil {
+		if parent := b.Parent(); parent != nil {
 			parents = append(parents, *parent)
 		}
 	}
@@ -343,7 +343,7 @@ func buildRebaseSpecsForAll(eng flattenEngine, plan *flattenPlan, branches engin
 	specs := make([]engine.RebaseSpec, 0, len(branches))
 
 	for _, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 
 		// If we already have a spec from the plan, use it
 		if spec, ok := existingSpecs[branchName]; ok {
@@ -352,7 +352,7 @@ func buildRebaseSpecsForAll(eng flattenEngine, plan *flattenPlan, branches engin
 		}
 
 		// This is a descendant branch - build its spec based on its parent's new position
-		parent := branch.GetParent()
+		parent := branch.Parent()
 		if parent == nil {
 			continue
 		}
@@ -365,7 +365,7 @@ func buildRebaseSpecsForAll(eng flattenEngine, plan *flattenPlan, branches engin
 
 		// The new parent revision is the tip of the parent branch
 		// (which will be its rebased position after the flatten)
-		newParentRev, ok := parentRevisions[parent.GetName()]
+		newParentRev, ok := parentRevisions[parent.Name()]
 		if !ok || newParentRev == "" {
 			continue
 		}
@@ -400,7 +400,7 @@ func filterPlanExcludingConflicts(plan *flattenPlan, conflicts map[string]string
 		})
 
 		for _, desc := range descendants {
-			descName := desc.GetName()
+			descName := desc.Name()
 			if errMsg, hasConflict := conflicts[descName]; hasConflict {
 				if descName == move.Branch {
 					movesToExclude[move.Branch] = "needs resolution: " + errMsg
@@ -471,16 +471,16 @@ func buildFlattenPlan(ctx *app.Context, eng flattenEngine, branches engine.Branc
 	revisions := eng.BatchRevisions(engine.Branches{trunk}.Concat(branches))
 	divergence := eng.BatchDivergencePoints(branches)
 
-	if revisions[trunk.GetName()] == "" {
+	if revisions[trunk.Name()] == "" {
 		return nil, errors.New("failed to get trunk revision")
 	}
 
 	// potentialParents tracks branches that can serve as parents for subsequent branches
 	// Starts with trunk, and grows as we process branches
-	potentialParents := []string{trunk.GetName()}
+	potentialParents := []string{trunk.Name()}
 
 	for i, b := range branches {
-		bName := b.GetName()
+		bName := b.Name()
 
 		// Report progress
 		if onProgress != nil {
@@ -488,7 +488,7 @@ func buildFlattenPlan(ctx *app.Context, eng flattenEngine, branches engine.Branc
 		}
 
 		// Get current parent info
-		origParentName := b.GetParentOrTrunk()
+		origParentName := b.ParentOrTrunk()
 
 		// The branch's base (divergence point from parent). bName is always in
 		// the map (the loop iterates the same branch set), so a missing key here

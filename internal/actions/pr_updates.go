@@ -31,7 +31,7 @@ func UpdateStackPRMetadata(ctx *app.Context, branches []string) {
 func FetchPRContentForBranches(ctx *app.Context, branches []string) map[git.PRNumber]github.PRContent {
 	prNumbers := make([]git.PRNumber, 0, len(branches))
 	for _, name := range branches {
-		prInfo, err := ctx.Engine.GetBranch(name).GetPrInfo()
+		prInfo, err := ctx.Engine.GetBranch(name).PrInfo()
 		if err != nil || prInfo == nil || prInfo.Number() == nil {
 			continue
 		}
@@ -68,7 +68,7 @@ func PRNavigationOptions(ctx *app.Context) pr.NavigationOptions {
 // falls back to a direct GetPullRequest so the freshness guarantee is preserved.
 func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, current map[git.PRNumber]github.PRContent) {
 	branch := ctx.Engine.GetBranch(name)
-	prInfo, err := branch.GetPrInfo()
+	prInfo, err := branch.PrInfo()
 	if err != nil || prInfo == nil || prInfo.Number() == nil {
 		ctx.Output.Debug("Skipping PR metadata update for %s: no PR info available", name)
 		return
@@ -132,7 +132,7 @@ func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, current ma
 	if err := ctx.Engine.ClearNeedsPRBodyUpdate(ctx.Context, name); err != nil {
 		ctx.Output.Debug("Failed to clear PR body update flag for %s: %v", name, err)
 	}
-	if err := ctx.Engine.UpsertPrInfo(ctx.Context, branch, prInfo.WithTitleAndBody(updatedTitle, updatedBody).WithLockReason(branch.GetLockReason())); err != nil {
+	if err := ctx.Engine.UpsertPrInfo(ctx.Context, branch, prInfo.WithTitleAndBody(updatedTitle, updatedBody).WithLockReason(branch.LockReason())); err != nil {
 		ctx.Output.Debug("Failed to update local PR info for %s: %v", name, err)
 	}
 

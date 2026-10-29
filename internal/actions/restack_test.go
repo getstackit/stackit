@@ -92,7 +92,7 @@ func TestRestackAction(t *testing.T) {
 		var names []string
 		for _, group := range plan.groups {
 			for _, branch := range group.sortedBranches {
-				names = append(names, branch.GetName())
+				names = append(names, branch.Name())
 			}
 		}
 		require.Equal(t, []string{"feature", "feature-child"}, names)

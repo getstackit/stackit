@@ -40,7 +40,7 @@ func (h *RepoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp := httpcontract.RepoResponse{
 		Owner:         owner,
 		Repo:          repo,
-		Trunk:         entry.Engine.Trunk().GetName(),
+		Trunk:         entry.Engine.Trunk().Name(),
 		CurrentBranch: entry.Engine.CurrentBranchName(r.Context()),
 		Remote:        entry.Remote,
 	}

@@ -99,7 +99,7 @@ func MinimalAnnotation(eng AnnotationReader, branch engine.Branch, worktrees *Wo
 		IsLocked:      branch.IsLocked(),
 		IsFrozen:      branch.IsFrozen(),
 		Scope:         eng.GetScope(branch).String(),
-		ExplicitScope: branch.GetExplicitScope().String(),
+		ExplicitScope: branch.ExplicitScope().String(),
 	}
 	worktrees.apply(eng, branch, &ann)
 	return ann
@@ -114,7 +114,7 @@ func FullAnnotation(eng AnnotationReader, branch engine.Branch, stat engine.Bran
 	}
 
 	if !branch.IsTrunk() {
-		if status := enrichment.CIStatuses.Get(branch.GetName()); status != nil {
+		if status := enrichment.CIStatuses.Get(branch.Name()); status != nil {
 			ann.Check = checkState(status)
 			ann.Review = reviewState(status.ReviewDecision)
 		}
@@ -134,7 +134,7 @@ func BaseAnnotation(eng ScopeReader, branch engine.Branch, stat engine.BranchSta
 		IsLocked:      branch.IsLocked(),
 		IsFrozen:      branch.IsFrozen(),
 		Scope:         eng.GetScope(branch).String(),
-		ExplicitScope: branch.GetExplicitScope().String(),
+		ExplicitScope: branch.ExplicitScope().String(),
 		LocalSHA:      stat.ShortSHA,
 	}
 
@@ -142,7 +142,7 @@ func BaseAnnotation(eng ScopeReader, branch engine.Branch, stat engine.BranchSta
 		return ann
 	}
 
-	if prInfo, _ := branch.GetPrInfo(); prInfo != nil {
+	if prInfo, _ := branch.PrInfo(); prInfo != nil {
 		ann.PRNumber = prInfo.Number()
 		ann.PRState = prInfo.State()
 		ann.IsDraft = prInfo.IsDraft()
@@ -159,7 +159,7 @@ func BaseAnnotation(eng ScopeReader, branch engine.Branch, stat engine.BranchSta
 		ann.CommitCount = stat.CommitCount
 	}
 
-	if merged := branch.GetMergedDownstack(); len(merged) > 0 {
+	if merged := branch.MergedDownstack(); len(merged) > 0 {
 		ann.MergedDownstack = merged
 	}
 

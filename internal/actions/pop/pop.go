@@ -41,11 +41,11 @@ func Action(ctx context.Context, deps Deps) error {
 	}).Validate(); err != nil {
 		return err
 	}
-	currentBranch := eng.CurrentBranch(ctx).GetName()
+	currentBranch := eng.CurrentBranch(ctx).Name()
 	currentBranchObj := eng.GetBranch(currentBranch)
 
 	// Get parent branch
-	parentName := currentBranchObj.GetParentOrTrunk()
+	parentName := currentBranchObj.ParentOrTrunk()
 
 	// Get parent branch revision
 	parentBranch := eng.GetBranch(parentName)

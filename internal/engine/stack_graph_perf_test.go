@@ -27,7 +27,7 @@ func (f *graphFixture) CurrentBranch(_ context.Context) *Branch {
 	return &b
 }
 func (f *graphFixture) GetParent(b Branch) *Branch {
-	name := f.parents[b.GetName()]
+	name := f.parents[b.Name()]
 	if name == "" {
 		return nil
 	}

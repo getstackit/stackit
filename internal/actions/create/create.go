@@ -60,12 +60,12 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	if err := validation.MustBeOnBranch(ctx.Context, eng).Validate(); err != nil {
 		return Result{}, err
 	}
-	currentBranch := eng.CurrentBranch(ctx.Context).GetName()
+	currentBranch := eng.CurrentBranch(ctx.Context).Name()
 	requestedParent := currentBranch
 	if opts.Onto != "" {
 		requestedParent = opts.Onto
 	}
-	if ctx.InManagedWorktree && ctx.WorktreeInfo != nil && requestedParent == eng.Trunk().GetName() {
+	if ctx.InManagedWorktree && ctx.WorktreeInfo != nil && requestedParent == eng.Trunk().Name() {
 		return Result{}, fmt.Errorf("cannot create a branch from trunk inside managed worktree %s; first check out a branch owned by this worktree", ctx.WorktreeInfo.Name)
 	}
 	if err := actions.EnsureCanModifyNamesHere(ctx, currentBranch); err != nil {
@@ -220,7 +220,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	// Check if branch already exists
 	allBranches := eng.AllBranches()

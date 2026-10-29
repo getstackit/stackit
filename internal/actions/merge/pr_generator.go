@@ -72,7 +72,7 @@ func (g *PRContentGenerator) generateBodyWithOptions(branches []pr.MergeBranch, 
 	}
 
 	stackTree := pr.FormatStackTree(pr.StackTreeParams{
-		TrunkName: g.engine.Trunk().GetName(),
+		TrunkName: g.engine.Trunk().Name(),
 		Branches:  treeBranches,
 	})
 
@@ -93,7 +93,7 @@ func (g *PRContentGenerator) collectMultiStackBranches(included []MultiStackInfo
 			branch := g.engine.GetBranch(branchName)
 			mb := pr.MergeBranch{Name: branchName}
 
-			if prInfo, err := branch.GetPrInfo(); err == nil && prInfo != nil && prInfo.Number() != nil {
+			if prInfo, err := branch.PrInfo(); err == nil && prInfo != nil && prInfo.Number() != nil {
 				mb.PRNumber = *prInfo.Number()
 				mb.PRTitle = prInfo.Title()
 			}
@@ -116,7 +116,7 @@ func (g *PRContentGenerator) convertBranchMergeInfo(branches []BranchMergeInfo) 
 		// Get PR title from engine if we have a PR number
 		if branchInfo.PRNumber > 0 {
 			branch := g.engine.GetBranch(branchInfo.BranchName)
-			if prInfo, err := branch.GetPrInfo(); err == nil && prInfo != nil {
+			if prInfo, err := branch.PrInfo(); err == nil && prInfo != nil {
 				mb.PRTitle = prInfo.Title()
 			}
 		}
@@ -156,10 +156,10 @@ func (g *PRContentGenerator) collectScopes(branches []pr.MergeBranch) []string {
 // calculateDepth computes how deep a branch is in the stack.
 func (g *PRContentGenerator) calculateDepth(branch engine.Branch) int {
 	depth := 0
-	parent := branch.GetParent()
+	parent := branch.Parent()
 	for parent != nil && !parent.IsTrunk() {
 		depth++
-		parent = parent.GetParent()
+		parent = parent.Parent()
 	}
 	return depth
 }

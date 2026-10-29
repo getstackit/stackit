@@ -17,7 +17,7 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 		return nil
 	}
 
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	oldTip, err := branch.GetRevision()
 	if err != nil {
 		return fmt.Errorf("failed to get branch revision for %s: %w", branchName, err)

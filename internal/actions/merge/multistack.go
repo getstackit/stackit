@@ -236,7 +236,7 @@ func unlockConsolidatingStacks(ctx *app.Context, eng engine.Engine, stacks []Mul
 	for _, stack := range stacks {
 		for _, name := range stack.AllBranches {
 			branch := eng.GetBranch(name)
-			if branch.GetLockReason() == engine.LockReasonConsolidating {
+			if branch.LockReason() == engine.LockReasonConsolidating {
 				branches.Add(branch)
 			}
 		}

@@ -384,7 +384,7 @@ func (m *shippableModel) rebuildCache() {
 	m.cache.currentBranch = ""
 	m.cache.currentStackRoot = ""
 	if current := m.engine.CurrentBranch(m.ctx.Context); current != nil {
-		m.cache.currentBranch = current.GetName()
+		m.cache.currentBranch = current.Name()
 		for _, stack := range m.stacks {
 			if slices.Contains(stack.Stack.AllBranches, m.cache.currentBranch) {
 				m.cache.currentStackRoot = stack.RootBranch()
@@ -406,7 +406,7 @@ func (m *shippableModel) rebuildCache() {
 	allBranches := engine.Branches{}
 	for _, stack := range m.stacks {
 		for _, branchName := range stack.Stack.AllBranches {
-			if branch := m.engine.GetBranch(branchName); branch.GetName() != "" {
+			if branch := m.engine.GetBranch(branchName); branch.Name() != "" {
 				allBranches = allBranches.Append(branch)
 			}
 		}
@@ -423,7 +423,7 @@ func (m *shippableModel) rebuildCache() {
 		m.cache.stackTitles[rootBranch] = stack.DisplayTitle()
 
 		// Get stack description from metadata
-		if branch := m.engine.GetBranch(rootBranch); branch.GetName() != "" {
+		if branch := m.engine.GetBranch(rootBranch); branch.Name() != "" {
 			if desc := m.engine.GetStackDescription(m.ctx.Context, branch); desc != nil && !desc.IsEmpty() {
 				m.cache.stackDescriptions[rootBranch] = desc
 			} else if stack.BranchCount() == 1 {
@@ -436,10 +436,10 @@ func (m *shippableModel) rebuildCache() {
 
 		for _, branchName := range stack.Stack.AllBranches {
 			branch := m.engine.GetBranch(branchName)
-			if branch.GetName() == "" {
+			if branch.Name() == "" {
 				continue
 			}
-			name := branch.GetName()
+			name := branch.Name()
 			ann := tui.TreeAnnotation(stackview.BaseAnnotation(m.engine, branch, stats[name], stackview.AnnotationOptions{SkipCommitMessages: true}))
 			if msgs := commits[name].Onelines(); msgs != nil {
 				ann.CommitMessages = msgs

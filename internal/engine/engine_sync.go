@@ -78,7 +78,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	if plan != nil && e.linearStacks {
 		moves := make([]BranchParentMove, 0, len(branches))
 		for _, branch := range branches {
-			item, ok := plan.Items[branch.GetName()]
+			item, ok := plan.Items[branch.Name()]
 			if ok && item.Action != RestackPlanSkip && item.Reparented {
 				moves = append(moves, BranchParentMove{Branch: item.Branch, NewParent: item.NewParent})
 			}
@@ -199,7 +199,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	}
 	applyingBranches := make(BranchNameSet, len(branches))
 	for _, branch := range branches {
-		applyingBranches[branch.GetName()] = true
+		applyingBranches[branch.Name()] = true
 	}
 	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs, dirtyWorktrees: dirtyWorktrees, untrackedByWorktree: untrackedByWorktree, heldReasons: heldReasons, applyingBranches: applyingBranches}
 
@@ -209,7 +209,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	squashCache := git.NewSquashMergeCache()
 
 	for i, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 		var result RestackBranchResult
 		var err error
 		if validation != nil {
@@ -240,7 +240,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			// Convert remaining branches to []string for RestackBatchResult
 			remainingBranchNames := make([]string, len(branches[i+1:]))
 			for j, b := range branches[i+1:] {
-				remainingBranchNames[j] = b.GetName()
+				remainingBranchNames[j] = b.Name()
 			}
 			if needsRebuild {
 				if rebuildErr := e.rebuild(ctx); rebuildErr != nil {
@@ -264,7 +264,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			// Convert remaining branches to []string for RestackBatchResult
 			remainingBranchNames := make([]string, len(branches[i+1:]))
 			for j, b := range branches[i+1:] {
-				remainingBranchNames[j] = b.GetName()
+				remainingBranchNames[j] = b.Name()
 			}
 			if needsRebuild {
 				if rebuildErr := e.rebuild(ctx); rebuildErr != nil {

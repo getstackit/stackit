@@ -298,7 +298,7 @@ func buildDeletionPlan(ctx *app.Context, deleteStatuses engine.DeletionStatuses)
 	trunkChildren := graph.ChildBranches(trunk)
 	branchesToProcess := make([]string, len(trunkChildren))
 	for i, child := range trunkChildren {
-		branchesToProcess[i] = child.GetName()
+		branchesToProcess[i] = child.Name()
 	}
 
 	// Adopt branches stranded by ghost ancestors. If the user manually ran
@@ -324,14 +324,14 @@ func buildDeletionPlan(ctx *app.Context, deleteStatuses engine.DeletionStatuses)
 
 		// Add children to DFS stack
 		for _, child := range children {
-			branchesToProcess = append(branchesToProcess, child.GetName())
+			branchesToProcess = append(branchesToProcess, child.Name())
 		}
 
 		if shouldDelete {
 			// Add to plan with its children as initial blockers
 			blockers := make(map[string]bool)
 			for _, child := range children {
-				blockers[child.GetName()] = true
+				blockers[child.Name()] = true
 			}
 			plan.add(branchName, status, blockers)
 			out.Debug("Marked %s for deletion. Reason: %s. Blockers: %v", branchName, status.Reason, blockers)
@@ -490,7 +490,7 @@ func selectBranchesForDeletion(plan *deletionPlan, canDelete func(string) bool, 
 
 // getParentName returns the name of the parent branch or trunk if no parent exists
 func getParentName(branch engine.Branch) string {
-	return branch.GetParentOrTrunk()
+	return branch.ParentOrTrunk()
 }
 
 // appendStrandedRoots adds branches whose metadata-parent no longer exists
@@ -502,7 +502,7 @@ func getParentName(branch engine.Branch) string {
 // running `git branch -D <merged-branch>` directly instead of letting
 // stackit clean up.
 func appendStrandedRoots(eng engine.Engine, graph *engine.StackGraph, deleteStatuses engine.DeletionStatuses, queue []string) []string {
-	trunkName := eng.Trunk().GetName()
+	trunkName := eng.Trunk().Name()
 	branchNames := eng.BranchNames()
 
 	for _, rootName := range graph.RootBranches() {
@@ -510,15 +510,15 @@ func appendStrandedRoots(eng engine.Engine, graph *engine.StackGraph, deleteStat
 			continue
 		}
 		root := eng.GetBranch(rootName)
-		parent := root.GetParent()
+		parent := root.Parent()
 		// Skip genuine roots (no metadata parent) and roots whose parent is
 		// real — those would already have been visited from trunkChildren.
-		if parent == nil || branchNames.Contains(parent.GetName()) {
+		if parent == nil || branchNames.Contains(parent.Name()) {
 			continue
 		}
 
 		// Walk the ghost chain, registering each ghost for deletion.
-		ghostName := parent.GetName()
+		ghostName := parent.Name()
 		for ghostName != "" && ghostName != trunkName && !branchNames.Contains(ghostName) {
 			if _, already := deleteStatuses[ghostName]; already {
 				break
@@ -537,11 +537,11 @@ func appendStrandedRoots(eng engine.Engine, graph *engine.StackGraph, deleteStat
 				Kind:         kind,
 			}
 			ghostBranch := eng.GetBranch(ghostName)
-			ghostParent := ghostBranch.GetParent()
+			ghostParent := ghostBranch.Parent()
 			if ghostParent == nil {
 				break
 			}
-			ghostName = ghostParent.GetName()
+			ghostName = ghostParent.Name()
 		}
 
 		queue = append(queue, rootName)
@@ -552,7 +552,7 @@ func appendStrandedRoots(eng engine.Engine, graph *engine.StackGraph, deleteStat
 // planReparentIfNecessary records a parent update if the branch's current parent
 // is being deleted. It returns nil when no parent change is needed.
 func planReparentIfNecessary(branch engine.Branch, plan *deletionPlan, eng engine.Engine, out output.Output) *plannedReparentMove {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	parentName := getParentName(branch)
 
 	// Find nearest ancestor that isn't being deleted
@@ -638,7 +638,7 @@ func removeWorktreeIfCheckedOut(ctx context.Context, branchName string, worktree
 	if worktrees.IsMain(worktreePath) {
 		// Unless it is where we are running: DeleteBranches checks out trunk
 		// when the batch contains its own HEAD, which frees the branch.
-		if git.IsMainWorktree(worktreePath, eng.GetRepoRoot()) {
+		if git.IsMainWorktree(worktreePath, eng.RepoRoot()) {
 			out.Debug("Branch %s is checked out here; deletion will switch to trunk first", branchName)
 			return "", nil
 		}

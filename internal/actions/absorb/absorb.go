@@ -116,11 +116,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	downstackBranches = engine.BranchesOf(*currentBranch).Concat(downstackBranches)
 
 	// Terminate downstack search if a scope boundary is hit
-	currentScope := currentBranch.GetScope()
+	currentScope := currentBranch.Scope()
 	if currentScope.IsDefined() {
 		limitedDownstack := engine.NewBranchesBuilder(len(downstackBranches))
 		for _, branch := range downstackBranches {
-			if branch.IsTrunk() || !branch.GetScope().Equal(currentScope) {
+			if branch.IsTrunk() || !branch.Scope().Equal(currentScope) {
 				break
 			}
 			limitedDownstack.Add(branch)
@@ -132,9 +132,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	commitsByBranch := eng.ReadBranchCommitNodes(ctx, downstackBranches)
 	commitSHAs := []string{}
 	for _, branch := range downstackBranches {
-		history, err := commitsByBranch.Get(branch.GetName())
+		history, err := commitsByBranch.Get(branch.Name())
 		if err != nil {
-			return fmt.Errorf("failed to get commits for branch %s: %w", branch.GetName(), err)
+			return fmt.Errorf("failed to get commits for branch %s: %w", branch.Name(), err)
 		}
 		for _, commit := range history {
 			commitSHAs = append(commitSHAs, commit.SHA)
@@ -234,7 +234,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			}
 
 			planJSON, err := GeneratePlanJSON(ctx.Context,
-				currentBranch.GetName(),
+				currentBranch.Name(),
 				absorbedTargets,
 				unabsorbedHunks,
 				newFiles,
@@ -365,24 +365,24 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	sortedBranches := eng.SortBranchesTopologically(ctx.Context, allBranches)
 
 	for _, branch := range sortedBranches {
-		branchHunks, ok := hunksByBranch[branch.GetName()]
+		branchHunks, ok := hunksByBranch[branch.Name()]
 		if !ok {
 			continue
 		}
 
 		if oldestModifiedBranch == "" {
-			oldestModifiedBranch = branch.GetName()
+			oldestModifiedBranch = branch.Name()
 		}
-		modifiedBranches = append(modifiedBranches, branch.GetName())
+		modifiedBranches = append(modifiedBranches, branch.Name())
 
 		// Apply all hunks for this branch together
 		if err := eng.ApplyHunksToBranch(ctx.Context, branch, branchHunks); err != nil {
-			return fmt.Errorf("failed to apply hunks to branch %s: %w", branch.GetName(), err)
+			return fmt.Errorf("failed to apply hunks to branch %s: %w", branch.Name(), err)
 		}
 
 		for commitSHA := range branchHunks {
-			handler.OnApply(branch.GetName(), commitSHA[:8])
-			out.Info("Absorbed changes into commit %s in %s", commitSHA[:8], output.BranchName(branch.GetName()))
+			handler.OnApply(branch.Name(), commitSHA[:8])
+			out.Info("Absorbed changes into commit %s in %s", commitSHA[:8], output.BranchName(branch.Name()))
 		}
 	}
 
@@ -418,7 +418,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if oldestModifiedBranch != "" {
 		// Rebuild graph with fresh engine state
 		graph = eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
-		upstackBranches := selectRestackBranches(graph, eng, opts.Restack, currentBranch.GetName(), oldestModifiedBranch, currentScope)
+		upstackBranches := selectRestackBranches(graph, eng, opts.Restack, currentBranch.Name(), oldestModifiedBranch, currentScope)
 
 		if len(upstackBranches) > 0 {
 			// ConflictModeContinue, not EnterWorkflow: entering the conflict
@@ -433,7 +433,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				case engine.RestackDone:
 					out.Info("Restacked %s on %s.",
 						output.BranchName(p.Branch),
-						output.BranchName(eng.GetBranch(p.Branch).GetParentOrTrunk()))
+						output.BranchName(eng.GetBranch(p.Branch).ParentOrTrunk()))
 				case engine.RestackConflict:
 					conflicted = append(conflicted, p.Branch)
 				case engine.RestackBlocked:
@@ -456,7 +456,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		// Narrower modes can leave descendants of the rewritten commits on
 		// stale parents with no visible signal; tell the user how to finish.
 		if opts.Restack != RestackAll {
-			allUpstack := selectRestackBranches(graph, eng, RestackAll, currentBranch.GetName(), oldestModifiedBranch, currentScope)
+			allUpstack := selectRestackBranches(graph, eng, RestackAll, currentBranch.Name(), oldestModifiedBranch, currentScope)
 			if skipped := len(allUpstack) - len(upstackBranches); skipped > 0 {
 				out.Warn(
 					"Skipped restacking %d %s above the rewritten commits; run 'stackit restack --upstack' to update them.",
@@ -481,7 +481,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 
 		jsonOutput, err := GeneratePlanJSON(ctx.Context,
-			currentBranch.GetName(),
+			currentBranch.Name(),
 			absorbedTargets,
 			unabsorbedHunks,
 			newFiles,

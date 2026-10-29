@@ -37,9 +37,9 @@ func (h *testLockHandler) PromptUnlockDownstack(names []string) (bool, error) {
 	return h.unlockDownstack, nil
 }
 
-func (h *testLockHandler) GetSubmitHandler() submit.Handler { return nil }
-func (h *testLockHandler) Cleanup()                         {}
-func (h *testLockHandler) IsInteractive() bool              { return h.isInteractive }
+func (h *testLockHandler) SubmitHandler() submit.Handler { return nil }
+func (h *testLockHandler) Cleanup()                      {}
+func (h *testLockHandler) IsInteractive() bool           { return h.isInteractive }
 
 func TestLockUnlockAction(t *testing.T) {
 	t.Parallel()
@@ -59,7 +59,7 @@ func TestLockUnlockAction(t *testing.T) {
 
 		require.True(t, s.Engine.GetBranch("feature-b").IsLocked())
 		require.True(t, s.Engine.GetBranch("feature-a").IsLocked())
-		require.Equal(t, engine.LockReasonUser, s.Engine.GetBranch("feature-b").GetLockReason())
+		require.Equal(t, engine.LockReasonUser, s.Engine.GetBranch("feature-b").LockReason())
 		require.False(t, s.Engine.GetBranch("main").IsLocked())
 	})
 

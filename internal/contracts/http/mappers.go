@@ -42,7 +42,7 @@ type BranchInput struct {
 // stackview.FetchBranchData.
 func NewBranchInput(node *engine.StackNode, checks *github.CheckStatus, data stackview.BranchData) BranchInput {
 	branch := node.Branch
-	name := branch.GetName()
+	name := branch.Name()
 	return BranchInput{
 		Branch:       branch,
 		Node:         node,
@@ -60,20 +60,20 @@ func MapBranch(ctx context.Context, eng MapperReader, in BranchInput) BranchResp
 	branch, node, checks := in.Branch, in.Node, in.Checks
 	remoteStatus, stat, commits, commitInfo, needsRestack := in.RemoteStatus, in.Stat, in.Commits, in.CommitInfo, in.NeedsRestack
 	resp := BranchResponse{
-		Name:         branch.GetName(),
+		Name:         branch.Name(),
 		Depth:        node.Depth,
-		IsCurrent:    branch.GetName() == eng.CurrentBranchName(ctx),
+		IsCurrent:    branch.Name() == eng.CurrentBranchName(ctx),
 		NeedsRestack: needsRestack,
 		IsLocked:     branch.IsLocked(),
 		IsFrozen:     branch.IsFrozen(),
 		Children:     node.Children,
 	}
 
-	if parent := branch.GetParent(); parent != nil {
-		resp.Parent = parent.GetName()
+	if parent := branch.Parent(); parent != nil {
+		resp.Parent = parent.Name()
 	}
 
-	if lockReason := branch.GetLockReason(); lockReason.IsLocked() {
+	if lockReason := branch.LockReason(); lockReason.IsLocked() {
 		resp.LockReason = string(lockReason)
 	}
 
@@ -97,7 +97,7 @@ func MapBranch(ctx context.Context, eng MapperReader, in BranchInput) BranchResp
 	}
 
 	// Map PR info
-	if prInfo, err := branch.GetPrInfo(); err == nil && prInfo != nil && prInfo.Number() != nil {
+	if prInfo, err := branch.PrInfo(); err == nil && prInfo != nil && prInfo.Number() != nil {
 		resp.PR = mapPR(prInfo)
 	}
 
@@ -211,7 +211,7 @@ func MapStackDetail(ctx context.Context, eng MapperReader, graph *engine.StackGr
 
 	branches := make([]BranchResponse, 0, len(nodes))
 	for _, node := range nodes {
-		br := MapBranch(ctx, eng, NewBranchInput(node, checksMap.Get(node.Branch.GetName()), data))
+		br := MapBranch(ctx, eng, NewBranchInput(node, checksMap.Get(node.Branch.Name()), data))
 		if isAnchor {
 			// Anchor's direct children become display roots
 			if br.Parent == anchorName {

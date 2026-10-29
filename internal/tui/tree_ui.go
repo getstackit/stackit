@@ -142,7 +142,7 @@ func NewTreeModel(ctx context.Context, eng TreeEngine, ghClient github.Client, o
 	allBranches := eng.AllBranches()
 	annotations := make(map[string]tree.BranchAnnotation)
 	for _, b := range allBranches {
-		annotations[b.GetName()] = TreeAnnotation(stackview.MinimalAnnotation(eng, b, worktrees))
+		annotations[b.Name()] = TreeAnnotation(stackview.MinimalAnnotation(eng, b, worktrees))
 	}
 	// Apply annotation overrides (e.g., custom labels for move operation)
 	if opts.AnnotationOverrides != nil {
@@ -159,10 +159,10 @@ func NewTreeModel(ctx context.Context, eng TreeEngine, ghClient github.Client, o
 
 	// Set initial selection
 	start = time.Now()
-	trunkName := eng.Trunk().GetName()
+	trunkName := eng.Trunk().Name()
 	selectedBranch := ""
 	if current := eng.CurrentBranch(ctx); current != nil {
-		selectedBranch = current.GetName()
+		selectedBranch = current.Name()
 	} else {
 		selectedBranch = trunkName
 	}
@@ -171,7 +171,7 @@ func NewTreeModel(ctx context.Context, eng TreeEngine, ghClient github.Client, o
 	// Initialize search matches (all branches match when no search query)
 	searchMatches := make(map[string]bool)
 	for _, b := range allBranches {
-		searchMatches[b.GetName()] = true
+		searchMatches[b.Name()] = true
 	}
 
 	treeDebug("NewTreeModel completed in %v", time.Since(initStart))
@@ -331,13 +331,13 @@ func (m *TreeModel) enrichData() tea.Cmd {
 		// shared map, then assemble the map serially.
 		built := make([]tree.BranchAnnotation, len(allBranches))
 		workpool.Run(indexedBranches(allBranches), func(item indexedBranch) {
-			built[item.index] = TreeAnnotation(stackview.FullAnnotation(eng, item.branch, stats[item.branch.GetName()], enrichment, stackview.AnnotationOptions{
+			built[item.index] = TreeAnnotation(stackview.FullAnnotation(eng, item.branch, stats[item.branch.Name()], enrichment, stackview.AnnotationOptions{
 				SkipCommitMessages: true,
 			}))
 		})
 		annotations := make(map[string]tree.BranchAnnotation, len(allBranches))
 		for i, b := range allBranches {
-			annotations[b.GetName()] = built[i]
+			annotations[b.Name()] = built[i]
 		}
 		treeDebug("Collected full annotations for %d branches in %v", len(allBranches), time.Since(start))
 
@@ -644,15 +644,15 @@ func (m *TreeModel) updateSearchMatches() {
 	if m.searchQuery == "" {
 		// All branches match when search is empty
 		for _, b := range m.allBranches {
-			m.searchMatches[b.GetName()] = true
+			m.searchMatches[b.Name()] = true
 		}
 		return
 	}
 
 	query := strings.ToLower(m.searchQuery)
 	for _, b := range m.allBranches {
-		branchName := strings.ToLower(b.GetName())
-		m.searchMatches[b.GetName()] = strings.Contains(branchName, query)
+		branchName := strings.ToLower(b.Name())
+		m.searchMatches[b.Name()] = strings.Contains(branchName, query)
 	}
 }
 

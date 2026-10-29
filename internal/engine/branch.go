@@ -35,9 +35,9 @@ func NewBranch(name string, reader branchReader) Branch {
 	}
 }
 
-// GetName returns the branch name. This method allows Branch to implement
+// Name returns the branch name. This method allows Branch to implement
 // the engine.Branch interface without creating circular dependencies.
-func (b Branch) GetName() string {
+func (b Branch) Name() string {
 	return b.name
 }
 
@@ -56,19 +56,19 @@ func (b Branch) IsTracked() bool {
 	return b.reader.IsTracked(b)
 }
 
-// GetScope returns the scope for this branch, inheriting from parent if not set
-func (b Branch) GetScope() Scope {
+// Scope returns the scope for this branch, inheriting from parent if not set
+func (b Branch) Scope() Scope {
 	return b.reader.GetScope(b)
 }
 
-// GetParentOrTrunk returns the parent branch name, or trunk if no parent
+// ParentOrTrunk returns the parent branch name, or trunk if no parent
 // This is used for validation where we expect a parent to exist
-func (b Branch) GetParentOrTrunk() string {
+func (b Branch) ParentOrTrunk() string {
 	parent := b.reader.GetParent(b)
 	if parent == nil {
-		return b.reader.Trunk().GetName()
+		return b.reader.Trunk().Name()
 	}
-	return parent.GetName()
+	return parent.Name()
 }
 
 // IsBranchUpToDate checks if this branch is up to date with its parent
@@ -107,29 +107,29 @@ func (b Branch) GetAllCommits() (git.Commits, error) {
 // GetCommitIDs returns newest-first identities without loading commit messages.
 func (b Branch) GetCommitIDs() ([]string, error) { return b.reader.GetCommitIDs(b) }
 
-// GetParent returns the parent branch (nil if no parent)
-func (b Branch) GetParent() *Branch {
+// Parent returns the parent branch (nil if no parent)
+func (b Branch) Parent() *Branch {
 	return b.reader.GetParent(b)
 }
 
-// GetPrInfo returns PR information for this branch
-func (b Branch) GetPrInfo() (*PrInfo, error) {
+// PrInfo returns PR information for this branch
+func (b Branch) PrInfo() (*PrInfo, error) {
 	return b.reader.GetPrInfo(b)
 }
 
 // HasPR reports whether this branch has a submitted PR number recorded.
 func (b Branch) HasPR() bool {
-	prInfo, err := b.GetPrInfo()
+	prInfo, err := b.PrInfo()
 	return err == nil && prInfo != nil && prInfo.Number() != nil
 }
 
-// GetMergedDownstack returns the merged downstack history for this branch
-func (b Branch) GetMergedDownstack() []git.MergedParent {
+// MergedDownstack returns the merged downstack history for this branch
+func (b Branch) MergedDownstack() []git.MergedParent {
 	return b.reader.GetMergedDownstack(b)
 }
 
-// GetExplicitScope returns the explicit scope set for this branch (no inheritance)
-func (b Branch) GetExplicitScope() Scope {
+// ExplicitScope returns the explicit scope set for this branch (no inheritance)
+func (b Branch) ExplicitScope() Scope {
 	return b.reader.GetExplicitScope(b)
 }
 
@@ -138,8 +138,8 @@ func (b Branch) IsLocked() bool {
 	return b.reader.IsLocked(b)
 }
 
-// GetLockReason returns why the branch is locked
-func (b Branch) GetLockReason() LockReason {
+// LockReason returns why the branch is locked
+func (b Branch) LockReason() LockReason {
 	return b.reader.GetLockReason(b)
 }
 
@@ -166,9 +166,9 @@ func (b Branch) ModificationBlocker() string {
 	case b.IsWorktreeAnchor():
 		return "worktree anchor"
 	case b.IsLocked() && b.IsFrozen():
-		return fmt.Sprintf("locked (%s) and frozen", b.GetLockReason())
+		return fmt.Sprintf("locked (%s) and frozen", b.LockReason())
 	case b.IsLocked():
-		return fmt.Sprintf("locked (%s)", b.GetLockReason())
+		return fmt.Sprintf("locked (%s)", b.LockReason())
 	case b.IsFrozen():
 		return "frozen"
 	default:
@@ -184,7 +184,7 @@ func (b Branch) EnsureCanModify() error {
 	if b.CanModify() {
 		return nil
 	}
-	return errors.NewBranchModificationError(b.name, b.GetLockReason(), b.IsFrozen())
+	return errors.NewBranchModificationError(b.name, b.LockReason(), b.IsFrozen())
 }
 
 // DefaultPRTitle returns the default PR title for this branch.

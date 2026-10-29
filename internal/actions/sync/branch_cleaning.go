@@ -31,7 +31,7 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet,
 	// Get current branch name for worktree detection
 	currentBranchName := ""
 	if currentBranch := ctx.Engine.CurrentBranch(ctx.Context); currentBranch != nil {
-		currentBranchName = currentBranch.GetName()
+		currentBranchName = currentBranch.Name()
 	}
 
 	cleanStart := time.Now()

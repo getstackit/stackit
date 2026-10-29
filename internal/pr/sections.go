@@ -93,7 +93,7 @@ func countStackBranches(ctx context.Context, branch string, eng engine.BranchRea
 			continue
 		}
 		// Check if branch has a PR
-		prInfo, err := branchObj.GetPrInfo()
+		prInfo, err := branchObj.PrInfo()
 		if err != nil || prInfo == nil || prInfo.Number() == nil {
 			continue
 		}
@@ -165,7 +165,7 @@ func renderNavigationContent(ctx context.Context, branch string, eng engine.Bran
 		}
 
 		// Add notice if present in PrInfo
-		prInfo, _ := branchObj.GetPrInfo()
+		prInfo, _ := branchObj.PrInfo()
 		if prInfo != nil {
 			if prInfo.MergeBranch() != "" {
 				if prInfo.State() == git.PRStateMerged {
@@ -176,7 +176,7 @@ func renderNavigationContent(ctx context.Context, branch string, eng engine.Bran
 
 					// If we can find the PR number for the merge branch, show it
 					mBranch := eng.GetBranch(mergeBranch)
-					if mPrInfo, err := mBranch.GetPrInfo(); err == nil && mPrInfo != nil && mPrInfo.Number() != nil {
+					if mPrInfo, err := mBranch.PrInfo(); err == nil && mPrInfo != nil && mPrInfo.Number() != nil {
 						msg = fmt.Sprintf("> 💡 **Notice**: This PR is part of a stack merge. See PR #%d for details.\n\n", *mPrInfo.Number())
 					}
 					content.WriteString(msg)
@@ -189,7 +189,7 @@ func renderNavigationContent(ctx context.Context, branch string, eng engine.Bran
 				continue
 			}
 
-			leaf := buildLeafWithMarker(eng, b.GetName(), depth, branch, opts.Marker)
+			leaf := buildLeafWithMarker(eng, b.Name(), depth, branch, opts.Marker)
 			if leaf != "" {
 				content.WriteString(leaf)
 			}
@@ -197,7 +197,7 @@ func renderNavigationContent(ctx context.Context, branch string, eng engine.Bran
 
 		// Add merged downstack history if enabled
 		if opts.ShowMerged {
-			mergedHistory := branchObj.GetMergedDownstack()
+			mergedHistory := branchObj.MergedDownstack()
 			if len(mergedHistory) > 0 {
 				content.WriteString("\n\n**Previously based on:**")
 				for _, mp := range slices.Backward(mergedHistory) {
@@ -278,7 +278,7 @@ func CreateLockSection(branch string, eng engine.BranchReader) string {
 		return ""
 	}
 
-	reason := branchObj.GetLockReason()
+	reason := branchObj.LockReason()
 	var message string
 	if reason == git.LockReasonUser {
 		message = "> 🔒 This PR has been locked. To unlock it, run `st unlock`."
@@ -356,23 +356,23 @@ func IsStackitComment(body string) bool {
 // findTerminalParent finds the terminal parent (parent of trunk) for a branch.
 func findTerminalParent(currentBranch string, eng engine.BranchReader) string {
 	branch := eng.GetBranch(currentBranch)
-	parent := branch.GetParent()
+	parent := branch.Parent()
 	if parent == nil {
 		// No parent, use trunk
-		return eng.Trunk().GetName()
+		return eng.Trunk().Name()
 	}
 
 	if parent.IsTrunk() {
 		return currentBranch
 	}
 
-	return findTerminalParent(parent.GetName(), eng)
+	return findTerminalParent(parent.Name(), eng)
 }
 
 // buildLeafWithMarker builds a single leaf in the tree with a custom marker.
 func buildLeafWithMarker(eng engine.BranchReader, branchName string, depth int, prBranch string, customMarker string) string {
 	branch := eng.GetBranch(branchName)
-	prInfo, err := branch.GetPrInfo()
+	prInfo, err := branch.PrInfo()
 	if err != nil || prInfo == nil || prInfo.Number() == nil {
 		return ""
 	}

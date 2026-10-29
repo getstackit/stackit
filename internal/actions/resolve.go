@@ -24,7 +24,7 @@ func ResolveBranchName(ctx context.Context, eng CurrentBranchReader, branchName 
 	if currentBranch == nil {
 		return "", errors.ErrNotOnBranchNoBranchSpecified
 	}
-	return currentBranch.GetName(), nil
+	return currentBranch.Name(), nil
 }
 
 // PRNumberForBranch returns the submitted PR number for a branch, when one is

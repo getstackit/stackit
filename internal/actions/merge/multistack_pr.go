@@ -56,7 +56,7 @@ func (p *MultiStackPRCreator) CreateAndPushBranch(ctx context.Context, branchNam
 
 	// Push to remote
 	remote := p.worktreeEng.GetRemote(ctx)
-	if err := p.worktreeEng.PushBranches(ctx, remote, []git.PushSpec{{BranchName: branch.GetName(), LeaseMode: git.PushLeaseNone}}, git.PushOptions{
+	if err := p.worktreeEng.PushBranches(ctx, remote, []git.PushSpec{{BranchName: branch.Name(), LeaseMode: git.PushLeaseNone}}, git.PushOptions{
 		Force:    false,
 		NoVerify: true,
 	}).One(); err != nil {
@@ -78,7 +78,7 @@ func (p *MultiStackPRCreator) CreatePR(ctx context.Context, branchName string, i
 		Title: content.Title,
 		Body:  content.Body,
 		Head:  branchName,
-		Base:  p.worktreeEng.Trunk().GetName(),
+		Base:  p.worktreeEng.Trunk().Name(),
 		Draft: false,
 	}
 

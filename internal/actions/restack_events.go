@@ -173,10 +173,10 @@ func (t *restackTally) parentName(p RestackProgress) string {
 		return p.NewParent
 	}
 	br := t.eng.GetBranch(p.Branch)
-	if br.GetName() == "" {
+	if br.Name() == "" {
 		return ""
 	}
-	return br.GetParentOrTrunk()
+	return br.ParentOrTrunk()
 }
 
 func (t *restackTally) result() RestackSummary {

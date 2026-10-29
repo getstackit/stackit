@@ -13,7 +13,7 @@ import (
 
 // IsTrunk checks if a branch is the trunk
 func (e *engineImpl) IsTrunk(branch Branch) bool {
-	branchName := branch.GetName()
+	branchName := branch.Name()
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return branchName == e.trunk
@@ -21,16 +21,16 @@ func (e *engineImpl) IsTrunk(branch Branch) bool {
 
 // IsTracked checks if a branch is tracked (has a parent in metadata)
 func (e *engineImpl) IsTracked(branch Branch) bool {
-	e.ensureBranchSharedLoaded(branch.GetName())
+	e.ensureBranchSharedLoaded(branch.Name())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	state := e.readState(branch.GetName())
+	state := e.readState(branch.Name())
 	return state != nil && state.Parent != ""
 }
 
 // GetScope returns the scope for a branch, inheriting from parent if not set
 func (e *engineImpl) GetScope(branch Branch) Scope {
-	current := branch.GetName()
+	current := branch.Name()
 	visited := make(map[string]bool)
 	for !visited[current] {
 		visited[current] = true
@@ -65,10 +65,10 @@ func (e *engineImpl) GetScope(branch Branch) Scope {
 
 // IsLocked checks if a branch is locked
 func (e *engineImpl) IsLocked(branch Branch) bool {
-	e.ensureBranchSharedLoaded(branch.GetName())
+	e.ensureBranchSharedLoaded(branch.Name())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if state := e.readState(branch.GetName()); state != nil {
+	if state := e.readState(branch.Name()); state != nil {
 		return state.IsLocked()
 	}
 	return false
@@ -76,10 +76,10 @@ func (e *engineImpl) IsLocked(branch Branch) bool {
 
 // GetLockReason returns the reason why a branch is locked
 func (e *engineImpl) GetLockReason(branch Branch) LockReason {
-	e.ensureBranchSharedLoaded(branch.GetName())
+	e.ensureBranchSharedLoaded(branch.Name())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if state := e.readState(branch.GetName()); state != nil {
+	if state := e.readState(branch.Name()); state != nil {
 		return state.LockReason
 	}
 	return LockReasonNone
@@ -92,7 +92,7 @@ func (e *engineImpl) IsFrozen(branch Branch) bool {
 	e.ensureLocalLoaded()
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if state := e.readState(branch.GetName()); state != nil {
+	if state := e.readState(branch.Name()); state != nil {
 		return state.Frozen
 	}
 	return false
@@ -100,10 +100,10 @@ func (e *engineImpl) IsFrozen(branch Branch) bool {
 
 // GetBranchType returns the branch type for a branch
 func (e *engineImpl) GetBranchType(branch Branch) git.BranchType {
-	e.ensureBranchSharedLoaded(branch.GetName())
+	e.ensureBranchSharedLoaded(branch.Name())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if state := e.readState(branch.GetName()); state != nil {
+	if state := e.readState(branch.Name()); state != nil {
 		return state.BranchType
 	}
 	return ""
@@ -119,7 +119,7 @@ func (e *engineImpl) SetBranchType(ctx context.Context, branch Branch, branchTyp
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	branchName := branch.GetName()
+	branchName := branch.Name()
 
 	// Read existing metadata
 	meta, err := e.readMetadata(branchName)
@@ -145,11 +145,11 @@ func (e *engineImpl) SetBranchType(ctx context.Context, branch Branch, branchTyp
 
 // GetExplicitScope returns the explicit scope set for a branch (no inheritance)
 func (e *engineImpl) GetExplicitScope(branch Branch) Scope {
-	e.ensureBranchSharedLoaded(branch.GetName())
+	e.ensureBranchSharedLoaded(branch.Name())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	if state := e.readState(branch.GetName()); state != nil && state.HasScope() {
+	if state := e.readState(branch.Name()); state != nil && state.HasScope() {
 		return state.GetScope()
 	}
 	return Empty()
@@ -163,7 +163,7 @@ func (e *engineImpl) IsUpToDate(branch Branch) bool {
 	}
 
 	e.mu.RLock()
-	state := e.readState(branch.GetName())
+	state := e.readState(branch.Name())
 	e.mu.RUnlock()
 
 	if state == nil {
@@ -199,7 +199,7 @@ func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
 	e.mu.RLock()
 	trunk := e.trunk
 	for _, branch := range branches {
-		name := branch.GetName()
+		name := branch.Name()
 		if name == trunk {
 			results[name] = true
 			continue
@@ -263,7 +263,7 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 	// set, so it must not be re-entered per worker.
 	var missingRefs []string
 	for _, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 		if remoteShas[branchName] == "" {
 			missingRefs = append(missingRefs, remote+"/"+branchName)
 		}
@@ -284,7 +284,7 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 	}
 
 	workpool.Run(indexed, func(item indexedBranch) {
-		branchName := item.branch.GetName()
+		branchName := item.branch.Name()
 		localSha := localShas[branchName]
 		remoteSha := remoteShas[branchName]
 		if remoteSha == "" {
@@ -310,7 +310,7 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 	})
 
 	for i, b := range branches {
-		results[b.GetName()] = statuses[i]
+		results[b.Name()] = statuses[i]
 	}
 
 	return results
@@ -468,7 +468,7 @@ type deletionStatusInputs struct {
 }
 
 func (e *engineImpl) loadDeletionStatusInputs(ctx context.Context, branchNames []string) (*deletionStatusInputs, error) {
-	trunkName := e.Trunk().GetName()
+	trunkName := e.Trunk().Name()
 
 	// Collect all refs we need revisions for (branches + their parents)
 	refsToFetch := make([]string, 0, len(branchNames)*2+1)
@@ -476,9 +476,9 @@ func (e *engineImpl) loadDeletionStatusInputs(ctx context.Context, branchNames [
 	for _, name := range branchNames {
 		refsToFetch = append(refsToFetch, name)
 		branch := e.GetBranch(name)
-		parent := branch.GetParent()
+		parent := branch.Parent()
 		if parent != nil {
-			refsToFetch = append(refsToFetch, parent.GetName())
+			refsToFetch = append(refsToFetch, parent.Name())
 		}
 	}
 
@@ -595,10 +595,10 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 		return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}
 	}
 
-	parent := branch.GetParent()
+	parent := branch.Parent()
 	parentName := trunkName
 	if parent != nil {
-		parentName = parent.GetName()
+		parentName = parent.Name()
 	}
 
 	if parentRev, ok := e.planRev(revisions, parentName); ok && parentRev != "" {

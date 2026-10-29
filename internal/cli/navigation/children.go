@@ -33,13 +33,13 @@ branches depend on the current branch.`,
 				graph := ctx.Engine.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 				children := graph.ChildBranches(*currentBranch)
 				if len(children) == 0 {
-					ctx.Output.Info("%s has no children.", style.ColorCurrentBranch(currentBranch.GetName()))
+					ctx.Output.Info("%s has no children.", style.ColorCurrentBranch(currentBranch.Name()))
 					return nil
 				}
 
 				// Print children
 				for _, child := range children {
-					ctx.Output.Info("%s", child.GetName())
+					ctx.Output.Info("%s", child.Name())
 				}
 				return nil
 			})

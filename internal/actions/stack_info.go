@@ -59,9 +59,9 @@ func QueryStackInfo(ctx context.Context, eng engine.Engine) (StackInfoResult, er
 	prStatuses, _ := eng.BatchGetPRSubmissionStatus(ctx, stackBranches, nil)
 	statuses := eng.ReadBranchStatuses(stackBranches)
 
-	trunk := eng.Trunk().GetName()
+	trunk := eng.Trunk().Name()
 	result := StackInfoResult{
-		Current:  current.GetName(),
+		Current:  current.Name(),
 		Trunk:    trunk,
 		Order:    make([]string, 0, len(stackBranches)),
 		Parents:  make(map[string]string, len(stackBranches)),
@@ -70,9 +70,9 @@ func QueryStackInfo(ctx context.Context, eng engine.Engine) (StackInfoResult, er
 	}
 
 	for _, branch := range stackBranches {
-		name := branch.GetName()
+		name := branch.Name()
 		result.Order = append(result.Order, name)
-		result.Parents[name] = branch.GetParentOrTrunk()
+		result.Parents[name] = branch.ParentOrTrunk()
 		result.UpToDate[name] = statuses.IsUpToDate(branch)
 
 		if branch.IsTrunk() {
@@ -82,10 +82,10 @@ func QueryStackInfo(ctx context.Context, eng engine.Engine) (StackInfoResult, er
 		diff := diffs[name]
 		info := StackInfoBranch{
 			Name:           name,
-			Parent:         branch.GetParentOrTrunk(),
+			Parent:         branch.ParentOrTrunk(),
 			IsLocked:       branch.IsLocked(),
 			IsFrozen:       branch.IsFrozen(),
-			Scope:          branch.GetScope().String(),
+			Scope:          branch.Scope().String(),
 			CommitMessages: commits[name].Onelines(),
 			DiffStats: BranchDiffStats{
 				Additions:    diff.Added,

@@ -44,7 +44,7 @@ func handleTrunkPullResult(ctx *app.Context, opts *Options, handler Handler, sum
 	out := ctx.Output
 	gctx := ctx.Context
 	trunk := nav.Trunk()
-	trunkName := trunk.GetName()
+	trunkName := trunk.Name()
 
 	switch pullResult {
 	case engine.PullDone:

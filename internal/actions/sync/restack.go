@@ -36,7 +36,7 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 				})
 				// Add branches to restack list
 				for _, b := range stack {
-					branchesToRestack = append(branchesToRestack, b.GetName())
+					branchesToRestack = append(branchesToRestack, b.Name())
 				}
 			} else if currentBranch.IsTrunk() {
 				// If on trunk, restack all branches
@@ -44,7 +44,7 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 					RecursiveChildren: true,
 				})
 				for _, b := range stack {
-					branchesToRestack = append(branchesToRestack, b.GetName())
+					branchesToRestack = append(branchesToRestack, b.Name())
 				}
 			}
 		}

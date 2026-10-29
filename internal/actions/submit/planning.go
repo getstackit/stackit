@@ -51,14 +51,14 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	// Batch misses (including a failed query) retain the single-PR fallback.
 	missingContent := make([]string, 0, len(branches))
 	for _, branch := range branches {
-		status := statuses[branch.GetName()]
+		status := statuses[branch.Name()]
 		action, _ := effectiveSubmitAction(status)
 		if _, skip := submissionSkipReason(status, action, opts); skip {
 			continue
 		}
-		info, _ := branch.GetPrInfo()
+		info, _ := branch.PrInfo()
 		if info != nil && info.Number() != nil && (info.Title() == "" || info.Body() == "") {
-			missingContent = append(missingContent, branch.GetName())
+			missingContent = append(missingContent, branch.Name())
 		}
 	}
 	var current map[git.PRNumber]github.PRContent
@@ -67,7 +67,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	}
 
 	for _, branch := range branches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 		status := statuses[branchName]
 
 		action, prNumber := effectiveSubmitAction(status)
@@ -108,7 +108,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		prUpdates[branchName] = pendingPrInfo(branch, metadata)
 
 		// Get SHAs from the batched revisions resolved above.
-		parentBranchName := resolveSubmitParent(nav, branch).GetName()
+		parentBranchName := resolveSubmitParent(nav, branch).Name()
 		headSHA := revisions[branchName]
 		baseSHA := revisions[parentBranchName]
 

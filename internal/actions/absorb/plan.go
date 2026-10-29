@@ -103,7 +103,7 @@ func buildStackNodes(ctx context.Context, eng engine.Engine, currentBranch strin
 	// Get all branches and build the stack
 	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	current := eng.GetBranch(currentBranch)
-	if current.GetName() == "" {
+	if current.Name() == "" {
 		return nodes
 	}
 
@@ -112,9 +112,9 @@ func buildStackNodes(ctx context.Context, eng engine.Engine, currentBranch strin
 
 	// Also include trunk
 	trunk := eng.Trunk()
-	if trunk.GetName() != "" {
+	if trunk.Name() != "" {
 		nodes = append(nodes, StackNode{
-			Name:    trunk.GetName(),
+			Name:    trunk.Name(),
 			IsTrunk: true,
 		})
 	}
@@ -125,16 +125,16 @@ func buildStackNodes(ctx context.Context, eng engine.Engine, currentBranch strin
 			continue // Already added trunk
 		}
 
-		parent := branch.GetParent()
+		parent := branch.Parent()
 		parentName := ""
 		if parent != nil {
-			parentName = parent.GetName()
+			parentName = parent.Name()
 		}
 
 		nodes = append(nodes, StackNode{
-			Name:      branch.GetName(),
+			Name:      branch.Name(),
 			Parent:    parentName,
-			IsCurrent: branch.GetName() == currentBranch,
+			IsCurrent: branch.Name() == currentBranch,
 		})
 	}
 

@@ -79,7 +79,7 @@ type RemoteMetadataManager interface {
 	BatchSetLastModifiedBy(ctx context.Context, branchNames []string) error
 	LoadRemoteMetadataCache(ctx context.Context) error
 	ApplyRemoteMetadataForBranches(ctx context.Context, branchNames []string) error
-	GetRemoteMetadataCache() RemoteMetadataView
+	RemoteMetadataCache() RemoteMetadataView
 	ComputeAllMetadataDiffs() ([]*MetadataDiff, error)
 	AcceptRemoteMetadata(ctx context.Context, branch string) error
 	RejectRemoteMetadata(branch string)
@@ -209,7 +209,7 @@ type Options struct {
 // Thread-safe: All methods are safe for concurrent use
 type UndoManager interface {
 	TakeSnapshot(ctx context.Context, opts SnapshotOptions) error
-	GetSnapshots() ([]SnapshotInfo, error)
+	Snapshots() ([]SnapshotInfo, error)
 	LoadSnapshot(snapshotID string) (*Snapshot, error)
 	RestoreSnapshot(ctx context.Context, snapshotID string) error
 	RestoreWorktree(ctx context.Context, snapshotID string) (bool, error)

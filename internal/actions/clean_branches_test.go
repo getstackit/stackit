@@ -90,9 +90,9 @@ func TestCleanBranches(t *testing.T) {
 
 		// branch2 should have new parent (main)
 		branchparent2 := s.Engine.GetBranch("branch2")
-		parent2 := branchparent2.GetParent()
+		parent2 := branchparent2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName())
+		require.Equal(t, "main", parent2.Name())
 		require.Contains(t, result.BranchesWithNewParents, "branch2")
 	})
 
@@ -126,13 +126,13 @@ func TestCleanBranches(t *testing.T) {
 
 		// Both children should have new parent
 		branchparent2 := s.Engine.GetBranch("branch2")
-		parent2 := branchparent2.GetParent()
+		parent2 := branchparent2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName())
+		require.Equal(t, "main", parent2.Name())
 		branchparent3 := s.Engine.GetBranch("branch3")
-		parent3 := branchparent3.GetParent()
+		parent3 := branchparent3.Parent()
 		require.NotNil(t, parent3)
-		require.Equal(t, "main", parent3.GetName())
+		require.Equal(t, "main", parent3.Name())
 		require.Contains(t, result.BranchesWithNewParents, "branch2")
 		require.Contains(t, result.BranchesWithNewParents, "branch3")
 	})
@@ -426,9 +426,9 @@ func TestCleanBranches(t *testing.T) {
 		require.Contains(t, plan.BranchesToDelete, "branch1")
 		require.Contains(t, plan.BranchesWithNewParents, "branch2")
 
-		parent := s.Engine.GetBranch("branch2").GetParent()
+		parent := s.Engine.GetBranch("branch2").Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "branch1", parent.GetName(), "planning should not mutate branch metadata")
+		require.Equal(t, "branch1", parent.Name(), "planning should not mutate branch metadata")
 	})
 
 	t.Run("uses supplied remote statuses for unpushed detection", func(t *testing.T) {
@@ -523,9 +523,9 @@ func TestCleanBranches(t *testing.T) {
 
 		// branch1 should be deleted and branch2 reparented to main.
 		require.False(t, s.Engine.GetBranch("branch1").IsTracked())
-		parent := s.Engine.GetBranch("branch2").GetParent()
+		parent := s.Engine.GetBranch("branch2").Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "main", parent.GetName())
+		require.Equal(t, "main", parent.Name())
 
 		// Critical regression assertion: preserve old divergence at branch1 tip.
 		// If this regresses, restack can replay branch1 commits and cause avoidable conflicts.

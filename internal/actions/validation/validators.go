@@ -157,7 +157,7 @@ func CurrentBranchMustBeTracked(ctx context.Context, eng BranchValidationEngine)
 			return errors.ErrNotOnBranch
 		}
 		if !currentBranch.IsTracked() {
-			return fmt.Errorf("branch %s is not tracked by stackit", currentBranch.GetName())
+			return fmt.Errorf("branch %s is not tracked by stackit", currentBranch.Name())
 		}
 		return nil
 	})

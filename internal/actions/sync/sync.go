@@ -129,7 +129,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		fetchStart := time.Now()
 		trunkFetchErr = eng.FetchRemote(remoteCtx, engine.RemoteFetchRequest{
 			Remote:               eng.GetRemote(ctx.Context),
-			Branches:             []string{eng.Trunk().GetName()},
+			Branches:             []string{eng.Trunk().Name()},
 			IncludeMetadata:      true,
 			IncludeStackMetadata: true,
 		})
@@ -257,7 +257,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			RecursiveChildren: true,
 		})
 		for _, b := range upstack {
-			branchesToRestack = append(branchesToRestack, b.GetName())
+			branchesToRestack = append(branchesToRestack, b.Name())
 		}
 		branchesToRestack = append(branchesToRestack, branchName)
 	}

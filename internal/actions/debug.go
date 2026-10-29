@@ -99,7 +99,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 	eng := ctx.Engine
 	repoRoot := ctx.RepoRoot
 
-	snapshotInfos, err := eng.GetSnapshots()
+	snapshotInfos, err := eng.Snapshots()
 	if err != nil {
 		snapshotInfos = []engine.SnapshotInfo{}
 	}
@@ -142,7 +142,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 	branchInfos := make([]BranchInfo, 0, len(allBranches))
 	for _, branch := range allBranches {
-		branchName := branch.GetName()
+		branchName := branch.Name()
 		branchInfo := BranchInfo{
 			Name:      branchName,
 			IsTrunk:   branch.IsTrunk(),
@@ -154,16 +154,16 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 			branchInfo.SHA = sha
 		}
 
-		parent := branchObj.GetParent()
+		parent := branchObj.Parent()
 		if parent != nil {
-			branchInfo.Parent = parent.GetName()
+			branchInfo.Parent = parent.Name()
 		}
 
 		children := graph.ChildBranches(branchObj)
 		if len(children) > 0 {
 			childNames := make([]string, len(children))
 			for i, c := range children {
-				childNames[i] = c.GetName()
+				childNames[i] = c.Name()
 			}
 			branchInfo.Children = childNames
 		}
@@ -173,7 +173,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 				branchInfo.ParentRevision = *rev
 			}
 
-			prInfo, err := branchObj.GetPrInfo()
+			prInfo, err := branchObj.PrInfo()
 			if err == nil && prInfo != nil {
 				branchInfo.PRInfo = prInfo
 			}
@@ -216,7 +216,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 			_ = eng.LoadRemoteMetadataCache(ctx.Context)
 		}
 		cancelRemote()
-		remoteCache := eng.GetRemoteMetadataCache()
+		remoteCache := eng.RemoteMetadataCache()
 
 		remoteRefs := make(map[string]RemoteRefInfo)
 		// We need to list the actual refs to get SHAs and potentially modification info
@@ -246,10 +246,10 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 		Timestamp:      time.Now(),
 		RecentCommands: recentCommands,
 		StackState: StackStateInfo{
-			Trunk: trunk.GetName(),
+			Trunk: trunk.Name(),
 			CurrentBranch: func() string {
 				if currentBranch != nil {
-					return currentBranch.GetName()
+					return currentBranch.Name()
 				}
 				return ""
 			}(),

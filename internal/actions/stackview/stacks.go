@@ -96,7 +96,7 @@ func DiscoverStacksWithSort(ctx context.Context, eng engine.StackView, strategy 
 func countPRs(branches engine.Branches) int {
 	count := 0
 	for _, branch := range branches {
-		prInfo, err := branch.GetPrInfo()
+		prInfo, err := branch.PrInfo()
 		if err == nil && prInfo != nil && prInfo.Number() != nil {
 			count++
 		}

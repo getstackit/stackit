@@ -139,17 +139,17 @@ func NewMoveModel(ctx context.Context, eng engine.Engine, config MoveModelConfig
 	// Build non-selectable set from descendants
 	nonSelectable := make(map[string]bool)
 	for _, d := range config.Descendants {
-		nonSelectable[d.GetName()] = true
+		nonSelectable[d.Name()] = true
 	}
 
 	// Determine old parent name
-	oldParentName := eng.Trunk().GetName()
+	oldParentName := eng.Trunk().Name()
 	if config.OldParent != nil {
-		oldParentName = config.OldParent.GetName()
+		oldParentName = config.OldParent.Name()
 	}
 
 	// Build the branch list using the tree renderer for proper formatting
-	trunk := eng.Trunk().GetName()
+	trunk := eng.Trunk().Name()
 
 	// Create tree renderer
 	renderer := NewStackTreeRenderer(ctx, eng)
@@ -158,10 +158,10 @@ func NewMoveModel(ctx context.Context, eng engine.Engine, config MoveModelConfig
 	annotations := make(map[string]tree.BranchAnnotation)
 	for _, b := range eng.AllBranches() {
 		ann := tree.BranchAnnotation{}
-		if b.GetName() == config.SourceBranch {
+		if b.Name() == config.SourceBranch {
 			ann.CustomLabel = " ← moving this"
 		}
-		annotations[b.GetName()] = ann
+		annotations[b.Name()] = ann
 	}
 	renderer.SetAnnotations(annotations)
 

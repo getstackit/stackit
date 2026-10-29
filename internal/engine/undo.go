@@ -449,8 +449,8 @@ func (e *engineImpl) enforceMaxStackDepth(ctx context.Context) error {
 	return nil
 }
 
-// GetSnapshots returns a list of all available snapshots, sorted by time (newest first)
-func (e *engineImpl) GetSnapshots() ([]SnapshotInfo, error) {
+// Snapshots returns a list of all available snapshots, sorted by time (newest first)
+func (e *engineImpl) Snapshots() ([]SnapshotInfo, error) {
 	dir := getUndoDir(e.repoRoot)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -607,14 +607,14 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 		if branchName == e.currentBranch {
 			// Access trunk directly while holding the lock (avoid deadlock from e.Trunk() trying to acquire RLock)
 			trunkBranch := NewBranch(trunkName, e)
-			if err := e.git.CheckoutBranch(ctx, trunkBranch.GetName()); err != nil {
+			if err := e.git.CheckoutBranch(ctx, trunkBranch.Name()); err != nil {
 				return fmt.Errorf("failed to switch to trunk before deleting branch: %w", err)
 			}
 			e.currentBranch = trunkName
 		}
 		// Delete the branch
 		branch := e.GetBranch(branchName)
-		if err := e.git.DeleteBranch(ctx, branch.GetName()); err != nil {
+		if err := e.git.DeleteBranch(ctx, branch.Name()); err != nil {
 			// Log but continue - branch might not exist or might be protected
 			continue
 		}
@@ -672,11 +672,11 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 			// If we are already on this branch, checkout might not update the working directory
 			// after we've updated the ref. Use reset --hard to be sure.
 			current, _ := e.git.GetCurrentBranch(ctx)
-			if current == branch.GetName() {
+			if current == branch.Name() {
 				if err := e.git.HardReset(ctx, "HEAD"); err != nil {
 					return fmt.Errorf("failed to reset working directory: %w", err)
 				}
-			} else if err := e.git.CheckoutBranch(ctx, branch.GetName()); err == nil {
+			} else if err := e.git.CheckoutBranch(ctx, branch.Name()); err == nil {
 				e.currentBranch = snapshot.CurrentBranch
 			}
 			// If checkout fails, continue anyway - the restore already applied the refs,
@@ -685,7 +685,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 			// Branch was deleted, switch to trunk
 			// Access trunk directly while holding the lock (avoid deadlock from e.Trunk() trying to acquire RLock)
 			trunkBranch := NewBranch(e.trunk, e)
-			if err := e.git.CheckoutBranch(ctx, trunkBranch.GetName()); err != nil {
+			if err := e.git.CheckoutBranch(ctx, trunkBranch.Name()); err != nil {
 				return fmt.Errorf("failed to checkout trunk after restore: %w", err)
 			}
 			e.currentBranch = e.trunk

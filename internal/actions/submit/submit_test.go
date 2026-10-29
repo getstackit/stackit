@@ -346,9 +346,9 @@ func TestSubmitCreatesNativeGitHubStackWhenRequested(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, mockConfig.CreatedStacks, 1)
 
-	basePR, err := s.Engine.GetBranch("base").GetPrInfo()
+	basePR, err := s.Engine.GetBranch("base").PrInfo()
 	require.NoError(t, err)
-	apiPR, err := s.Engine.GetBranch("api").GetPrInfo()
+	apiPR, err := s.Engine.GetBranch("api").PrInfo()
 	require.NoError(t, err)
 	require.Equal(t, []git.PRNumber{*basePR.Number(), *apiPR.Number()}, mockConfig.CreatedStacks[0])
 
@@ -968,13 +968,13 @@ func TestSubmitGitHubStackSyncsDisjointChainsFromTrunk(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, mockConfig.CreatedStacks, 2)
 
-	oneBottomPR, err := s.Engine.GetBranch("one-bottom").GetPrInfo()
+	oneBottomPR, err := s.Engine.GetBranch("one-bottom").PrInfo()
 	require.NoError(t, err)
-	oneTopPR, err := s.Engine.GetBranch("one-top").GetPrInfo()
+	oneTopPR, err := s.Engine.GetBranch("one-top").PrInfo()
 	require.NoError(t, err)
-	twoBottomPR, err := s.Engine.GetBranch("two-bottom").GetPrInfo()
+	twoBottomPR, err := s.Engine.GetBranch("two-bottom").PrInfo()
 	require.NoError(t, err)
-	twoTopPR, err := s.Engine.GetBranch("two-top").GetPrInfo()
+	twoTopPR, err := s.Engine.GetBranch("two-top").PrInfo()
 	require.NoError(t, err)
 	require.Equal(t, [][]git.PRNumber{
 		{*oneBottomPR.Number(), *oneTopPR.Number()},
@@ -1100,7 +1100,7 @@ func TestSubmitDissolvesNativeGitHubStackToRetargetBase(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Empty(t, mockConfig.CreatedStacks[0], "the stale native Stack should have been dissolved")
-	apiPR, err := s.Engine.GetBranch("api").GetPrInfo()
+	apiPR, err := s.Engine.GetBranch("api").PrInfo()
 	require.NoError(t, err)
 	require.Equal(t, "main", apiPR.Base())
 }
@@ -1140,7 +1140,7 @@ func TestSubmitRetargetsBaseWhenStackKeepsMergedPullRequest(t *testing.T) {
 	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
 	require.NoError(t, err, "a Stack pinned open by a merged PR must not block retargeting the others")
 
-	apiPR, err := s.Engine.GetBranch("api").GetPrInfo()
+	apiPR, err := s.Engine.GetBranch("api").PrInfo()
 	require.NoError(t, err)
 	require.Equal(t, "main", apiPR.Base())
 

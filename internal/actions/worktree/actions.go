@@ -123,10 +123,10 @@ func snapshotWorktree(ctx *app.Context, entry *Entry) (*worktreeSnapshot, error)
 
 	snapshot.AnchorExists = true
 	snapshot.AnchorScope = ctx.Engine.GetScope(anchorBranch).String()
-	if parent := anchorBranch.GetParent(); parent != nil {
-		snapshot.AnchorParent = parent.GetName()
+	if parent := anchorBranch.Parent(); parent != nil {
+		snapshot.AnchorParent = parent.Name()
 	} else {
-		snapshot.AnchorParent = ctx.Engine.Trunk().GetName()
+		snapshot.AnchorParent = ctx.Engine.Trunk().Name()
 	}
 	anchorRev, err := anchorBranch.GetRevision()
 	if err != nil {
@@ -363,21 +363,21 @@ func CreateAction(ctx *app.Context, opts CreateOptions) (*WorktreeResult, error)
 	trunkStatus := eng.ReadBranchRemoteStatuses(remoteCtx, engine.BranchesOf(trunk)).ForBranch(trunk)
 	cancelRemote()
 	if trunkStatus.Behind() {
-		out.Warn("Local %s is behind remote. Consider running 'st sync' first.", trunk.GetName())
+		out.Warn("Local %s is behind remote. Consider running 'st sync' first.", trunk.Name())
 	}
 
 	// Inform user if not on trunk (worktree is always created from trunk)
 	currentBranch := eng.CurrentBranch(ctx.Context)
 	if currentBranch == nil {
-		out.Info("Creating worktree from %s (currently in detached HEAD state)", trunk.GetName())
-	} else if currentBranch.GetName() != trunk.GetName() {
-		out.Info("Creating worktree from %s (current branch: %s)", trunk.GetName(), currentBranch.GetName())
+		out.Info("Creating worktree from %s (currently in detached HEAD state)", trunk.Name())
+	} else if currentBranch.Name() != trunk.Name() {
+		out.Info("Creating worktree from %s (current branch: %s)", trunk.Name(), currentBranch.Name())
 	}
 
 	created, err := createAnchoredWorktree(ctx, eng, repoRoot, anchoredWorktreeOptions{
 		Name:         opts.Name,
 		Scope:        opts.Scope,
-		AnchorParent: trunk.GetName(),
+		AnchorParent: trunk.Name(),
 		Config:       cfg,
 	})
 	if err != nil {
@@ -493,10 +493,10 @@ func CreateAnchoredWorktreeForBranch(ctx *app.Context, branchName string, name s
 	if name == "" {
 		name = branchName
 	}
-	parent := ctx.Engine.Trunk().GetName()
+	parent := ctx.Engine.Trunk().Name()
 	if branch := ctx.Engine.GetBranch(branchName); branch.IsTracked() {
-		if currentParent := branch.GetParent(); currentParent != nil {
-			parent = currentParent.GetName()
+		if currentParent := branch.Parent(); currentParent != nil {
+			parent = currentParent.Name()
 		}
 	}
 
@@ -521,7 +521,7 @@ func CreateAnchoredWorktreeForBranch(ctx *app.Context, branchName string, name s
 func createAnchoredWorktree(ctx *app.Context, eng engine.Engine, repoRoot string, opts anchoredWorktreeOptions) (*WorktreeResult, error) {
 	out := ctx.Output
 	if opts.AnchorParent == "" {
-		opts.AnchorParent = eng.Trunk().GetName()
+		opts.AnchorParent = eng.Trunk().Name()
 	}
 	if opts.OriginalParent == "" {
 		opts.OriginalParent = opts.AnchorParent

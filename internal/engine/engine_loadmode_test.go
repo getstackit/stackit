@@ -82,7 +82,7 @@ func TestNewEngineDoesNotFetchRemoteMetadata(t *testing.T) {
 	remoteMetadataSHA, err := s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "--verify", "refs/stackit/remote-metadata/feature")
 	require.NoError(t, err)
 	require.NotEmpty(t, remoteMetadataSHA)
-	require.True(t, eng.GetRemoteMetadataCache().Has("feature"))
+	require.True(t, eng.RemoteMetadataCache().Has("feature"))
 }
 
 func TestEnsureRemoteMetadataRequiresDeadline(t *testing.T) {
@@ -107,11 +107,11 @@ func TestLoadMode_FullParity(t *testing.T) {
 		fullBranch := full.GetBranch(name)
 		sharedBranch := shared.GetBranch(name)
 
-		fullParent := fullBranch.GetParent()
-		sharedParent := sharedBranch.GetParent()
+		fullParent := fullBranch.Parent()
+		sharedParent := sharedBranch.Parent()
 		require.NotNil(t, fullParent, "parent missing on full engine for %s", name)
 		require.NotNil(t, sharedParent, "parent missing on shared engine for %s", name)
-		require.Equal(t, fullParent.GetName(), sharedParent.GetName(),
+		require.Equal(t, fullParent.Name(), sharedParent.Name(),
 			"parent mismatch for %s", name)
 		require.Equal(t, full.IsTracked(fullBranch), shared.IsTracked(sharedBranch),
 			"IsTracked mismatch for %s", name)

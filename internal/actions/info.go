@@ -94,7 +94,7 @@ func refreshRemoteMetadataForBranchInfo(ctx context.Context, eng engine.Engine, 
 
 func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName string, branch engine.Branch, opts BranchInfoQueryOptions) (BranchInfoResult, error) {
 	currentBranch := eng.CurrentBranch(ctx)
-	isCurrent := currentBranch != nil && branchName == currentBranch.GetName()
+	isCurrent := currentBranch != nil && branchName == currentBranch.Name()
 	isTrunk := branch.IsTrunk()
 
 	result := BranchInfoResult{
@@ -104,8 +104,8 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 		IsLocked:       branch.IsLocked(),
 		IsFrozen:       branch.IsFrozen(),
 		NeedsRestack:   !isTrunk && !branch.IsBranchUpToDate(),
-		Scope:          branch.GetScope().String(),
-		Trunk:          eng.Trunk().GetName(),
+		Scope:          branch.Scope().String(),
+		Trunk:          eng.Trunk().Name(),
 		CommitMessages: []string{},
 		Children:       []string{},
 	}
@@ -115,17 +115,17 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 		result.CommitDate = commitDate.Format(time.RFC3339)
 	}
 
-	if parent := branch.GetParent(); parent != nil {
-		result.Parent = parent.GetName()
+	if parent := branch.Parent(); parent != nil {
+		result.Parent = parent.Name()
 	}
 
 	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	for _, child := range graph.ChildBranches(branch) {
-		result.Children = append(result.Children, child.GetName())
+		result.Children = append(result.Children, child.Name())
 	}
 
 	if !isTrunk {
-		prInfo, _ := branch.GetPrInfo()
+		prInfo, _ := branch.PrInfo()
 		if prInfo != nil {
 			result.PR = &BranchInfoPR{
 				Number:  prInfo.Number(),

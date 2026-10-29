@@ -135,7 +135,7 @@ func NewModel(ctx context.Context, cfg Config) *Model {
 	}
 
 	// Build stack path for direction visualization
-	if cfg.Engine != nil && cfg.Branch.GetName() != "" {
+	if cfg.Engine != nil && cfg.Branch.Name() != "" {
 		m.buildStackPath(ctx)
 	}
 
@@ -541,7 +541,7 @@ func (m *Model) renderStackTree(ctx context.Context) string {
 	renderer := tree.NewRenderer(virtualTree)
 
 	// Set annotation for current branch
-	renderer.SetAnnotation(m.config.Branch.GetName(), tree.BranchAnnotation{
+	renderer.SetAnnotation(m.config.Branch.Name(), tree.BranchAnnotation{
 		CustomLabel: "← current",
 	})
 
@@ -655,7 +655,7 @@ func (m *Model) buildStackPath(ctx context.Context) {
 	}
 
 	graph := m.config.Engine.Graph(ctx, engine.SortStrategySmart)
-	currentName := m.config.Branch.GetName()
+	currentName := m.config.Branch.Name()
 
 	var path []string
 	current := currentName
@@ -684,15 +684,15 @@ func (m *Model) buildVirtualTree(ctx context.Context) *virtualTree {
 
 	return &virtualTree{
 		stackPath:     m.stackPath,
-		currentBranch: m.config.Branch.GetName(),
+		currentBranch: m.config.Branch.Name(),
 		trunkBranch:   trunkBranch,
 		children:      children,
 		direction:     m.direction,
 	}
 }
 
-// GetResult returns the result of the split wizard
-func (m *Model) GetResult() Result {
+// Result returns the result of the split wizard
+func (m *Model) Result() Result {
 	return m.result
 }
 
@@ -717,33 +717,33 @@ func (m *Model) SetCommitMessage(msg string) {
 	m.commitMessage = msg
 }
 
-// GetCurrentSubState returns the current sub-state
-func (m *Model) GetCurrentSubState() SubState {
+// CurrentSubState returns the current sub-state
+func (m *Model) CurrentSubState() SubState {
 	return m.subState
 }
 
-// GetCurrentState returns the current state
-func (m *Model) GetCurrentState() State {
+// CurrentState returns the current state
+func (m *Model) CurrentState() State {
 	return m.state
 }
 
-// GetSelectedDirection returns the selected direction
-func (m *Model) GetSelectedDirection() Direction {
+// SelectedDirection returns the selected direction
+func (m *Model) SelectedDirection() Direction {
 	return m.direction
 }
 
-// GetSelectedStyle returns the selected style
-func (m *Model) GetSelectedStyle() Style {
+// SelectedStyle returns the selected style
+func (m *Model) SelectedStyle() Style {
 	return m.result.Style
 }
 
-// GetBranchName returns the current branch name input value
-func (m *Model) GetBranchName() string {
+// BranchName returns the current branch name input value
+func (m *Model) BranchName() string {
 	return m.branchInput.Value()
 }
 
-// GetWantsEditMessage returns whether user wants to edit the message
-func (m *Model) GetWantsEditMessage() bool {
+// WantsEditMessage returns whether user wants to edit the message
+func (m *Model) WantsEditMessage() bool {
 	return m.wantsEditMessage
 }
 

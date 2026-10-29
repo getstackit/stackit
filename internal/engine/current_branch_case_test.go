@@ -30,7 +30,7 @@ func TestCurrentBranchResolvesRefCasing(t *testing.T) {
 
 		current := s.Engine.CurrentBranch(t.Context())
 		require.NotNil(t, current)
-		require.Equal(t, "claude/feature", current.GetName())
+		require.Equal(t, "claude/feature", current.Name())
 	})
 
 	t.Run("matching casing is left untouched", func(t *testing.T) {
@@ -40,7 +40,7 @@ func TestCurrentBranchResolvesRefCasing(t *testing.T) {
 
 		current := s.Engine.CurrentBranch(t.Context())
 		require.NotNil(t, current)
-		require.Equal(t, "claude/feature", current.GetName())
+		require.Equal(t, "claude/feature", current.Name())
 	})
 
 	t.Run("track succeeds on a branch HEAD spells differently", func(t *testing.T) {
@@ -56,9 +56,9 @@ func TestCurrentBranchResolvesRefCasing(t *testing.T) {
 		require.Equal(t, "claude/feature", name)
 
 		require.NoError(t, s.Engine.TrackBranch(t.Context(), name, "main"))
-		parent := s.Engine.GetBranch(name).GetParent()
+		parent := s.Engine.GetBranch(name).Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "main", parent.GetName())
+		require.Equal(t, "main", parent.Name())
 	})
 }
 

@@ -31,12 +31,12 @@ func (e *engineImpl) readBranchRanges(ctx context.Context, branches Branches) gi
 	result := git.ReadResults[git.RevRange]{}
 	refs := make([]string, 0, 2*len(branches))
 	for _, branch := range branches {
-		refs = append(refs, branch.GetName(), branch.GetParentOrTrunk())
+		refs = append(refs, branch.Name(), branch.ParentOrTrunk())
 	}
 	revs := e.git.ReadRevisions(ctx, refs...)
 	metas := e.metadata.ReadMetadata(ctx, branches.Names()...)
 	for _, branch := range branches {
-		name := branch.GetName()
+		name := branch.Name()
 		head, err := revs.Get(name)
 		if err != nil {
 			result.Fail(name, err)
@@ -56,7 +56,7 @@ func (e *engineImpl) readBranchRanges(ctx context.Context, branches Branches) gi
 			base = *rev
 		}
 		if base == "" {
-			base, err = revs.Get(branch.GetParentOrTrunk())
+			base, err = revs.Get(branch.ParentOrTrunk())
 		}
 		result.Record(name, git.RevRange{Base: base, Head: head}, err)
 	}
@@ -70,8 +70,8 @@ func (e *engineImpl) BatchDiffStats(branches Branches) map[string]DiffStat {
 	diffs := e.readBranchDiffs(context.Background(), ranges, git.DiffStats)
 	result := make(map[string]DiffStat, len(branches))
 	for _, branch := range branches {
-		diff := diffs[branch.GetName()]
-		result[branch.GetName()] = DiffStat{Added: diff.Added, Deleted: diff.Deleted, FilesChanged: len(diff.Files)}
+		diff := diffs[branch.Name()]
+		result[branch.Name()] = DiffStat{Added: diff.Added, Deleted: diff.Deleted, FilesChanged: len(diff.Files)}
 	}
 	return result
 }
@@ -147,7 +147,7 @@ func readBranchHistory[C, T any](e *engineImpl, ctx context.Context, branches Br
 	ranges := make([]git.RevRange, 0, len(branches))
 	byBranch := make(map[string]git.RevRange)
 	for _, branch := range branches {
-		name := branch.GetName()
+		name := branch.Name()
 		if e.IsTrunk(branch) {
 			var zero T
 			result.Set(name, zero)
@@ -178,7 +178,7 @@ func (e *engineImpl) BatchChangedFileCounts(ctx context.Context, branches Branch
 	diffs := e.readBranchDiffs(ctx, e.branchDiffRanges(branches), git.DiffNames)
 	result := make(map[string]int, len(branches))
 	for _, branch := range branches {
-		result[branch.GetName()] = len(diffs[branch.GetName()].Files)
+		result[branch.Name()] = len(diffs[branch.Name()].Files)
 	}
 	return result
 }
@@ -213,14 +213,14 @@ func (e *engineImpl) BatchBranchStats(branches Branches) map[string]BranchStat {
 	diffRead.Wait()
 	result := make(map[string]BranchStat, len(branches))
 	for _, branch := range branches {
-		rr := ranges[branch.GetName()]
+		rr := ranges[branch.Name()]
 		stat := BranchStat{ShortSHA: git.ShortRevision(rr.Head, 0)}
 		if count, ok := e.commitCountCache.Load(rr); ok {
 			stat.CommitCount = count.(int)
 		}
-		diff := diffs[branch.GetName()]
+		diff := diffs[branch.Name()]
 		stat.LinesAdded, stat.LinesDeleted = diff.Added, diff.Deleted
-		result[branch.GetName()] = stat
+		result[branch.Name()] = stat
 	}
 	return result
 }

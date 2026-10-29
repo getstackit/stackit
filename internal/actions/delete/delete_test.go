@@ -30,9 +30,9 @@ func TestDelete(t *testing.T) {
 		require.False(t, s.Engine.GetBranch("branch1").IsTracked())
 		require.True(t, s.Engine.GetBranch("branch2").IsTracked())
 		branchparent2 := s.Engine.GetBranch("branch2")
-		parent2 := branchparent2.GetParent()
+		parent2 := branchparent2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName())
+		require.Equal(t, "main", parent2.Name())
 	})
 
 	t.Run("deletes upstack", func(t *testing.T) {
@@ -108,7 +108,7 @@ func TestDelete(t *testing.T) {
 		s.Checkout("branch1")
 		currentBranch := s.Engine.CurrentBranch(t.Context())
 		require.NotNil(t, currentBranch)
-		require.Equal(t, "branch1", currentBranch.GetName())
+		require.Equal(t, "branch1", currentBranch.Name())
 
 		_, err := Action(s.Context, Options{
 			BranchName: "branch1",
@@ -118,7 +118,7 @@ func TestDelete(t *testing.T) {
 
 		currentBranch = s.Engine.CurrentBranch(t.Context())
 		require.NotNil(t, currentBranch)
-		require.Equal(t, "main", currentBranch.GetName())
+		require.Equal(t, "main", currentBranch.Name())
 	})
 
 	t.Run("deletes a branch in a branching stack", func(t *testing.T) {
@@ -143,13 +143,13 @@ func TestDelete(t *testing.T) {
 		require.True(t, s.Engine.GetBranch("child1").IsTracked())
 		require.True(t, s.Engine.GetBranch("child2").IsTracked())
 		branchparent1 := s.Engine.GetBranch("child1")
-		parent1 := branchparent1.GetParent()
+		parent1 := branchparent1.Parent()
 		require.NotNil(t, parent1)
-		require.Equal(t, "main", parent1.GetName())
+		require.Equal(t, "main", parent1.Name())
 		branchparent2 := s.Engine.GetBranch("child2")
-		parent2 := branchparent2.GetParent()
+		parent2 := branchparent2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName())
+		require.Equal(t, "main", parent2.Name())
 	})
 
 	t.Run("preserves child commit boundaries when deleting squash-merged parent", func(t *testing.T) {
@@ -181,9 +181,9 @@ func TestDelete(t *testing.T) {
 
 		require.False(t, s.Engine.GetBranch("branch1").IsTracked())
 		require.True(t, s.Engine.GetBranch("branch2").IsTracked())
-		parent := s.Engine.GetBranch("branch2").GetParent()
+		parent := s.Engine.GetBranch("branch2").Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "main", parent.GetName())
+		require.Equal(t, "main", parent.Name())
 
 		require.Equal(t, 1, s.BranchCommitCount("branch2"))
 	})

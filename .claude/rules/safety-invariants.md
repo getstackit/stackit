@@ -117,7 +117,7 @@ session.Engine.MergeMultiple(...)          // Updates refs/heads/main!
 session, _ := wtExecutor.CreateSession(ctx, opts)
 // Worktree is already at detached HEAD from CreateSession
 // If you need the latest trunk, use ResetHard (keeps HEAD detached):
-session.Engine.ResetHard(ctx, trunk.GetName())
+session.Engine.ResetHard(ctx, trunk.Name())
 session.Engine.MergeMultiple(...)  // Creates commits at detached HEAD only
 ```
 
@@ -174,7 +174,7 @@ if err := actions.PushMetadataAndSyncPRs(ctx, branches); err != nil {
 // CORRECT - batch mark for update, sync handles GitHub
 branchNames := make([]string, len(branches))
 for i, b := range branches {
-    branchNames[i] = b.GetName()
+    branchNames[i] = b.Name()
 }
 _ = eng.MarkBranchesForPRBodyUpdate(ctx, branchNames)
 if err := pushMetadataOnly(ctx, eng, branchName); err != nil {

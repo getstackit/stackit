@@ -78,7 +78,7 @@ func TestGetAction(t *testing.T) {
 
 		// Verify branch feature-a exists and is tracked
 		require.True(t, s.Engine.GetBranch("feature-a").IsTracked())
-		require.Equal(t, "main", s.Engine.GetBranch("feature-a").GetParent().GetName())
+		require.Equal(t, "main", s.Engine.GetBranch("feature-a").Parent().Name())
 	})
 
 	t.Run("crawls ancestors via GitHub PRs", func(t *testing.T) {
@@ -125,8 +125,8 @@ func TestGetAction(t *testing.T) {
 		// Verify both branches are tracked correctly
 		require.True(t, s.Engine.GetBranch("feature-a").IsTracked())
 		require.True(t, s.Engine.GetBranch("feature-b").IsTracked())
-		require.Equal(t, "main", s.Engine.GetBranch("feature-a").GetParent().GetName())
-		require.Equal(t, "feature-a", s.Engine.GetBranch("feature-b").GetParent().GetName())
+		require.Equal(t, "main", s.Engine.GetBranch("feature-a").Parent().Name())
+		require.Equal(t, "feature-a", s.Engine.GetBranch("feature-b").Parent().Name())
 		require.Equal(t, 1, countingClient.branchCallCount("feature-a"))
 		require.Equal(t, 1, countingClient.branchCallCount("feature-b"))
 	})

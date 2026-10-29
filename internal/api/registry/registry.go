@@ -134,9 +134,9 @@ func NewEntry(ctx context.Context, cfg EntryConfig) *RepoEntry {
 	entry.AddCloser(func() error { entry.Broadcaster.Close(); return nil })
 
 	if cfg.RepoRoot != "" && cfg.Engine != nil {
-		entry.trunkName = cfg.Engine.Trunk().GetName()
+		entry.trunkName = cfg.Engine.Trunk().Name()
 		if cb := cfg.Engine.CurrentBranch(ctx); cb != nil {
-			entry.lastCurrentBranch = cb.GetName()
+			entry.lastCurrentBranch = cb.Name()
 		}
 		// Watcher-driven refreshes run for the entry's lifetime, not the
 		// caller's, so they get a context that closing the entry cancels.
@@ -198,7 +198,7 @@ func (e *RepoEntry) Refresh(ctx context.Context) {
 	}
 
 	if cb := e.Engine.CurrentBranch(ctx); cb != nil {
-		newBranch := cb.GetName()
+		newBranch := cb.Name()
 		if e.lastCurrentBranch != "" && newBranch != e.lastCurrentBranch {
 			data, _ := json.Marshal(map[string]string{
 				"from":      e.lastCurrentBranch,

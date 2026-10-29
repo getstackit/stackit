@@ -50,7 +50,7 @@ type RewriteGuard struct {
 // DetachForRewrite detaches HEAD and resets the branch's changes into the
 // working tree, returning a guard that restores the branch on failure.
 func DetachForRewrite(ctx context.Context, eng detachForRewriteEngine, branch engine.Branch) (*RewriteGuard, error) {
-	if err := eng.DetachAndResetBranchChanges(ctx, branch.GetName()); err != nil {
+	if err := eng.DetachAndResetBranchChanges(ctx, branch.Name()); err != nil {
 		return nil, fmt.Errorf("failed to detach and reset: %w", err)
 	}
 	return NewRewriteGuard(eng, branch), nil
@@ -91,7 +91,7 @@ func (g *RewriteGuard) Restore(ctx context.Context, opErr error) error {
 		v()
 	}
 
-	name := g.branch.GetName()
+	name := g.branch.Name()
 	if g.originalSHA != "" {
 		if err := g.eng.UpdateBranchRef(ctx, name, g.originalSHA); err != nil {
 			return withRecoveryWarning(opErr, fmt.Sprintf("failed to restore branch ref: %s; run 'git branch -f %s %s' to recover",

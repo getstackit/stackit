@@ -26,7 +26,7 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 	_, err := eng.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonUser)
 	require.NoError(t, err)
 	require.True(t, branch.IsLocked())
-	require.Equal(t, string(engine.LockReasonUser), string(branch.GetLockReason()))
+	require.Equal(t, string(engine.LockReasonUser), string(branch.LockReason()))
 
 	// 2. Upsert PR info with lockReason="user"
 	prNumber := git.PRNumber(123)
@@ -39,7 +39,7 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 	s.RunGit("update-ref", "refs/remotes/origin/feature", localSha)
 
 	// 3. Verify it's saved in the PR info
-	gotPrInfo, err := branch.GetPrInfo()
+	gotPrInfo, err := branch.PrInfo()
 	require.NoError(t, err)
 	require.NotNil(t, gotPrInfo)
 	require.True(t, gotPrInfo.IsLocked())
@@ -51,7 +51,7 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 	branch = eng.GetBranch("feature")
 	require.True(t, branch.IsLocked())
 
-	gotPrInfo, err = branch.GetPrInfo()
+	gotPrInfo, err = branch.PrInfo()
 	require.NoError(t, err)
 	require.NotNil(t, gotPrInfo)
 	require.True(t, gotPrInfo.IsLocked(), "Locked status should be persisted in PR info")
@@ -59,12 +59,12 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 	// 5. Check submission status - should NOT need update if nothing changed
 	statuses, err := eng.BatchGetPRSubmissionStatus(t.Context(), engine.BranchesOf(branch), nil)
 	require.NoError(t, err)
-	status := statuses[branch.GetName()]
+	status := statuses[branch.Name()]
 	if status.NeedsUpdate {
 		t.Logf("Needs update: %v, Reason: %s", status.NeedsUpdate, status.Reason)
 		// Check components of needsUpdate
-		prInfo, _ := branch.GetPrInfo()
-		parentBranch := eng.Trunk().GetName()
+		prInfo, _ := branch.PrInfo()
+		parentBranch := eng.Trunk().Name()
 		baseChanged := prInfo.Base() != parentBranch
 		remoteStatus := eng.ReadBranchRemoteStatuses(t.Context(), engine.BranchesOf(branch)).ForBranch(branch)
 		branchChanged := !remoteStatus.Matches()

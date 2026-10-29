@@ -122,11 +122,11 @@ func hookEnv(ctx *app.Context, cmd *cobra.Command, phaseKey string) []string {
 	}
 	if ctx.Engine != nil {
 		if cur := ctx.Engine.CurrentBranch(ctx.Context); cur != nil {
-			env = append(env, "STACKIT_BRANCH="+cur.GetName())
-			if parent := cur.GetParent(); parent != nil {
-				env = append(env, "STACKIT_PARENT="+parent.GetName())
+			env = append(env, "STACKIT_BRANCH="+cur.Name())
+			if parent := cur.Parent(); parent != nil {
+				env = append(env, "STACKIT_PARENT="+parent.Name())
 			}
-			if pr, err := cur.GetPrInfo(); err == nil && pr != nil {
+			if pr, err := cur.PrInfo(); err == nil && pr != nil {
 				if n := pr.Number(); n != nil {
 					env = append(env, fmt.Sprintf("STACKIT_PR_NUMBER=%d", *n))
 				}

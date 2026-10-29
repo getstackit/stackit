@@ -411,7 +411,7 @@ func (r *runner) DiscoverRepoRoot() (string, error) {
 	return r.getRepoRoot(), nil
 }
 
-func (r *runner) GetRepoRoot() string {
+func (r *runner) RepoRoot() string {
 	return r.getRepoRoot()
 }
 
@@ -423,7 +423,7 @@ func (r *runner) getRepoRoot() string {
 	return r.repoRoot
 }
 
-func (r *runner) GetGitCommonDir() (string, error) {
+func (r *runner) GitCommonDir() (string, error) {
 	root, err := r.DiscoverRepoRoot()
 	if err != nil {
 		return "", err

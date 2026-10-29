@@ -61,7 +61,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if currentBranch == nil {
 			return errors.New("not on a branch and no source branch specified")
 		}
-		source = currentBranch.GetName()
+		source = currentBranch.Name()
 	}
 
 	// Validate source branch
@@ -99,13 +99,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
 
 	// Get current parent (grandparent for children)
-	oldParent := sourceBranch.GetParent()
+	oldParent := sourceBranch.Parent()
 	oldParentName := ""
 	grandparentBranch := eng.Trunk()
 	if oldParent == nil {
-		oldParentName = eng.Trunk().GetName()
+		oldParentName = eng.Trunk().Name()
 	} else {
-		oldParentName = oldParent.GetName()
+		oldParentName = oldParent.Name()
 		grandparentBranch = *oldParent
 	}
 
@@ -139,7 +139,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Get revisions needed for rebase specs in a single batched call instead
 	// of one git process per branch.
-	grandparentName := grandparentBranch.GetName()
+	grandparentName := grandparentBranch.Name()
 	revisions := eng.BatchRevisions(engine.BranchesOf(ontoBranch, grandparentBranch, sourceBranch))
 
 	ontoRev, ok := revisions.Rev(onto)
@@ -168,14 +168,14 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	childDivPoints := eng.BatchDivergencePoints(children)
 	for _, child := range children {
 		// Get the old upstream (divergence point)
-		childOldUpstream, ok := childDivPoints.Rev(child.GetName())
+		childOldUpstream, ok := childDivPoints.Rev(child.Name())
 		if !ok || childOldUpstream == "" {
 			// Fallback to source revision if unavailable
 			childOldUpstream = sourceRev
 		}
 
 		rebaseSpecs = append(rebaseSpecs, engine.RebaseSpec{
-			Branch:      child.GetName(),
+			Branch:      child.Name(),
 			NewParent:   grandparentRev,
 			OldUpstream: childOldUpstream,
 		})
@@ -215,7 +215,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// rejects even when the completed transformation is a valid chain.
 	moves := make([]engine.BranchParentMove, 0, len(children)+1)
 	for _, child := range children {
-		moves = append(moves, engine.BranchParentMove{Branch: child.GetName(), NewParent: grandparentBranch.GetName()})
+		moves = append(moves, engine.BranchParentMove{Branch: child.Name(), NewParent: grandparentBranch.Name()})
 	}
 	moves = append(moves, engine.BranchParentMove{Branch: source, NewParent: onto})
 
@@ -238,12 +238,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	var reparentedChildren []string
 	if len(children) > 0 {
 		for _, child := range children {
-			handler.OnChildReparented(basehandler.Reparent{Branch: child.GetName(), OldParent: source, NewParent: grandparentBranch.GetName()})
-			reparentedChildren = append(reparentedChildren, child.GetName())
+			handler.OnChildReparented(basehandler.Reparent{Branch: child.Name(), OldParent: source, NewParent: grandparentBranch.Name()})
+			reparentedChildren = append(reparentedChildren, child.Name())
 			out.Info("Reparented %s from %s to %s.",
-				output.BranchName(child.GetName()),
+				output.BranchName(child.Name()),
 				output.BranchName(source),
-				output.BranchName(grandparentBranch.GetName()))
+				output.BranchName(grandparentBranch.Name()))
 		}
 		handler.OnStep(StepReparentingChild, basehandler.StatusCompleted, "Children reparented")
 	}
@@ -273,7 +273,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	branchesToRestack := engine.Branches{}
 
 	for _, child := range children {
-		childBranch := eng.GetBranch(child.GetName())
+		childBranch := eng.GetBranch(child.Name())
 		childDescendants := graph.Range(childBranch, engine.StackRange{
 			RecursiveChildren: true,
 			IncludeCurrent:    true,
@@ -312,7 +312,7 @@ func InvalidOntoTargets(ctx context.Context, eng engine.StackView, source string
 	})
 	excluded := make(map[string]bool, len(descendants))
 	for _, d := range descendants {
-		excluded[d.GetName()] = true
+		excluded[d.Name()] = true
 	}
 	return excluded
 }

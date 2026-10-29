@@ -26,7 +26,7 @@ func getOpenPRInfo(eng mergeExecuteEngine, branchName string) (*engine.PrInfo, e
 // getExistingPRInfo fetches PR info for a branch and validates it exists.
 func getExistingPRInfo(eng mergeExecuteEngine, branchName string) (*engine.PrInfo, error) {
 	branch := eng.GetBranch(branchName)
-	prInfo, err := branch.GetPrInfo()
+	prInfo, err := branch.PrInfo()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PR info: %w", err)
 	}
@@ -92,12 +92,12 @@ func validateStepPreconditions(ctx context.Context, step PlanStep, eng mergeExec
 // This is used in top-down strategy to rebase the current branch onto trunk
 func executeUpdatePRBase(ctx *app.Context, eng mergeExecuteEngine, step PlanStep) error {
 	trunk := eng.Trunk()
-	trunkName := trunk.GetName()
+	trunkName := trunk.Name()
 	githubClient := ctx.GitHub()
 
 	// Get the parent revision (old base)
 	branch := eng.GetBranch(step.BranchName)
-	parentName := branch.GetParentOrTrunk()
+	parentName := branch.ParentOrTrunk()
 
 	// Get the old parent revision
 	parentBranch := eng.GetBranch(parentName)
@@ -117,7 +117,7 @@ func executeUpdatePRBase(ctx *app.Context, eng mergeExecuteEngine, step PlanStep
 	currentBranchObj := eng.CurrentBranch(ctx.Context)
 	currentBranch := ""
 	if currentBranchObj != nil {
-		currentBranch = currentBranchObj.GetName()
+		currentBranch = currentBranchObj.Name()
 	}
 	var currentRev string
 	if currentBranch == "" {
@@ -201,7 +201,7 @@ func executeConsolidation(ctx *app.Context, eng mergeExecuteEngine, stepIndex in
 func executeWaitCIWithProgress(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecuteEngine, opts ExecuteOptions) error {
 	// Get PR info for better error messages
 	branch := eng.GetBranch(step.BranchName)
-	prInfo, err := branch.GetPrInfo()
+	prInfo, err := branch.PrInfo()
 	if err != nil {
 		return fmt.Errorf("failed to get PR info: %w", err)
 	}

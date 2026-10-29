@@ -58,7 +58,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 		if currentBranch == nil {
 			return Result{}, errors.New("no branch specified and not on a branch")
 		}
-		branchName = currentBranch.GetName()
+		branchName = currentBranch.Name()
 	}
 
 	if branchName == "" {
@@ -117,21 +117,21 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	// Confirm if not forced and not merged/closed
 	if !opts.Force {
 		for _, b := range toDelete {
-			status := statuses.For(b.GetName())
+			status := statuses.For(b.Name())
 			if !status.SafeToDelete {
 				// If handler is interactive, prompt for confirmation
 				if handler.IsInteractive() {
-					confirmed, err := handler.PromptConfirm(b.GetName(), status.Reason)
+					confirmed, err := handler.PromptConfirm(b.Name(), status.Reason)
 					if err != nil {
 						return Result{}, err
 					}
 					if !confirmed {
-						handler.OnBranch(b.GetName(), StatusSkipped, nil)
+						handler.OnBranch(b.Name(), StatusSkipped, nil)
 						handler.Complete(0, 1)
 						return Result{}, nil
 					}
 				} else if status.Reason == "" {
-					return Result{}, fmt.Errorf("branch %s is not merged/closed; use --force to delete anyway", b.GetName())
+					return Result{}, fmt.Errorf("branch %s is not merged/closed; use --force to delete anyway", b.Name())
 				}
 			}
 		}
@@ -180,11 +180,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	// Identify stack roots that were deleted (branches whose parent is trunk)
 	// and clean up any associated worktrees
 	deletedStackRoots := []string{}
-	trunkName := eng.Trunk().GetName()
+	trunkName := eng.Trunk().Name()
 	for _, b := range toDelete {
-		parent := b.GetParent()
-		if parent == nil || parent.GetName() == trunkName {
-			deletedStackRoots = append(deletedStackRoots, b.GetName())
+		parent := b.Parent()
+		if parent == nil || parent.Name() == trunkName {
+			deletedStackRoots = append(deletedStackRoots, b.Name())
 		}
 	}
 
@@ -235,7 +235,7 @@ func managedCleanupAnchors(ctx *app.Context, eng deleteEngine, toDelete engine.B
 
 	selected := make(map[string]bool, len(toDelete))
 	for _, branch := range toDelete {
-		selected[branch.GetName()] = true
+		selected[branch.Name()] = true
 	}
 
 	anchors := make(map[string]bool)
@@ -252,7 +252,7 @@ func managedCleanupAnchors(ctx *app.Context, eng deleteEngine, toDelete engine.B
 			if candidate.IsWorktreeAnchor() {
 				continue
 			}
-			if owner := owningWorktree(candidate); owner != nil && owner.AnchorBranch == anchor && !selected[candidate.GetName()] {
+			if owner := owningWorktree(candidate); owner != nil && owner.AnchorBranch == anchor && !selected[candidate.Name()] {
 				complete = false
 				break
 			}
@@ -281,7 +281,7 @@ func preReparentChildrenWithPreservedDivergence(ctx *app.Context, eng deleteEngi
 
 	toDeleteSet := make(map[string]bool, len(toDelete))
 	for _, b := range toDelete {
-		toDeleteSet[b.GetName()] = true
+		toDeleteSet[b.Name()] = true
 	}
 
 	graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
@@ -290,19 +290,19 @@ func preReparentChildrenWithPreservedDivergence(ctx *app.Context, eng deleteEngi
 	var moves []engine.BranchParentMove
 
 	for _, deleted := range toDelete {
-		deletedName := deleted.GetName()
+		deletedName := deleted.Name()
 		status := statuses.For(deletedName)
 		if !shouldPreserveDivergenceOnDelete(status.Kind) {
 			continue
 		}
 
-		targetParentName := deleted.GetParentOrTrunk()
+		targetParentName := deleted.ParentOrTrunk()
 		targetParentName = eng.FindNearestNonExcludedAncestor(targetParentName, func(name string) bool {
 			return toDeleteSet[name]
 		})
 
 		for _, child := range graph.ChildBranches(deleted) {
-			childName := child.GetName()
+			childName := child.Name()
 			if toDeleteSet[childName] {
 				continue
 			}

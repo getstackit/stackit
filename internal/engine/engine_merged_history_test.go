@@ -46,7 +46,7 @@ func TestRestackBranch_CapturesMergedHistory(t *testing.T) {
 		require.Equal(t, "main", result.NewParent)
 
 		// Verify merged history was captured
-		mergedHistory := branch2.GetMergedDownstack()
+		mergedHistory := branch2.MergedDownstack()
 		require.Len(t, mergedHistory, 1)
 		require.Equal(t, "branch1", mergedHistory[0].BranchName)
 	})
@@ -86,7 +86,7 @@ func TestRestackBranch_CapturesMergedHistory(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify merged history includes PR info
-		mergedHistory := branch2.GetMergedDownstack()
+		mergedHistory := branch2.MergedDownstack()
 		require.Len(t, mergedHistory, 1)
 		require.Equal(t, "branch1", mergedHistory[0].BranchName)
 		require.NotNil(t, mergedHistory[0].PRNumber)
@@ -119,7 +119,7 @@ func TestRestackBranch_InheritsMergedHistory(t *testing.T) {
 		_, _ = s.Engine.RestackBranches(t.Context(), engine.BranchesOf(branch2), engine.RestackOpts{})
 
 		// Verify branch2 now has branch1 in history
-		history2 := branch2.GetMergedDownstack()
+		history2 := branch2.MergedDownstack()
 		require.Len(t, history2, 1)
 		require.Equal(t, "branch1", history2[0].BranchName)
 
@@ -135,7 +135,7 @@ func TestRestackBranch_InheritsMergedHistory(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch3 inherited history: [branch1, branch2]
-		history3 := branch3.GetMergedDownstack()
+		history3 := branch3.MergedDownstack()
 		require.Len(t, history3, 2)
 		require.Equal(t, "branch1", history3[0].BranchName) // oldest first
 		require.Equal(t, "branch2", history3[1].BranchName) // newest last
@@ -181,7 +181,7 @@ func TestRestackBranch_LimitsHistoryGrowth(t *testing.T) {
 
 		// Verify b7 has exactly 5 entries (the most recent 5)
 		b7 := s.Engine.GetBranch("b7")
-		history := b7.GetMergedDownstack()
+		history := b7.MergedDownstack()
 		require.Len(t, history, 5)
 
 		// Should have b2-b6 (b1 was dropped due to limit)
@@ -219,7 +219,7 @@ func TestRestackBranch_HandlesNoPRInfo(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify history was captured with just the branch name
-		mergedHistory := branch2.GetMergedDownstack()
+		mergedHistory := branch2.MergedDownstack()
 		require.Len(t, mergedHistory, 1)
 		require.Equal(t, "branch1", mergedHistory[0].BranchName)
 		require.Nil(t, mergedHistory[0].PRNumber) // No PR number
@@ -250,7 +250,7 @@ func TestRestackBranch_PreventsDuplicateHistory(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch2 has branch1 in history
-		history := branch2.GetMergedDownstack()
+		history := branch2.MergedDownstack()
 		require.Len(t, history, 1)
 		require.Equal(t, "branch1", history[0].BranchName)
 
@@ -260,7 +260,7 @@ func TestRestackBranch_PreventsDuplicateHistory(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify history still has exactly 1 entry (no duplicate)
-		history = branch2.GetMergedDownstack()
+		history = branch2.MergedDownstack()
 		require.Len(t, history, 1, "should not add duplicate history entry on retry")
 		require.Equal(t, "branch1", history[0].BranchName)
 	})

@@ -294,7 +294,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		if current == nil {
 			return errors.New("not on a branch and no branch/PR specified")
 		}
-		targetBranch = current.GetName()
+		targetBranch = current.Name()
 	} else {
 		// Check if it's a PR number
 		if n, err := strconv.Atoi(branchOrPR); err == nil {
@@ -323,7 +323,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	})
 
 	remote := eng.GetRemote(ctx.Context)
-	trunkName := eng.Trunk().GetName()
+	trunkName := eng.Trunk().Name()
 
 	// Identify branches to sync (ancestors + descendants)
 	targets := newSyncTargets(targetBranch)
@@ -350,12 +350,12 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		usedMetadata = targets.crawlAncestorsViaMetadata(eng, targetBranch)
 	}
 	if !usedMetadata {
-		targets.crawlAncestorsViaGitHub(remoteCtx, ctx.GitHub(), eng.Trunk().GetName(), targetBranch)
+		targets.crawlAncestorsViaGitHub(remoteCtx, ctx.GitHub(), eng.Trunk().Name(), targetBranch)
 	}
 	// Either crawl can leave a branch without its divergence anchor: the GitHub
 	// one never reads them, and the metadata one abandons a partial chain. Fill
 	// in whatever the remote metadata does have before anything relies on it.
-	targets.harvestAnchors(eng.GetRemoteMetadataCache())
+	targets.harvestAnchors(eng.RemoteMetadataCache())
 
 	// If target branch exists locally, identify local descendants
 	targetBranchObj := eng.GetBranch(targetBranch)
@@ -363,7 +363,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
 		upstack := graph.Range(targetBranchObj, engine.StackRange{RecursiveChildren: true})
 		for _, b := range upstack {
-			targets.appendBranches(b.GetName())
+			targets.appendBranches(b.Name())
 		}
 	}
 
@@ -444,7 +444,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 
 	// Fetch PR info for branches in parallel if possible
 	if ctx.GitHub() != nil {
-		trunkName := eng.Trunk().GetName()
+		trunkName := eng.Trunk().Name()
 
 		// Filter out trunk before parallel fetch
 		branchesToFetch := make([]string, 0, len(targets.branches))
@@ -485,7 +485,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 
 	// Sync each branch
 	for _, branchName := range targets.branches {
-		if branchName == eng.Trunk().GetName() {
+		if branchName == eng.Trunk().Name() {
 			continue
 		}
 
@@ -856,7 +856,7 @@ func (targets *syncTargets) staleAfterReanchor(ctx context.Context, eng engine.E
 		// place in the graph, and it is still the one carrying landed commits.
 		mark(r.Branch, hasAnchor)
 		for _, b := range graph.Range(eng.GetBranch(r.Branch), engine.StackRange{RecursiveChildren: true}) {
-			mark(b.GetName(), hasAnchor)
+			mark(b.Name(), hasAnchor)
 		}
 	}
 
@@ -901,7 +901,7 @@ func unfreezeForRestack(ctx *app.Context, names []string, pendingFreeze engine.B
 		}
 	}
 
-	return pendingFreeze.Filter(func(b engine.Branch) bool { return !unfreezing[b.GetName()] })
+	return pendingFreeze.Filter(func(b engine.Branch) bool { return !unfreezing[b.Name()] })
 }
 
 // crawlAncestorsViaMetadata walks the parent chain of targetBranch using the fetched
@@ -911,8 +911,8 @@ func unfreezeForRestack(ctx *app.Context, names []string, pendingFreeze engine.B
 // reports whether the target had usable metadata; when false the caller should fall back
 // to a GitHub crawl. Callers must have populated the cache via LoadRemoteMetadataCache.
 func (targets *syncTargets) crawlAncestorsViaMetadata(eng engine.Engine, targetBranch string) bool {
-	view := eng.GetRemoteMetadataCache()
-	trunkName := eng.Trunk().GetName()
+	view := eng.RemoteMetadataCache()
+	trunkName := eng.Trunk().Name()
 
 	// No usable metadata for the target: signal a fallback to the GitHub crawl.
 	if meta := view.Get(targetBranch); meta == nil || meta.GetParentBranchName() == nil {

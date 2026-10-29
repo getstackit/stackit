@@ -117,13 +117,13 @@ func handleShowTrunk(ctx *app.Context) error {
 	if currentBranch == nil {
 		// Not on a branch, just show primary trunk
 		trunk := eng.Trunk()
-		ctx.Output.Info("%s", trunk.GetName())
+		ctx.Output.Info("%s", trunk.Name())
 		return nil
 	}
 
 	// If current branch is trunk, show it
 	if currentBranch.IsTrunk() {
-		ctx.Output.Info("%s", currentBranch.GetName())
+		ctx.Output.Info("%s", currentBranch.Name())
 		return nil
 	}
 

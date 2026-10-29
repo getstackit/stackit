@@ -16,8 +16,8 @@ func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeC
 	children := graph.ChildBranches(runtimeCtx.Engine.GetBranch(currentBranch))
 	siblings := []string{}
 	for _, child := range children {
-		if child.GetName() != newBranch {
-			siblings = append(siblings, child.GetName())
+		if child.Name() != newBranch {
+			siblings = append(siblings, child.Name())
 		}
 	}
 
@@ -78,7 +78,7 @@ func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeC
 		}
 
 		for _, branch := range branchesToRestack {
-			child := branch.GetName()
+			child := branch.Name()
 			res, ok := batchRes.Results[child]
 			if !ok {
 				continue

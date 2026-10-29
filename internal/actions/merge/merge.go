@@ -73,7 +73,7 @@ func Action(ctx *app.Context, opts Options) error {
 	if targetBranch == "" && opts.Scope == "" && opts.Plan == nil {
 		cb := eng.CurrentBranch(ctx.Context)
 		if cb != nil {
-			targetBranch = cb.GetName()
+			targetBranch = cb.Name()
 		}
 	}
 

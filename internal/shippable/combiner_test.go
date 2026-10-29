@@ -81,7 +81,7 @@ func TestCombinationResult_GetWorkingRoots(t *testing.T) {
 		},
 	}
 
-	roots := result.GetWorkingRoots()
+	roots := result.WorkingRoots()
 	require.Equal(t, []string{"stack-a", "stack-b"}, roots)
 }
 
@@ -94,7 +94,7 @@ func TestCombinationResult_GetConflictingRoots(t *testing.T) {
 		},
 	}
 
-	roots := result.GetConflictingRoots()
+	roots := result.ConflictingRoots()
 	require.Equal(t, []string{"stack-c", "stack-d"}, roots)
 }
 
@@ -116,8 +116,8 @@ func TestCombinationResult_EmptyStacks(t *testing.T) {
 	require.Equal(t, 0, result.IncludedCount())
 	require.Equal(t, 0, result.ExcludedCount())
 	require.True(t, result.AllCombined())
-	require.Empty(t, result.GetWorkingRoots())
-	require.Empty(t, result.GetConflictingRoots())
+	require.Empty(t, result.WorkingRoots())
+	require.Empty(t, result.ConflictingRoots())
 }
 
 func TestCombinationResult_LocalCIFields(t *testing.T) {

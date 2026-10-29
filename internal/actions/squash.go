@@ -27,7 +27,7 @@ func SquashAction(ctx *app.Context, opts SquashOptions) error {
 
 	originalBranch := ctx.Navigator().CurrentBranch(ctx.Context)
 	currentBranch := originalBranch
-	if opts.Branch != "" && (originalBranch == nil || originalBranch.GetName() != opts.Branch) {
+	if opts.Branch != "" && (originalBranch == nil || originalBranch.Name() != opts.Branch) {
 		target := ctx.Navigator().GetBranch(opts.Branch)
 		currentBranch = &target
 	}
@@ -44,19 +44,19 @@ func SquashAction(ctx *app.Context, opts SquashOptions) error {
 
 	if currentBranch != originalBranch {
 		if err := ctx.Engine.CheckoutBranch(context, *currentBranch); err != nil {
-			return fmt.Errorf("checkout %s: %w", currentBranch.GetName(), err)
+			return fmt.Errorf("checkout %s: %w", currentBranch.Name(), err)
 		}
 		if originalBranch != nil {
 			defer func() {
 				if err := ctx.Engine.CheckoutBranch(context, *originalBranch); err != nil {
-					ctx.Logger.Info("squash failed to restore branch=%v err=%v", originalBranch.GetName(), err)
+					ctx.Logger.Info("squash failed to restore branch=%v err=%v", originalBranch.Name(), err)
 				}
 			}()
 		}
 	}
 
 	// Log entry point for diagnostics
-	ctx.Logger.Info("squash started branch=%v", currentBranch.GetName())
+	ctx.Logger.Info("squash started branch=%v", currentBranch.Name())
 
 	// Take snapshot before modifying the repository
 	snapshotOpts := NewSnapshot("squash",
@@ -74,8 +74,8 @@ func SquashAction(ctx *app.Context, opts SquashOptions) error {
 		return fmt.Errorf("failed to squash branch: %w", err)
 	}
 
-	out.Info("Squashed commits in %s.", output.CurrentBranch(currentBranch.GetName()))
-	ctx.Logger.Info("squash completed branch=%v", currentBranch.GetName())
+	out.Info("Squashed commits in %s.", output.CurrentBranch(currentBranch.Name()))
+	ctx.Logger.Info("squash completed branch=%v", currentBranch.Name())
 
 	// Get upstack branches (recursive children only, excluding current branch)
 	rng := engine.StackRange{
@@ -90,7 +90,7 @@ func SquashAction(ctx *app.Context, opts SquashOptions) error {
 	if len(upstackBranches) > 0 {
 		upstackNames := make([]string, len(upstackBranches))
 		for i, b := range upstackBranches {
-			upstackNames[i] = b.GetName()
+			upstackNames[i] = b.Name()
 		}
 		ctx.Logger.Info("squash restacking upstack branches=%v count=%v", upstackNames, len(upstackBranches))
 	} else {

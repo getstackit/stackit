@@ -40,7 +40,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		if currentBranch == nil {
 			return errors.ErrNotOnBranch
 		}
-		parentName := currentBranch.GetParentOrTrunk()
+		parentName := currentBranch.ParentOrTrunk()
 		parentBranch := eng.GetBranch(parentName)
 		parentRev, err := parentBranch.GetRevision()
 		if err != nil {
@@ -49,7 +49,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		continuation = &config.ContinuationState{
 			RebasedBranchBase:     parentRev,
 			BranchesToRestack:     []string{},
-			CurrentBranchOverride: currentBranch.GetName(),
+			CurrentBranchOverride: currentBranch.Name(),
 		}
 		expectedBranchRevision, err := currentBranch.GetRevision()
 		if err != nil {
@@ -88,7 +88,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 			if currentBranch == nil {
 				return errors.ErrNotOnBranch
 			}
-			branchName = currentBranch.GetName()
+			branchName = currentBranch.Name()
 		}
 		if result.RerereResolvedCount > 0 {
 			printRerereResolved(ctx, result.RerereResolvedCount)
@@ -165,7 +165,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		trunk := eng.Trunk()
 		if err := eng.CheckoutBranch(ctx.Context, trunk); err == nil {
 			out.Info("Switched to %s; %s lives in its own worktree.",
-				output.BranchName(trunk.GetName()), output.BranchName(result.BranchName))
+				output.BranchName(trunk.Name()), output.BranchName(result.BranchName))
 		} else {
 			out.Warn("HEAD is detached here. Run 'stackit checkout <branch>' to get back onto a branch.")
 		}

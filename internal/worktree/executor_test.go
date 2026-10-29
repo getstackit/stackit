@@ -34,7 +34,7 @@ func TestExecutor_CreateSession(t *testing.T) {
 
 		// Verify engine is usable
 		trunk := session.Engine.Trunk()
-		require.Equal(t, "main", trunk.GetName())
+		require.Equal(t, "main", trunk.Name())
 	})
 
 	t.Run("creates worktree at specific ref", func(t *testing.T) {
@@ -139,7 +139,7 @@ func TestSession_ResetToRef(t *testing.T) {
 	s.Scene.Repo.CreateChangeAndCommit("feature change", "feature")
 
 	// Get the feature SHA
-	featureSHA, err := s.Scene.Repo.GetCurrentSHA()
+	featureSHA, err := s.Scene.Repo.CurrentSHA()
 	require.NoError(t, err)
 
 	s.Scene.Repo.CheckoutBranch("main")

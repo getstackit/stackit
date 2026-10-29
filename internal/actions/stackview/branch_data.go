@@ -96,7 +96,7 @@ func LocalStatus(graph *engine.StackGraph, branchNames []string, statuses engine
 			anyLocked = true
 		}
 
-		prInfo, err := branch.GetPrInfo()
+		prInfo, err := branch.PrInfo()
 		if err != nil || prInfo == nil || prInfo.Number() == nil {
 			allHavePR = false
 		}

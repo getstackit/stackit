@@ -49,12 +49,12 @@ func SwitchBranchAction(direction Direction, ctx *app.Context, handler Handler) 
 	case DirectionBottom:
 		// Walks the parent chain only — no full graph needed, so the command can
 		// run under LoadModeBranchesOnly and lazily promote just the chain.
-		targetBranch = traverseDownward(currentBranch.GetName(), eng, ctx.Output)
+		targetBranch = traverseDownward(currentBranch.Name(), eng, ctx.Output)
 	case DirectionTop:
 		// Walking toward the tips needs child relationships, which requires the
 		// full stack graph.
 		graph := eng.Graph(ctx.Context, engine.SortStrategyAlphabetical)
-		targetBranch, err = traverseUpward(currentBranch.GetName(), eng, ctx.Output, graph, handler)
+		targetBranch, err = traverseUpward(currentBranch.Name(), eng, ctx.Output, graph, handler)
 		if err != nil {
 			return actions.CheckoutResult{}, err
 		}
@@ -62,7 +62,7 @@ func SwitchBranchAction(direction Direction, ctx *app.Context, handler Handler) 
 		return actions.CheckoutResult{}, fmt.Errorf("invalid direction: %s", direction)
 	}
 
-	if targetBranch == currentBranch.GetName() {
+	if targetBranch == currentBranch.Name() {
 		directionText := "bottom most"
 		if direction == DirectionTop {
 			directionText = "top most"
@@ -88,7 +88,7 @@ func traverseDownward(currentBranch string, eng engine.BranchLookup, out output.
 		return currentBranch
 	}
 
-	parent := currentBranchObj.GetParent()
+	parent := currentBranchObj.Parent()
 	if parent == nil {
 		// No parent, we're at the bottom
 		return currentBranch
@@ -96,15 +96,15 @@ func traverseDownward(currentBranch string, eng engine.BranchLookup, out output.
 
 	// Skip worktree anchors — walk through them transparently
 	for parent != nil && parent.IsWorktreeAnchor() {
-		parent = parent.GetParent()
+		parent = parent.Parent()
 	}
 
 	if parent == nil || parent.IsTrunk() {
 		return currentBranch
 	}
 
-	out.Info("⮑  %s", parent.GetName())
-	return traverseDownward(parent.GetName(), eng, out)
+	out.Info("⮑  %s", parent.Name())
+	return traverseDownward(parent.Name(), eng, out)
 }
 
 // traverseUpward walks up the children chain to find the tip branch.
@@ -125,7 +125,7 @@ func traverseUpward(currentBranch string, eng engine.BranchLookup, out output.Ou
 
 	if len(children) == 1 {
 		// Single child, follow it
-		nextBranch = children[0].GetName()
+		nextBranch = children[0].Name()
 	} else {
 		// Multiple children, use handler to select
 		nextBranch, err = handleMultipleChildren(children.Names(), handler)

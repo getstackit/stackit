@@ -52,10 +52,10 @@ func ReorderAction(ctx *app.Context, opts ReorderOptions) error {
 		return err
 	}
 
-	currentBranch := eng.CurrentBranch(ctx.Context).GetName()
+	currentBranch := eng.CurrentBranch(ctx.Context).Name()
 	currentBranchObj := eng.GetBranch(currentBranch)
 	out.Debug("reorder: current branch object: name=%s, isTrunk=%v, isTracked=%v",
-		currentBranchObj.GetName(), currentBranchObj.IsTrunk(), currentBranchObj.IsTracked())
+		currentBranchObj.Name(), currentBranchObj.IsTrunk(), currentBranchObj.IsTracked())
 
 	// Build StackGraph for efficient traversals
 	out.Debug("reorder: building stack graph")
@@ -68,7 +68,7 @@ func ReorderAction(ctx *app.Context, opts ReorderOptions) error {
 	out.Debug("reorder: found %d branches in stack (including trunk)", len(stack))
 	for i, b := range stack {
 		out.Debug("reorder: stack[%d]: name=%s, isTrunk=%v, isTracked=%v",
-			i, b.GetName(), b.IsTrunk(), b.IsTracked())
+			i, b.Name(), b.IsTrunk(), b.IsTracked())
 	}
 
 	// Filter out trunk and get only tracked branches
@@ -76,13 +76,13 @@ func ReorderAction(ctx *app.Context, opts ReorderOptions) error {
 	for _, branch := range stack {
 		if !branch.IsTrunk() && branch.IsTracked() {
 			if err := branch.EnsureCanModify(); err != nil {
-				out.Debug("reorder: branch %s cannot be modified: %v", branch.GetName(), err)
+				out.Debug("reorder: branch %s cannot be modified: %v", branch.Name(), err)
 				return fmt.Errorf("cannot reorder stack: %w", err)
 			}
-			branches = append(branches, branch.GetName())
+			branches = append(branches, branch.Name())
 		} else {
 			out.Debug("reorder: skipping branch %s (isTrunk=%v, isTracked=%v)",
-				branch.GetName(), branch.IsTrunk(), branch.IsTracked())
+				branch.Name(), branch.IsTrunk(), branch.IsTracked())
 		}
 	}
 	if err := EnsureCanModifyNamesHere(ctx, branches...); err != nil {
@@ -102,7 +102,7 @@ func ReorderAction(ctx *app.Context, opts ReorderOptions) error {
 	out.Debug("reorder: original order (trunk-to-tip): %v", originalOrder)
 
 	// Get trunk name for TUI display
-	trunkName := eng.Trunk().GetName()
+	trunkName := eng.Trunk().Name()
 
 	// Reverse branches for TUI display (tip first, then down to trunk)
 	// This makes the UI more intuitive: top of stack at the top of the list
@@ -193,7 +193,7 @@ func ReorderAction(ctx *app.Context, opts ReorderOptions) error {
 	})
 	out.Debug("reorder: found %d affected branches to restack", len(affectedBranches))
 	for i, b := range affectedBranches {
-		out.Debug("reorder: affected[%d]: %s", i, b.GetName())
+		out.Debug("reorder: affected[%d]: %s", i, b.Name())
 	}
 
 	// Restack all affected branches
@@ -282,11 +282,11 @@ func updateParentRelationships(ctx context.Context, eng reorderUpdateEngine, new
 
 	// Set parent of first branch to trunk, then chain each subsequent branch
 	trunk := eng.Trunk()
-	out.Debug("reorder: updateParentRelationships: trunk is %s", trunk.GetName())
+	out.Debug("reorder: updateParentRelationships: trunk is %s", trunk.Name())
 
 	moves := make([]engine.BranchParentMove, len(newOrder))
 	for i, branchName := range newOrder {
-		parentName := trunk.GetName()
+		parentName := trunk.Name()
 		if i > 0 {
 			parentName = newOrder[i-1]
 		}
@@ -312,7 +312,7 @@ type reorderUpdateEngine interface {
 func findFirstAffectedBranch(eng engine.StackNavigator, originalOrder, newOrder []string, out output.Output) string {
 	out.Debug("reorder: findFirstAffectedBranch: comparing %d branches", len(newOrder))
 
-	trunk := eng.Trunk().GetName()
+	trunk := eng.Trunk().Name()
 	out.Debug("reorder: findFirstAffectedBranch: trunk is %s", trunk)
 
 	// Create a map of original positions
@@ -343,12 +343,12 @@ func findFirstAffectedBranch(eng engine.StackNavigator, originalOrder, newOrder 
 		}
 
 		branchObj := eng.GetBranch(branch)
-		currentParent := branchObj.GetParent()
+		currentParent := branchObj.Parent()
 		currentParentName := ""
 		if currentParent == nil {
 			currentParentName = trunk
 		} else {
-			currentParentName = currentParent.GetName()
+			currentParentName = currentParent.Name()
 		}
 
 		out.Debug("reorder: findFirstAffectedBranch: %s current parent=%s, expected parent=%s",

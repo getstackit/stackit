@@ -42,8 +42,8 @@ func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch)
 	out := ctx.Output
 
 	out.Info("%s", output.Yellow("Dry Run: Folding plan"))
-	out.Info("  Fold branch: %s", output.CurrentBranch(current.GetName()))
-	out.Info("  Into parent: %s", output.BranchName(parent.GetName()))
+	out.Info("  Fold branch: %s", output.CurrentBranch(current.Name()))
+	out.Info("  Into parent: %s", output.BranchName(parent.Name()))
 	out.Newline()
 
 	// Show combined commit messages
@@ -51,7 +51,7 @@ func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch)
 	parentCommitsData, err := parent.GetAllCommits()
 	parentCommits := parentCommitsData.Onelines()
 	if err != nil {
-		out.Debug("Failed to get parent commits for %s: %v", parent.GetName(), err)
+		out.Debug("Failed to get parent commits for %s: %v", parent.Name(), err)
 	}
 	for _, commit := range parentCommits {
 		out.Info("  %s", output.Dim(commit))
@@ -60,7 +60,7 @@ func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch)
 	currentCommitsData, err := current.GetAllCommits()
 	currentCommits := currentCommitsData.Onelines()
 	if err != nil {
-		out.Debug("Failed to get current commits for %s: %v", current.GetName(), err)
+		out.Debug("Failed to get current commits for %s: %v", current.Name(), err)
 	}
 	for _, commit := range currentCommits {
 		out.Info("  %s", commit)
@@ -70,20 +70,20 @@ func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch)
 	// Show combined diff stat
 	out.Info("%s", output.Cyan("Combined Diff Stat:"))
 	// Base is parent's parent (or trunk)
-	grandparentName := parent.GetParentOrTrunk()
+	grandparentName := parent.ParentOrTrunk()
 	baseRev, err := eng.GetRevision(eng.GetBranch(grandparentName))
 	if err != nil {
 		out.Debug("Failed to get revision for grandparent %s: %v", grandparentName, err)
 		var mbErr error
-		baseRev, mbErr = eng.GetMergeBase(ctx, eng.Trunk().GetName(), parent.GetName())
+		baseRev, mbErr = eng.GetMergeBase(ctx, eng.Trunk().Name(), parent.Name())
 		if mbErr != nil {
-			out.Debug("Failed to get merge base for %s: %v", parent.GetName(), mbErr)
+			out.Debug("Failed to get merge base for %s: %v", parent.Name(), mbErr)
 		}
 	}
 
 	headRev, err := current.GetRevision()
 	if err != nil {
-		out.Debug("Failed to get revision for current branch %s: %v", current.GetName(), err)
+		out.Debug("Failed to get revision for current branch %s: %v", current.Name(), err)
 	}
 
 	diffStat, err := eng.ShowDiff(ctx.Context, git.RevRange{Base: baseRev, Head: headRev}, git.DiffFormatStat)
@@ -116,11 +116,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if err := validation.GitOperationChain(gctx, eng, "fold").Validate(); err != nil {
 		return err
 	}
-	currentBranch := eng.CurrentBranch(ctx.Context).GetName()
+	currentBranch := eng.CurrentBranch(ctx.Context).Name()
 	currentBranchObj := eng.GetBranch(currentBranch)
 
 	// Get parent branch
-	parentName := currentBranchObj.GetParentOrTrunk()
+	parentName := currentBranchObj.ParentOrTrunk()
 
 	parentBranch := eng.GetBranch(parentName)
 	if !parentBranch.IsTrunk() {
@@ -143,8 +143,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Prohibit folding branches with different scopes
 	if !parentBranch.IsTrunk() {
-		currentScope := currentBranchObj.GetScope()
-		parentScope := parentBranch.GetScope()
+		currentScope := currentBranchObj.Scope()
+		parentScope := parentBranch.Scope()
 		if !currentScope.Equal(parentScope) {
 			return fmt.Errorf("cannot fold branches with different scopes (current: [%s], parent: [%s])", currentScope.String(), parentScope.String())
 		}

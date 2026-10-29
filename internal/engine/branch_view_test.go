@@ -22,7 +22,7 @@ func TestBatchBranchStats(t *testing.T) {
 	stats := s.Engine.BatchBranchStats(branches)
 
 	for _, b := range branches {
-		name := b.GetName()
+		name := b.Name()
 		stat, ok := stats[name]
 		require.True(t, ok, "missing stat for %s", name)
 
@@ -35,7 +35,7 @@ func TestBatchBranchStats(t *testing.T) {
 			continue
 		}
 
-		parent := b.GetParent().GetName()
+		parent := b.Parent().Name()
 
 		wantCount, err := s.Scene.Repo.GetCommitCount(parent, name)
 		require.NoError(t, err)
@@ -84,7 +84,7 @@ func TestPerConcernBatchReaders(t *testing.T) {
 	divergence := s.Engine.BatchDivergencePoints(branches)
 
 	for _, b := range branches {
-		name := b.GetName()
+		name := b.Name()
 
 		if b.IsTrunk() {
 			continue
@@ -94,7 +94,7 @@ func TestPerConcernBatchReaders(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, wantDiv, divergence[name], "divergence for %s", name)
 
-		wantAdded, wantDeleted, err := s.Scene.Repo.GetDiffStats(b.GetParent().GetName(), name)
+		wantAdded, wantDeleted, err := s.Scene.Repo.GetDiffStats(b.Parent().Name(), name)
 		require.NoError(t, err)
 		require.Equal(t, engine.DiffStat{Added: wantAdded, Deleted: wantDeleted, FilesChanged: 1}, diffs[name], "diff for %s", name)
 
@@ -116,7 +116,7 @@ func TestBatchCommitInfo(t *testing.T) {
 	info := s.Engine.BatchCommitInfo(branches)
 
 	for _, b := range branches {
-		name := b.GetName()
+		name := b.Name()
 		got, ok := info[name]
 		require.True(t, ok, "missing commit info for %s", name)
 
@@ -156,7 +156,7 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 	// Without the fallback, GetAllCommits walks b's whole history to the repo
 	// root while a parent..b walk covers only b's own commits, so the two
 	// disagree. The raw-git count against the parent tip is the oracle here.
-	count, err := s.Scene.Repo.GetCommitCount(b.GetParent().GetName(), "b")
+	count, err := s.Scene.Repo.GetCommitCount(b.Parent().Name(), "b")
 	require.NoError(t, err)
 	require.Len(t, commits, count,
 		"commit messages and count must use the same base when no divergence is stored")

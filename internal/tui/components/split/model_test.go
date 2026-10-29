@@ -28,7 +28,7 @@ func TestModel_Update_KeyMsg_Quit_MarksCanceled(t *testing.T) {
 			m := newModel.(*Model)
 
 			require.NotNil(t, cmd, "should return quit command")
-			require.True(t, m.GetResult().Canceled, "result should be marked canceled")
+			require.True(t, m.Result().Canceled, "result should be marked canceled")
 			require.Equal(t, StateCanceled, m.state)
 		})
 	}
@@ -43,6 +43,6 @@ func TestModel_Update_SpinnerTickMsg_DoesNotCancel(t *testing.T) {
 	m := newModel.(*Model)
 
 	require.NotNil(t, cmd, "should return spinner tick command")
-	require.False(t, m.GetResult().Canceled, "spinner tick should not cancel the wizard")
+	require.False(t, m.Result().Canceled, "spinner tick should not cancel the wizard")
 	require.Equal(t, StateSelectingType, m.state)
 }

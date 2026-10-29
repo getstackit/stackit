@@ -28,7 +28,7 @@ func TestIsAncestor(t *testing.T) {
 		// Create another commit
 		err = scene.Repo.CreateChangeAndCommit("second", "second")
 		require.NoError(t, err)
-		secondSha, err := scene.Repo.GetCurrentSHA()
+		secondSha, err := scene.Repo.CurrentSHA()
 		require.NoError(t, err)
 
 		// Initial should be ancestor of second
@@ -52,7 +52,7 @@ func TestIsAncestor(t *testing.T) {
 		// Create another commit
 		err = scene.Repo.CreateChangeAndCommit("second", "second")
 		require.NoError(t, err)
-		secondSha, err := scene.Repo.GetCurrentSHA()
+		secondSha, err := scene.Repo.CurrentSHA()
 		require.NoError(t, err)
 
 		// Second should NOT be ancestor of initial
@@ -99,7 +99,7 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get initial SHA from remote
-		initialSha, err := remoteScene.Repo.GetCurrentSHA()
+		initialSha, err := remoteScene.Repo.CurrentSHA()
 		require.NoError(t, err)
 
 		// 2. Setup a "local" repository by cloning
@@ -112,7 +112,7 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		// 3. Add commits to remote (simulating PR merge)
 		err = remoteScene.Repo.CreateChangeAndCommit("feature", "feature")
 		require.NoError(t, err)
-		newSha, err := remoteScene.Repo.GetCurrentSHA()
+		newSha, err := remoteScene.Repo.CurrentSHA()
 		require.NoError(t, err)
 		err = remoteScene.Repo.PushBranch("upstream", "main")
 		require.NoError(t, err)
@@ -156,7 +156,7 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		require.NoError(t, err)
 		err = scene.Repo.CreateChangeAndCommit("change-a", "a")
 		require.NoError(t, err)
-		shaA, err := scene.Repo.GetCurrentSHA()
+		shaA, err := scene.Repo.CurrentSHA()
 		require.NoError(t, err)
 
 		// Go back to initial and create branch B with different commit
@@ -166,7 +166,7 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		require.NoError(t, err)
 		err = scene.Repo.CreateChangeAndCommit("change-b", "b")
 		require.NoError(t, err)
-		shaB, err := scene.Repo.GetCurrentSHA()
+		shaB, err := scene.Repo.CurrentSHA()
 		require.NoError(t, err)
 
 		// Neither should be ancestor of the other (diverged)

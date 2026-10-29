@@ -31,9 +31,9 @@ func TestTrackBranch(t *testing.T) {
 
 		// Verify parent relationship
 		branch := s.Engine.GetBranch("feature")
-		parent := branch.GetParent()
+		parent := branch.Parent()
 		require.NotNil(t, parent)
-		require.Equal(t, "main", parent.GetName())
+		require.Equal(t, "main", parent.Name())
 
 		// Verify children relationship
 		graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
@@ -62,13 +62,13 @@ func TestTrackBranch(t *testing.T) {
 
 		// Verify relationships
 		branch1 := s.Engine.GetBranch("branch1")
-		parent1 := branch1.GetParent()
+		parent1 := branch1.Parent()
 		require.NotNil(t, parent1)
-		require.Equal(t, "main", parent1.GetName())
+		require.Equal(t, "main", parent1.Name())
 		branch2 := s.Engine.GetBranch("branch2")
-		parent2 := branch2.GetParent()
+		parent2 := branch2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "branch1", parent2.GetName())
+		require.Equal(t, "branch1", parent2.Name())
 		graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 		mainChildNames := graph.Children(s.Engine.Trunk())
 		require.Contains(t, mainChildNames, "branch1")
@@ -146,7 +146,7 @@ func TestLinearStacksAllowDeletingMiddleBranch(t *testing.T) {
 	require.NoError(t, eng.TrackBranch(t.Context(), "child", "middle"))
 
 	require.NoError(t, eng.DeleteBranch(t.Context(), eng.GetBranch("middle")))
-	require.Equal(t, "base", eng.GetBranch("child").GetParentOrTrunk())
+	require.Equal(t, "base", eng.GetBranch("child").ParentOrTrunk())
 	require.False(t, eng.BranchNames().Contains("middle"))
 }
 
@@ -227,9 +227,9 @@ func TestSetParent(t *testing.T) {
 
 		// Verify initial state
 		branch2 := s.Engine.GetBranch("branch2")
-		parent2 := branch2.GetParent()
+		parent2 := branch2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "branch1", parent2.GetName())
+		require.Equal(t, "branch1", parent2.Name())
 
 		// Change parent of branch2 to main
 		err = s.Engine.SetParent(t.Context(), s.Engine.GetBranch("branch2"), s.Engine.GetBranch("main"), engine.DivergenceRecompute)
@@ -237,9 +237,9 @@ func TestSetParent(t *testing.T) {
 
 		// Verify new parent
 		branchparent2After := s.Engine.GetBranch("branch2")
-		parent2After := branchparent2After.GetParent()
+		parent2After := branchparent2After.Parent()
 		require.NotNil(t, parent2After)
-		require.Equal(t, "main", parent2After.GetName())
+		require.Equal(t, "main", parent2After.Name())
 		graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 		mainChildNames := graph.Children(s.Engine.Trunk())
 		require.Contains(t, mainChildNames, "branch2")
@@ -289,13 +289,13 @@ func TestDeleteBranch(t *testing.T) {
 
 		// Verify children now point to main
 		branchparent2 := s.Engine.GetBranch("branch2")
-		parent2 := branchparent2.GetParent()
+		parent2 := branchparent2.Parent()
 		require.NotNil(t, parent2)
-		require.Equal(t, "main", parent2.GetName())
+		require.Equal(t, "main", parent2.Name())
 		branchparent3 := s.Engine.GetBranch("branch3")
-		parent3 := branchparent3.GetParent()
+		parent3 := branchparent3.Parent()
 		require.NotNil(t, parent3)
-		require.Equal(t, "main", parent3.GetName())
+		require.Equal(t, "main", parent3.Name())
 		graph = engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 		mainChildNames := graph.Children(s.Engine.Trunk())
 		require.Contains(t, mainChildNames, "branch2")
@@ -316,17 +316,17 @@ func TestDeleteBranch(t *testing.T) {
 
 		// Verify initial parent of children is P
 		branchparentC1 := s.Engine.GetBranch("C1")
-		parentC1 := branchparentC1.GetParent()
+		parentC1 := branchparentC1.Parent()
 		require.NotNil(t, parentC1)
-		require.Equal(t, "P", parentC1.GetName())
+		require.Equal(t, "P", parentC1.Name())
 		branchparentC2 := s.Engine.GetBranch("C2")
-		parentC2 := branchparentC2.GetParent()
+		parentC2 := branchparentC2.Parent()
 		require.NotNil(t, parentC2)
-		require.Equal(t, "P", parentC2.GetName())
+		require.Equal(t, "P", parentC2.Name())
 		branchparentC3 := s.Engine.GetBranch("C3")
-		parentC3 := branchparentC3.GetParent()
+		parentC3 := branchparentC3.Parent()
 		require.NotNil(t, parentC3)
-		require.Equal(t, "P", parentC3.GetName())
+		require.Equal(t, "P", parentC3.Name())
 
 		// Delete P
 		err := s.Engine.DeleteBranch(t.Context(), s.Engine.GetBranch("P"))
@@ -337,27 +337,27 @@ func TestDeleteBranch(t *testing.T) {
 
 		// Verify all direct children of P now point to main
 		branchparentC1After := s.Engine.GetBranch("C1")
-		parentC1After := branchparentC1After.GetParent()
+		parentC1After := branchparentC1After.Parent()
 		require.NotNil(t, parentC1After)
-		require.Equal(t, "main", parentC1After.GetName())
+		require.Equal(t, "main", parentC1After.Name())
 		branchparentC2After := s.Engine.GetBranch("C2")
-		parentC2After := branchparentC2After.GetParent()
+		parentC2After := branchparentC2After.Parent()
 		require.NotNil(t, parentC2After)
-		require.Equal(t, "main", parentC2After.GetName())
+		require.Equal(t, "main", parentC2After.Name())
 		branchparentC3After := s.Engine.GetBranch("C3")
-		parentC3After := branchparentC3After.GetParent()
+		parentC3After := branchparentC3After.Parent()
 		require.NotNil(t, parentC3After)
-		require.Equal(t, "main", parentC3After.GetName())
+		require.Equal(t, "main", parentC3After.Name())
 
 		// Verify grandchildren still point to their parents
 		branchparentGC1 := s.Engine.GetBranch("GC1")
-		parentGC1 := branchparentGC1.GetParent()
+		parentGC1 := branchparentGC1.Parent()
 		require.NotNil(t, parentGC1)
-		require.Equal(t, "C1", parentGC1.GetName())
+		require.Equal(t, "C1", parentGC1.Name())
 		branchparentGC3 := s.Engine.GetBranch("GC3")
-		parentGC3 := branchparentGC3.GetParent()
+		parentGC3 := branchparentGC3.Parent()
 		require.NotNil(t, parentGC3)
-		require.Equal(t, "C3", parentGC3.GetName())
+		require.Equal(t, "C3", parentGC3.Name())
 
 		// Verify main's children list contains C1, C2, C3
 		graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
@@ -541,7 +541,7 @@ func TestNewEngine_Scoping(t *testing.T) {
 	// and will incorrectly see the current branch of mainDir (which is "main")
 	curr := eng.CurrentBranch(t.Context())
 	require.NotNil(t, curr)
-	require.Equal(t, "unique-branch-in-other-repo", curr.GetName(),
+	require.Equal(t, "unique-branch-in-other-repo", curr.Name(),
 		"Engine must be scoped to its RepoRoot (%s), but seems to be looking at CWD (%s)", otherDir, mainDir)
 }
 
@@ -601,7 +601,7 @@ func TestRestackBranches(t *testing.T) {
 		var progressed []string
 
 		batchResult, err := s.Engine.RestackBranches(t.Context(), branches, engine.RestackOpts{Progress: func(branch engine.Branch, result engine.RestackBranchResult) {
-			progressed = append(progressed, branch.GetName())
+			progressed = append(progressed, branch.Name())
 			require.Contains(t, []engine.RestackResult{engine.RestackDone, engine.RestackUnneeded}, result.Result)
 		}})
 		require.NoError(t, err)
@@ -627,9 +627,9 @@ func TestRestackBranches(t *testing.T) {
 		// Verify it is now tracked
 		require.True(t, s.Engine.GetBranch("branch1").IsTracked())
 		branchparent1 := s.Engine.GetBranch("branch1")
-		parent1 := branchparent1.GetParent()
+		parent1 := branchparent1.Parent()
 		require.NotNil(t, parent1)
-		require.Equal(t, "main", parent1.GetName())
+		require.Equal(t, "main", parent1.Name())
 	})
 }
 
@@ -646,9 +646,9 @@ func TestRebuild(t *testing.T) {
 		allBranches := s.Engine.AllBranches()
 		require.Contains(t, allBranches.Names(), "branch1")
 		branchparent1 := s.Engine.GetBranch("branch1")
-		parent1 := branchparent1.GetParent()
+		parent1 := branchparent1.Parent()
 		require.NotNil(t, parent1)
-		require.Equal(t, "main", parent1.GetName())
+		require.Equal(t, "main", parent1.Name())
 
 		// Create new branch externally (not tracked)
 		s.CreateBranchQuiet("branch2").
@@ -676,7 +676,7 @@ func TestRebuildBranches(t *testing.T) {
 	descendantsOf := func(eng engine.Engine, start string) map[string]int {
 		got := map[string]int{}
 		for b, depth := range eng.BranchesDepthFirst(eng.GetBranch(start)) {
-			got[b.GetName()] = depth
+			got[b.Name()] = depth
 		}
 		return got
 	}
@@ -694,14 +694,14 @@ func TestRebuildBranches(t *testing.T) {
 		require.NoError(t, s.Metadata.WriteMetadata(t.Context(), "b", meta.WithParentBranchName(&main)))
 
 		// Engine still shows the pre-write graph until we refresh.
-		require.Equal(t, "a", s.Engine.GetBranch("b").GetParent().GetName())
+		require.Equal(t, "a", s.Engine.GetBranch("b").Parent().Name())
 
 		require.NoError(t, s.Engine.RebuildBranches([]string{"b"}))
 
 		// b now parents onto main; a and c are untouched.
-		require.Equal(t, "main", s.Engine.GetBranch("b").GetParent().GetName())
-		require.Equal(t, "main", s.Engine.GetBranch("a").GetParent().GetName())
-		require.Equal(t, "b", s.Engine.GetBranch("c").GetParent().GetName())
+		require.Equal(t, "main", s.Engine.GetBranch("b").Parent().Name())
+		require.Equal(t, "main", s.Engine.GetBranch("a").Parent().Name())
+		require.Equal(t, "b", s.Engine.GetBranch("c").Parent().Name())
 
 		// childrenMap is consistent: a lost b, main gained b, b keeps c.
 		fromMain := descendantsOf(s.Engine, "main")
@@ -760,7 +760,7 @@ func TestRebuildBranches(t *testing.T) {
 
 		// a was not in the list, so its cached state is unchanged (still tracked
 		// under main, no surprise refresh).
-		require.Equal(t, "main", s.Engine.GetBranch("a").GetParent().GetName())
+		require.Equal(t, "main", s.Engine.GetBranch("a").Parent().Name())
 		require.True(t, s.Engine.GetBranch("a").IsTracked())
 	})
 }
@@ -781,7 +781,7 @@ func TestCreateBranchUpdatesBranchInventory(t *testing.T) {
 
 	require.False(t, s.Engine.GetBranch("branch2").IsTracked())
 	require.NoError(t, s.Engine.TrackBranch(t.Context(), "branch2", "main"))
-	require.Equal(t, "main", s.Engine.GetBranch("branch2").GetParentOrTrunk())
+	require.Equal(t, "main", s.Engine.GetBranch("branch2").ParentOrTrunk())
 }
 
 func TestIsBranchTracked(t *testing.T) {
@@ -833,7 +833,7 @@ func TestGetParentOrTrunk(t *testing.T) {
 			})
 
 		branch := s.Engine.GetBranch("branch1")
-		parent := branch.GetParentOrTrunk()
+		parent := branch.ParentOrTrunk()
 		require.Equal(t, "main", parent)
 	})
 
@@ -846,7 +846,7 @@ func TestGetParentOrTrunk(t *testing.T) {
 
 		// Don't track branch1
 		branch := s.Engine.GetBranch("branch1")
-		parent := branch.GetParentOrTrunk()
+		parent := branch.ParentOrTrunk()
 		require.Equal(t, "main", parent) // Should return trunk
 	})
 }
@@ -1061,7 +1061,7 @@ func TestUpsertPrInfo(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify PR info
-		retrieved, err := branch.GetPrInfo()
+		retrieved, err := branch.PrInfo()
 		require.NoError(t, err)
 		require.NotNil(t, retrieved)
 		require.Equal(t, git.PRNumber(123), *retrieved.Number())
@@ -1090,7 +1090,7 @@ func TestUpsertPrInfo(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify updated PR info
-		retrieved, err := branch.GetPrInfo()
+		retrieved, err := branch.PrInfo()
 		require.NoError(t, err)
 		require.NotNil(t, retrieved)
 		require.Equal(t, "Updated Title", retrieved.Title())
@@ -1133,7 +1133,7 @@ func TestConcurrentAccess(t *testing.T) {
 		for range 10 {
 			go func() {
 				branch := s.Engine.GetBranch("branch1")
-				_ = branch.GetParent()
+				_ = branch.Parent()
 				graph := engine.BuildStackGraph(t.Context(), s.Engine, engine.SortStrategyAlphabetical, nil)
 				_ = graph.Children(s.Engine.Trunk())
 				_ = s.Engine.GetBranch("branch1").IsTracked()
@@ -1470,12 +1470,12 @@ func TestEdgeCases(t *testing.T) {
 
 		// Branch exists but not tracked
 		branch := s.Engine.GetBranch("branch1")
-		parent := branch.GetParent()
+		parent := branch.Parent()
 		require.Empty(t, parent)
 
 		// GetParentOrTrunk should return trunk
 		// branch already declared above
-		parentName := branch.GetParentOrTrunk()
+		parentName := branch.ParentOrTrunk()
 		require.Equal(t, "main", parentName)
 	})
 

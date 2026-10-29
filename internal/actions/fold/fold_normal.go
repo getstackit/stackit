@@ -36,8 +36,8 @@ func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBra
 	}
 
 	splog.Info("Folded %s into %s.",
-		output.CurrentBranch(currentBranch.GetName()),
-		output.BranchName(parentBranch.GetName()))
+		output.CurrentBranch(currentBranch.Name()),
+		output.BranchName(parentBranch.Name()))
 
 	// Restack all descendants of the parent
 	if len(descendants) > 0 {
@@ -63,11 +63,11 @@ func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBra
 // fastForwardOrMerge merges source into the checked-out target branch,
 // fast-forwarding when possible and falling back to a merge commit.
 func fastForwardOrMerge(gctx context.Context, eng foldEngine, source, target engine.Branch) error {
-	if err := eng.Merge(gctx, source.GetName(), engine.MergeOptions{FFOnly: true}); err == nil {
+	if err := eng.Merge(gctx, source.Name(), engine.MergeOptions{FFOnly: true}); err == nil {
 		return nil
 	}
-	if err := eng.Merge(gctx, source.GetName(), engine.MergeOptions{NoEdit: true}); err != nil {
-		return fmt.Errorf("failed to merge %s into %s due to conflicts. Please resolve the conflicts and run 'git commit', or abort with 'git merge --abort'", source.GetName(), target.GetName())
+	if err := eng.Merge(gctx, source.Name(), engine.MergeOptions{NoEdit: true}); err != nil {
+		return fmt.Errorf("failed to merge %s into %s due to conflicts. Please resolve the conflicts and run 'git commit', or abort with 'git merge --abort'", source.Name(), target.Name())
 	}
 	return nil
 }

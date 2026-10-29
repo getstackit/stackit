@@ -102,7 +102,7 @@ func (a *Analyzer) remoteStatusProviderFor(ctx context.Context, stacks []stackvi
 	for _, stack := range stacks {
 		for _, branchName := range stack.AllBranches {
 			branch := a.eng.GetBranch(branchName)
-			prInfo, err := branch.GetPrInfo()
+			prInfo, err := branch.PrInfo()
 			if err == nil && prInfo != nil && prInfo.Number() != nil && !prInfo.IsDraft() {
 				remoteStatusBranches = append(remoteStatusBranches, branch)
 			}
@@ -127,7 +127,7 @@ func (a *Analyzer) analyzeStack(stack stackview.StackInfo, statusMap github.Chec
 	// Get display title from root branch (PR title > commit subject > branch name)
 	if stack.RootBranch != "" {
 		rootBranch := a.eng.GetBranch(stack.RootBranch)
-		if prInfo, err := rootBranch.GetPrInfo(); err == nil && prInfo != nil && prInfo.Title() != "" {
+		if prInfo, err := rootBranch.PrInfo(); err == nil && prInfo != nil && prInfo.Title() != "" {
 			result.PRTitle = prInfo.Title()
 		} else {
 			// Fall back to commit subject (DefaultPRTitle returns commit subject or branch name)
@@ -176,7 +176,7 @@ func (a *Analyzer) analyzeStack(stack stackview.StackInfo, statusMap github.Chec
 func (a *Analyzer) analyzeBranch(branchName string, statusMap github.ChecksByBranch, remoteStatuses *branchRemoteStatusProvider) *BlockingPR {
 	// Get PR info from engine metadata
 	branch := a.eng.GetBranch(branchName)
-	prInfo, err := branch.GetPrInfo()
+	prInfo, err := branch.PrInfo()
 
 	// Check if PR exists
 	if err != nil || prInfo == nil || prInfo.Number() == nil {

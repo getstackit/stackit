@@ -240,9 +240,9 @@ func (h *OnboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	summary := httpcontract.RepoSummary{ID: entry.ID, Owner: entry.Owner, Repo: entry.Name, DisplayName: entry.DisplayName}
 	if entry.Engine != nil {
-		summary.Trunk = entry.Engine.Trunk().GetName()
+		summary.Trunk = entry.Engine.Trunk().Name()
 		if cur := entry.Engine.CurrentBranch(r.Context()); cur != nil {
-			summary.CurrentBranch = cur.GetName()
+			summary.CurrentBranch = cur.Name()
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")

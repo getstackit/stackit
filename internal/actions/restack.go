@@ -219,7 +219,7 @@ func guardUnpushedTrunk(ctx *app.Context, eng engine.BranchReader, groups []rest
 	return fmt.Errorf(
 		"local trunk %q has commits that are not on %q; restack would build the stack on those un-pushed commits.\n"+
 			"Reconcile trunk with the remote first (run `stackit sync`, or push trunk) so restack only builds on %s",
-		eng.Trunk().GetName(), state.RemoteRef, state.RemoteRef,
+		eng.Trunk().Name(), state.RemoteRef, state.RemoteRef,
 	)
 }
 

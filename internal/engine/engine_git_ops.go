@@ -51,7 +51,7 @@ func (e *engineImpl) GetUntrackedFileHunks(ctx context.Context) ([]git.Hunk, err
 
 	hunks := make([]git.Hunk, 0, len(files))
 	for _, file := range files {
-		content, err := os.ReadFile(filepath.Join(e.git.GetRepoRoot(), file))
+		content, err := os.ReadFile(filepath.Join(e.git.RepoRoot(), file))
 		if err != nil {
 			return nil, fmt.Errorf("failed to read untracked file %s: %w", file, err)
 		}
@@ -173,9 +173,9 @@ func (e *engineImpl) GetRepoInfo(ctx context.Context) (git.RemoteRepository, err
 	return e.git.GetRepoInfo(ctx)
 }
 
-// GetRepoRoot returns the absolute path to the repository root.
-func (e *engineImpl) GetRepoRoot() string {
-	return e.git.GetRepoRoot()
+// RepoRoot returns the absolute path to the repository root.
+func (e *engineImpl) RepoRoot() string {
+	return e.git.RepoRoot()
 }
 
 // GetUserName returns the configured git user.name.

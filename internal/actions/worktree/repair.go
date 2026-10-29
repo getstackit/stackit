@@ -196,11 +196,11 @@ func convertLegacyRegistration(ctx *app.Context, cfg RepoConfig, wtInfo engine.W
 		return "", fmt.Errorf("branch %s is not tracked by stackit", output.BranchName(rootBranchName))
 	}
 
-	originalParent := ctx.Engine.Trunk().GetName()
-	if parent := rootBranch.GetParent(); parent != nil {
-		originalParent = parent.GetName()
+	originalParent := ctx.Engine.Trunk().Name()
+	if parent := rootBranch.Parent(); parent != nil {
+		originalParent = parent.Name()
 	}
-	scope := rootBranch.GetScope().String()
+	scope := rootBranch.Scope().String()
 	name := wtInfo.Name
 	if name == "" {
 		name = engine.WorktreeName(rootBranchName)

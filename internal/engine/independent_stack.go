@@ -20,7 +20,7 @@ func DiscoverIndependentStacks(ctx context.Context, eng StackView) []Independent
 // callers to choose how sibling branches are ordered.
 func DiscoverIndependentStacksWithSort(ctx context.Context, eng StackView, strategy SortStrategy) []IndependentStack {
 	graph := eng.Graph(ctx, strategy)
-	trunkNode := graph.GetNode(eng.Trunk().GetName())
+	trunkNode := graph.GetNode(eng.Trunk().Name())
 	if trunkNode == nil {
 		return nil
 	}

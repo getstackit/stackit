@@ -185,7 +185,7 @@ func (e *engineImpl) ApplyRemoteMetadataForBranches(ctx context.Context, branchN
 		return fmt.Errorf("load remote metadata cache: %w", err)
 	}
 
-	trunkName := e.Trunk().GetName()
+	trunkName := e.Trunk().Name()
 	remotes := make(MetaMap, len(branchNames))
 
 	e.mu.RLock()
@@ -228,11 +228,11 @@ func mergeRemoteMetadata(local, remote *git.Meta) *git.Meta {
 		WithLastModifiedAt(remote.GetLastModifiedAt())
 }
 
-// GetRemoteMetadataCache returns a read-only view of the remote metadata cache.
+// RemoteMetadataCache returns a read-only view of the remote metadata cache.
 // Returns RemoteMetadataView instead of a raw map to prevent external mutation
 // and provide a stable snapshot even if the cache is reloaded concurrently.
 // Use Get/Has/Range methods to access entries.
-func (e *engineImpl) GetRemoteMetadataCache() RemoteMetadataView {
+func (e *engineImpl) RemoteMetadataCache() RemoteMetadataView {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 

@@ -3,7 +3,7 @@ package split_test
 import (
 	"testing"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
 
 	"github.com/stretchr/testify/require"
 
@@ -46,7 +46,7 @@ func TestRunWizardRefusesBranchOwnedByAnotherWorktree(t *testing.T) {
 	require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreePath), Name: "feature-wt"}))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
-	err := split.RunWizard(t.Context(), split.Deps{Engine: s.Context.Engine, MutationDeps: actions.MutationDepsFrom(s.Context), Prompts: s.Context.Prompts()}, guardOnlyHandler{}, split.WizardOptions{})
+	err := split.RunWizard(t.Context(), split.Deps{Engine: s.Context.Engine, MutationDeps: actiondeps.Mutation(s.Context), Prompts: s.Context.Prompts()}, guardOnlyHandler{}, split.WizardOptions{})
 
 	require.Error(t, err)
 	require.ErrorContains(t, err, "belongs to worktree feature-wt")

@@ -3,11 +3,14 @@ package integration
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/sync"
-	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 
@@ -109,12 +112,12 @@ func TestRestackAfterMultiCommitSquashParentDeleted(t *testing.T) {
 	sh.Rebuild()
 
 	sh.Checkout("child")
-	plan, err := actions.PlanRestack(sh.Context, actions.RestackDepsFrom(sh.Context), actions.RestackOptions{
+	plan, err := actions.PlanRestack(sh.Context, actiondeps.Restack(sh.Context), actions.RestackOptions{
 		BranchName: "child",
 		Scope:      engine.StackRangeFull(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, actions.RestackAction(sh.Context, actions.RestackDepsFrom(sh.Context), plan, &actions.NullRestackHandler{}))
+	require.NoError(t, actions.RestackAction(sh.Context, actiondeps.Restack(sh.Context), plan, &actions.NullRestackHandler{}))
 
 	sh.Rebuild()
 	require.Equal(t, mainName, sh.Engine.GetBranch("child").Parent().Name())
@@ -159,12 +162,12 @@ func TestRestackDetectsSquashMergeWithStalePRState(t *testing.T) {
 	sh.SyncRemoteTrunkToLocal()
 
 	sh.Checkout("child")
-	plan, err := actions.PlanRestack(sh.Context, actions.RestackDepsFrom(sh.Context), actions.RestackOptions{
+	plan, err := actions.PlanRestack(sh.Context, actiondeps.Restack(sh.Context), actions.RestackOptions{
 		BranchName: "child",
 		Scope:      engine.StackRangeFull(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, actions.RestackAction(sh.Context, actions.RestackDepsFrom(sh.Context), plan, &actions.NullRestackHandler{}))
+	require.NoError(t, actions.RestackAction(sh.Context, actiondeps.Restack(sh.Context), plan, &actions.NullRestackHandler{}))
 
 	sh.Rebuild()
 	require.Equal(t, mainName, sh.Engine.GetBranch("child").Parent().Name(),
@@ -336,12 +339,12 @@ func TestRestackAfterMultiCommitSquashWithoutSync(t *testing.T) {
 
 	// User runs `stackit restack` from the child without syncing first.
 	sh.Checkout("child")
-	plan, err := actions.PlanRestack(sh.Context, actions.RestackDepsFrom(sh.Context), actions.RestackOptions{
+	plan, err := actions.PlanRestack(sh.Context, actiondeps.Restack(sh.Context), actions.RestackOptions{
 		BranchName: "child",
 		Scope:      engine.StackRangeFull(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, actions.RestackAction(sh.Context, actions.RestackDepsFrom(sh.Context), plan, &actions.NullRestackHandler{}))
+	require.NoError(t, actions.RestackAction(sh.Context, actiondeps.Restack(sh.Context), plan, &actions.NullRestackHandler{}))
 
 	sh.Rebuild()
 	require.Equal(t, mainName, sh.Engine.GetBranch("child").Parent().Name(),

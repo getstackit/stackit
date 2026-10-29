@@ -7,7 +7,6 @@ import (
 	"os"
 	"slices"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 )
 
@@ -19,22 +18,11 @@ type Here struct {
 	Worktree *engine.WorktreeInfo
 }
 
-// HereFrom reads the command's location from its runtime context.
-func HereFrom(ctx *app.Context) Here {
-	return Here{InManagedWorktree: ctx.InManagedWorktree, Worktree: ctx.WorktreeInfo}
-}
-
 // OwnershipEngine is the engine surface the ownership guard reads.
 type OwnershipEngine interface {
 	engine.BranchLookup
 	WorktreeOwnershipByStackRoot(ctx context.Context) (map[string]engine.WorktreeOwnership, error)
 	GetStackRootForBranch(branch engine.Branch) string
-}
-
-// EnsureCanModifyHere refuses to mutate a stack from anywhere other than its
-// managed worktree. It is the *app.Context form of EnsureCanModify.
-func EnsureCanModifyHere(ctx *app.Context, branches ...engine.Branch) error {
-	return EnsureCanModify(ctx.Context, ctx.Engine, HereFrom(ctx), branches...)
 }
 
 // EnsureCanModify refuses to mutate a stack from anywhere other than its
@@ -123,12 +111,6 @@ func (o WorktreeOwners) Owner(branch engine.Branch) (*engine.WorktreeInfo, error
 		return nil, nil
 	}
 	return ownership.Worktree, ownership.Err
-}
-
-// EnsureCanModifyNamesHere is the convenient form for operations that resolve
-// their targets as branch names before constructing a plan.
-func EnsureCanModifyNamesHere(ctx *app.Context, branchNames ...string) error {
-	return EnsureCanModifyNames(ctx.Context, ctx.Engine, HereFrom(ctx), branchNames...)
 }
 
 // EnsureCanModifyNames is EnsureCanModify for branch names.

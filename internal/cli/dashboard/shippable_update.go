@@ -4,14 +4,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/squash"
 	"github.com/getstackit/stackit/internal/actions/submit"
-	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/shippable"
 )
@@ -483,7 +485,7 @@ func (m *shippableModel) executeSquash() (tea.Model, tea.Cmd) {
 		// The action checks out the target and restores the current branch.
 		deps := squash.Deps{
 			Engine:       quietCtx.Engine,
-			MutationDeps: actions.MutationDepsFrom(quietCtx),
+			MutationDeps: actiondeps.Mutation(quietCtx),
 			Log:          quietCtx.Logger,
 			Verify:       quietCtx.Verify,
 		}

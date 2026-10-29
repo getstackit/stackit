@@ -4,7 +4,8 @@ package branch
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/actions/delete"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -45,7 +46,7 @@ close the pull request.`,
 					defer runner.Cleanup()
 				}
 
-				result, err := delete.Action(ctx.Context, delete.Deps{Engine: ctx.Engine, MutationDeps: actions.MutationDepsFrom(ctx)}, delete.Options{
+				result, err := delete.Action(ctx.Context, delete.Deps{Engine: ctx.Engine, MutationDeps: actiondeps.Mutation(ctx)}, delete.Options{
 					BranchName: branchName,
 					Downstack:  downstack,
 					Force:      force,

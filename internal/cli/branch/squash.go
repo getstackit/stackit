@@ -4,7 +4,8 @@ package branch
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/actions/squash"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -48,7 +49,7 @@ Examples:
 				// Run squash action
 				return squash.Action(ctx.Context, squash.Deps{
 					Engine:       ctx.Engine,
-					MutationDeps: actions.MutationDepsFrom(ctx),
+					MutationDeps: actiondeps.Mutation(ctx),
 					Log:          ctx.Logger,
 					Verify:       ctx.Verify,
 				}, squash.Options{

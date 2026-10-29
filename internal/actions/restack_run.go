@@ -295,3 +295,10 @@ func restackWithPlan(ctx context.Context, deps RestackDeps, branches engine.Bran
 	}
 	return executor.Execute(ctx, plan, mode, nil)
 }
+
+// NewRestackRunner builds the restack runner for deps, printing per-branch
+// results as plain text.
+func NewRestackRunner(deps RestackDeps) restack.Runner {
+	planner, executor := restackerFor(deps, nil)
+	return restack.Runner{Planner: planner, Executor: executor}
+}

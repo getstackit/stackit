@@ -8,6 +8,10 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -16,7 +20,6 @@ import (
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/actions/track"
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/cli/navigation"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
@@ -86,7 +89,7 @@ func TestCreateDoesNotFetchAtStartup(t *testing.T) {
 	ctx, counting := countingContext(t, s)
 	_, err := create.Action(t.Context(), create.Deps{
 		Engine:       ctx.Engine,
-		MutationDeps: actions.MutationDepsFrom(ctx),
+		MutationDeps: actiondeps.Mutation(ctx),
 		Log:          ctx.Logger,
 		Verify:       ctx.Verify,
 	}, create.Options{Message: "feat: new"}, nil)
@@ -101,7 +104,7 @@ func TestTrackDoesNotFetchAtStartup(t *testing.T) {
 	require.NoError(t, s.Scene.Repo.RunGitCommand("branch", "extra", "main"))
 
 	ctx, counting := countingContext(t, s)
-	require.NoError(t, track.Action(t.Context(), track.Deps{Engine: ctx.Engine, Out: ctx.Output, Here: actions.HereFrom(ctx)}, track.Options{BranchName: "extra", Parent: "main"}, nil))
+	require.NoError(t, track.Action(t.Context(), track.Deps{Engine: ctx.Engine, Out: ctx.Output, Here: actiondeps.Here(ctx)}, track.Options{BranchName: "extra", Parent: "main"}, nil))
 
 	require.Zero(t, counting.totalFetches(), "track must not fetch remote metadata at startup")
 }

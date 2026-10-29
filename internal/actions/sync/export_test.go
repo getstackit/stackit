@@ -1,8 +1,8 @@
 package sync
 
 import (
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
 )
 
 // DepsFrom builds sync's collaborators from a test's runtime context. Call it
@@ -15,11 +15,11 @@ func DepsFrom(ctx *app.Context) Deps {
 		Log:       ctx.Logger,
 		GitHub:    ctx.GitHub,
 		GHRunner:  ctx.GHRunner,
-		PRSync:    actions.PRSyncFrom(ctx),
-		Restack:   actions.RestackDepsFrom(ctx),
-		Cleanup:   actions.CleanBranchesDepsFrom(ctx),
-		Snapshots: actions.SnapshotsFrom(ctx),
-		Here:      actions.HereFrom(ctx),
+		PRSync:    actiondeps.PRSync(ctx),
+		Restack:   actiondeps.Restack(ctx),
+		Cleanup:   actiondeps.CleanBranches(ctx),
+		Snapshots: actiondeps.Snapshots(ctx),
+		Here:      actiondeps.Here(ctx),
 		Config:    ctx.Config,
 	}
 }

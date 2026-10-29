@@ -64,7 +64,7 @@ func TestRestackAction(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		plan, err := PlanRestack(s.Context, RestackDepsFrom(s.Context), RestackOptions{
+		plan, err := PlanRestack(s.Context, restackDepsFrom(s.Context), RestackOptions{
 			BranchName: "main",
 			Scope:      engine.StackRangeFull(),
 		})
@@ -81,7 +81,7 @@ func TestRestackAction(t *testing.T) {
 				"feature-child": "feature",
 			})
 
-		plan, err := PlanRestack(s.Context, RestackDepsFrom(s.Context), RestackOptions{
+		plan, err := PlanRestack(s.Context, restackDepsFrom(s.Context), RestackOptions{
 			BranchName: "main",
 			Scope:      engine.StackRangeFull(),
 		})
@@ -117,13 +117,13 @@ func TestRestackAction(t *testing.T) {
 		})
 
 		recorder := &recordingRestackHandler{}
-		plan, err := PlanRestack(s.Context, RestackDepsFrom(s.Context), RestackOptions{
+		plan, err := PlanRestack(s.Context, restackDepsFrom(s.Context), RestackOptions{
 			AllStacks: true,
 			Parallel:  true,
 			Jobs:      2,
 		})
 		require.NoError(t, err)
-		err = RestackAction(s.Context, RestackDepsFrom(s.Context), plan, recorder)
+		err = RestackAction(s.Context, restackDepsFrom(s.Context), plan, recorder)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "restack failed")
 		require.ErrorContains(t, err, "alpha-root")
@@ -145,7 +145,7 @@ func TestRestackAction(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		_, err := PlanRestack(s.Context, RestackDepsFrom(s.Context), RestackOptions{
+		_, err := PlanRestack(s.Context, restackDepsFrom(s.Context), RestackOptions{
 			BranchName: "does-not-exist",
 			Scope:      engine.StackRangeFull(),
 		})
@@ -165,7 +165,7 @@ func TestRestackAction(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("main change", "conflict"))
 		s.Checkout("feature")
 
-		plan, err := PlanRestack(s.Context, RestackDepsFrom(s.Context), RestackOptions{
+		plan, err := PlanRestack(s.Context, restackDepsFrom(s.Context), RestackOptions{
 			BranchName:     "feature",
 			Scope:          engine.StackRange{IncludeCurrent: true},
 			NonInteractive: true,
@@ -174,7 +174,7 @@ func TestRestackAction(t *testing.T) {
 		require.True(t, plan.HasWork())
 
 		recorder := &recordingRestackHandler{}
-		err = RestackAction(s.Context, RestackDepsFrom(s.Context), plan, recorder)
+		err = RestackAction(s.Context, restackDepsFrom(s.Context), plan, recorder)
 
 		// A routine conflict is data, not an error: status "conflict" with
 		// the branch listed, and the repo left clean — never mid-rebase with
@@ -208,7 +208,7 @@ func TestRestackAction(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("main change", "conflict"))
 		s.Checkout("b")
 
-		plan, err := PlanRestack(s.Context, RestackDepsFrom(s.Context), RestackOptions{
+		plan, err := PlanRestack(s.Context, restackDepsFrom(s.Context), RestackOptions{
 			BranchName: "b",
 			Scope:      engine.StackRangeFull(),
 		})
@@ -216,7 +216,7 @@ func TestRestackAction(t *testing.T) {
 		require.True(t, plan.HasWork())
 
 		handler := &promptRestackHandler{resolveConflicts: true}
-		err = RestackAction(s.Context, RestackDepsFrom(s.Context), plan, handler)
+		err = RestackAction(s.Context, restackDepsFrom(s.Context), plan, handler)
 		require.True(t, handler.prompted)
 		require.Equal(t, []string{"b"}, handler.conflicts)
 
@@ -255,7 +255,7 @@ func TestRestackAction(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("main change", "conflict"))
 		s.Checkout("feature")
 
-		plan, err := PlanRestack(s.Context, RestackDepsFrom(s.Context), RestackOptions{
+		plan, err := PlanRestack(s.Context, restackDepsFrom(s.Context), RestackOptions{
 			BranchName: "feature",
 			Scope:      engine.StackRange{IncludeCurrent: true},
 		})
@@ -263,7 +263,7 @@ func TestRestackAction(t *testing.T) {
 		require.True(t, plan.HasWork())
 
 		handler := &promptRestackHandler{}
-		err = RestackAction(s.Context, RestackDepsFrom(s.Context), plan, handler)
+		err = RestackAction(s.Context, restackDepsFrom(s.Context), plan, handler)
 		require.NoError(t, err)
 		require.True(t, handler.prompted)
 		require.Equal(t, []string{"feature"}, handler.conflicts)

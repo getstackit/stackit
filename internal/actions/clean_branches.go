@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
@@ -20,12 +19,6 @@ type CleanBranchesDeps struct {
 	Engine engine.Engine
 	Out    output.Output
 	Log    output.Logger
-}
-
-// CleanBranchesDepsFrom builds CleanBranchesDeps from the command's runtime
-// context.
-func CleanBranchesDepsFrom(ctx *app.Context) CleanBranchesDeps {
-	return CleanBranchesDeps{Engine: ctx.Engine, Out: ctx.Output, Log: ctx.Logger}
 }
 
 // CleanBranchesOptions contains options for cleaning branches

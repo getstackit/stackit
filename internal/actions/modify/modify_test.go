@@ -4,9 +4,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/modify"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -15,7 +16,7 @@ import (
 func deps(s *scenario.Scenario) modify.Deps {
 	return modify.Deps{
 		Engine:       s.Context.Engine,
-		MutationDeps: actions.MutationDepsFrom(s.Context),
+		MutationDeps: actiondeps.Mutation(s.Context),
 		RepoRoot:     s.Context.RepoRoot,
 		Verify:       s.Context.Verify,
 	}

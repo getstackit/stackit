@@ -1,10 +1,11 @@
 package cli
 
 import (
-	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/actions/track"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -43,7 +44,7 @@ This command can also be used to fix corrupted stackit metadata.`,
 				return track.Action(ctx.Context, track.Deps{
 					Engine: ctx.Engine,
 					Out:    ctx.Output,
-					Here:   actions.HereFrom(ctx),
+					Here:   actiondeps.Here(ctx),
 				}, track.Options{
 					BranchName: branchName,
 					Force:      force,

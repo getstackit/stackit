@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/pluck"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -70,7 +71,7 @@ would occur, the pluck will abort without making any changes.`,
 				}
 
 				// Run pluck action
-				return pluck.Action(ctx.Context, pluck.Deps{Engine: ctx.Engine, Log: ctx.Logger, MutationDeps: actions.MutationDepsFrom(ctx)}, pluck.Options{
+				return pluck.Action(ctx.Context, pluck.Deps{Engine: ctx.Engine, Log: ctx.Logger, MutationDeps: actiondeps.Mutation(ctx)}, pluck.Options{
 					Source:      sourceBranch,
 					Onto:        ontoBranch,
 					SkipConfirm: yes,

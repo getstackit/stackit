@@ -3,11 +3,12 @@ package branch
 import (
 	"errors"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/term"
 
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/rename"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -56,7 +57,7 @@ Note that this removes any association to a pull request, as GitHub pull request
 				return rename.Action(ctx.Context, rename.Deps{
 					Engine:    ctx.Engine,
 					Out:       ctx.Output,
-					Snapshots: actions.SnapshotsFrom(ctx),
+					Snapshots: actiondeps.Snapshots(ctx),
 				}, opts, renameHandler{})
 			})
 		},

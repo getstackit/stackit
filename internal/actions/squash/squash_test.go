@@ -3,9 +3,10 @@ package squash_test
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/squash"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -32,7 +33,7 @@ func TestSquashTargetBranchRestoresOriginal(t *testing.T) {
 func deps(s *scenario.Scenario) squash.Deps {
 	return squash.Deps{
 		Engine:       s.Context.Engine,
-		MutationDeps: actions.MutationDepsFrom(s.Context),
+		MutationDeps: actiondeps.Mutation(s.Context),
 		Log:          s.Context.Logger,
 		Verify:       s.Context.Verify,
 	}

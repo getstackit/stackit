@@ -4,7 +4,8 @@ package branch
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/actions/modify"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -58,7 +59,7 @@ Examples:
 				// Run modify action
 				return modify.Action(ctx.Context, modify.Deps{
 					Engine:       ctx.Engine,
-					MutationDeps: actions.MutationDepsFrom(ctx),
+					MutationDeps: actiondeps.Mutation(ctx),
 					RepoRoot:     ctx.RepoRoot,
 					Verify:       ctx.Verify,
 				}, modify.Options{

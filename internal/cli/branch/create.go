@@ -4,7 +4,8 @@ package branch
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/actions/create"
 	wtactions "github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/app"
@@ -93,7 +94,7 @@ Examples:
 
 				result, err := create.Action(ctx.Context, create.Deps{
 					Engine:       ctx.Engine,
-					MutationDeps: actions.MutationDepsFrom(ctx),
+					MutationDeps: actiondeps.Mutation(ctx),
 					Log:          ctx.Logger,
 					Verify:       ctx.Verify,
 					Worktrees:    wtactions.BranchWorktrees{Deps: wtcli.DepsFrom(ctx)},

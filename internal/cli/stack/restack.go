@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -99,7 +101,7 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 
 				// Build the plan once. RestackAction reuses it so we don't
 				// pay for engine.PlanRestack twice (~3 git ops per branch).
-				deps := actions.RestackDepsFrom(ctx)
+				deps := actiondeps.Restack(ctx)
 				plan, err := actions.PlanRestack(ctx, deps, opts)
 				if err != nil {
 					return err

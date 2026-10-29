@@ -6,7 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/api/auth"
 	"github.com/getstackit/stackit/internal/api/registry"
@@ -93,9 +94,9 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		GitHub:      ctx.GitHub,
 		GitHubError: ctx.GitHubError,
 		GHRunner:    ctx.GHRunner,
-		PRSync:      actions.PRSyncFrom(ctx),
-		Restack:     actions.RestackDepsFrom(ctx),
-		Snapshots:   actions.SnapshotsFrom(ctx),
+		PRSync:      actiondeps.PRSync(ctx),
+		Restack:     actiondeps.Restack(ctx),
+		Snapshots:   actiondeps.Snapshots(ctx),
 		Prompts:     ctx.Prompts(),
 		Verify:      ctx.Verify,
 		Config:      cfg,

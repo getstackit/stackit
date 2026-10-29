@@ -2,8 +2,9 @@
 package branch
 
 import (
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/spf13/cobra"
+
+	"github.com/getstackit/stackit/internal/app/actiondeps"
 
 	"github.com/getstackit/stackit/internal/actions/fold"
 	"github.com/getstackit/stackit/internal/app"
@@ -43,7 +44,7 @@ close the pull request.`,
 				}
 
 				// Run fold action
-				return fold.Action(ctx.Context, fold.Deps{Engine: ctx.Engine, MutationDeps: actions.MutationDepsFrom(ctx)}, fold.Options{
+				return fold.Action(ctx.Context, fold.Deps{Engine: ctx.Engine, MutationDeps: actiondeps.Mutation(ctx)}, fold.Options{
 					Keep:       keep,
 					AllowTrunk: allowTrunk,
 					DryRun:     dryRun,

@@ -3,7 +3,8 @@ package stack
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/actions/flatten"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -49,7 +50,7 @@ Examples:
 				// TUI runner. Otherwise the runner sets output to quiet, the
 				// "no branches" message gets suppressed, and the user only
 				// sees bubbletea startup/teardown escape codes flash.
-				deps := flatten.Deps{Engine: ctx.Engine, Log: ctx.Logger, MutationDeps: actions.MutationDepsFrom(ctx)}
+				deps := flatten.Deps{Engine: ctx.Engine, Log: ctx.Logger, MutationDeps: actiondeps.Mutation(ctx)}
 				hasWork, err := flatten.HasFlattenWork(ctx.Context, deps, opts)
 				if err != nil {
 					return err

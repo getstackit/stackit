@@ -5,10 +5,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/google/go-github/v93/github"
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/get"
 	stackitgithub "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/testhelpers"
@@ -24,7 +25,7 @@ func deps(s *scenario.Scenario) get.Deps {
 		Out:         ctx.Output,
 		GitHub:      ctx.GitHub,
 		GitHubError: ctx.GitHubError,
-		Restack:     actions.RestackDepsFrom(ctx),
+		Restack:     actiondeps.Restack(ctx),
 	}
 }
 

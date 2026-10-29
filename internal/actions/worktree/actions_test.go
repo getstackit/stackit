@@ -4,9 +4,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
@@ -413,7 +414,7 @@ func depsFor(s *scenario.Scenario) worktree.Deps {
 		Out:      s.Context.Output,
 		Log:      s.Context.Logger,
 		RepoRoot: s.Context.RepoRoot,
-		Here:     actions.HereFrom(s.Context),
+		Here:     actiondeps.Here(s.Context),
 		Config:   s.Context.Config,
 		Prompts:  s.Context.Prompts(),
 	}

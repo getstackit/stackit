@@ -3,11 +3,12 @@ package integration
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/actions/sync"
-	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"

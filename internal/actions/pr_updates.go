@@ -3,7 +3,6 @@ package actions
 import (
 	"context"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
@@ -34,31 +33,6 @@ type PRSync struct {
 	GHRunner github.GitCommandRunner
 	Nav      pr.NavigationOptions
 	Log      DebugLogger
-}
-
-// PRSyncFrom builds a PRSync from the command's runtime context.
-func PRSyncFrom(ctx *app.Context) PRSync {
-	return PRSync{Engine: ctx.Engine, GitHub: ctx.GitHub, GHRunner: ctx.GHRunner, Nav: PRNavigationOptions(ctx), Log: ctx.Output}
-}
-
-// UpdateStackPRMetadata is the *app.Context form of PRSync.UpdateStack.
-func UpdateStackPRMetadata(ctx *app.Context, branches []string) {
-	PRSyncFrom(ctx).UpdateStack(ctx.Context, branches)
-}
-
-// FetchPRContentForBranches is the *app.Context form of PRSync.FetchContent.
-func FetchPRContentForBranches(ctx *app.Context, branches []string) map[git.PRNumber]github.PRContent {
-	return PRSyncFrom(ctx).FetchContent(ctx.Context, branches)
-}
-
-// UpdateBranchPRMetadataWithContent is the *app.Context form of PRSync.UpdateBranch.
-func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, current map[git.PRNumber]github.PRContent) {
-	PRSyncFrom(ctx).UpdateBranch(ctx.Context, name, current)
-}
-
-// PushMetadataAndSyncPRs is the *app.Context form of PRSync.PushAndSync.
-func PushMetadataAndSyncPRs(ctx *app.Context, branchNames []string) error {
-	return PRSyncFrom(ctx).PushAndSync(ctx.Context, branchNames)
 }
 
 // UpdateStack updates PR titles and body footers for a list of branches
@@ -99,19 +73,6 @@ func (s PRSync) FetchContent(ctx context.Context, branches []string) map[git.PRN
 		return map[git.PRNumber]github.PRContent{}
 	}
 	return content
-}
-
-// PRNavigationOptions resolves the stack navigation settings from config,
-// falling back to defaults when no config is loaded.
-func PRNavigationOptions(ctx *app.Context) pr.NavigationOptions {
-	navOpts := pr.DefaultNavigationOptions()
-	if ctx.Config != nil {
-		navOpts.When = ctx.Config.NavigationWhen()
-		navOpts.Marker = ctx.Config.NavigationMarker()
-		navOpts.Location = ctx.Config.NavigationLocation()
-		navOpts.ShowMerged = ctx.Config.NavigationShowMerged()
-	}
-	return navOpts
 }
 
 // UpdateBranch updates PR title and body footer for a single

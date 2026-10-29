@@ -3,6 +3,8 @@ package integration
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
 	"github.com/getstackit/stackit/internal/actions/get"
 
 	"github.com/stretchr/testify/require"
@@ -10,7 +12,6 @@ import (
 	"github.com/getstackit/stackit/internal/actions/submit"
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
 	worktreeaction "github.com/getstackit/stackit/internal/actions/worktree"
-	"github.com/getstackit/stackit/internal/cli/common"
 	wtcli "github.com/getstackit/stackit/internal/cli/worktree"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"

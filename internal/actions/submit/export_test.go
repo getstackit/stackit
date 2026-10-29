@@ -1,8 +1,8 @@
 package submit
 
 import (
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
 )
 
 // DepsFrom builds submit's collaborators from a test's runtime context. Call
@@ -16,9 +16,9 @@ func DepsFrom(ctx *app.Context) Deps {
 		GitHub:      ctx.GitHub,
 		GitHubError: ctx.GitHubError,
 		GHRunner:    ctx.GHRunner,
-		PRSync:      actions.PRSyncFrom(ctx),
-		Restack:     actions.RestackDepsFrom(ctx),
-		Snapshots:   actions.SnapshotsFrom(ctx),
+		PRSync:      actiondeps.PRSync(ctx),
+		Restack:     actiondeps.Restack(ctx),
+		Snapshots:   actiondeps.Snapshots(ctx),
 		Prompts:     ctx.Prompts(),
 		Verify:      ctx.Verify,
 		Config:      ctx.Config,

@@ -3,7 +3,8 @@ package branch
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/actions/get"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -88,6 +89,6 @@ func getDeps(ctx *app.Context) get.Deps {
 		Out:         ctx.Output,
 		GitHub:      ctx.GitHub,
 		GitHubError: ctx.GitHubError,
-		Restack:     actions.RestackDepsFrom(ctx),
+		Restack:     actiondeps.Restack(ctx),
 	}
 }

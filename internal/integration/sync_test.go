@@ -4,11 +4,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/actions/undo"
-	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"

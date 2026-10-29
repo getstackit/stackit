@@ -54,8 +54,9 @@ internal/api/*
     CAN import: actions, engine, app/bootstrap packages, internal/contracts/http
 
 internal/app
+internal/app/actiondeps
 internal/config
-    Bootstrap/runtime wiring
+    Bootstrap/runtime wiring (actiondeps builds action Deps from app.Context)
     Responsible for repo discovery, config loading, engine construction, and client construction
     Do not let business orchestration accumulate here
 
@@ -94,7 +95,7 @@ If an action needs config values, resolve them in bootstrap or the adapter layer
 
 1. **TUI importing action data types directly**: If `internal/tui` needs a preview/result shape from `internal/actions/X`, define a local struct in `tui` with the same fields and have the caller convert.
 
-2. **Action taking `*app.Context`**: This couples orchestration to bootstrap concerns. Take `(ctx context.Context, deps Deps, opts Options)` instead, with an exported consumer-side `Engine` interface in `Deps` (see `internal/actions/scope`). Converted packages are listed in the `actions-no-app-context` depguard rule; add yours when you convert it.
+2. **Action taking `*app.Context`**: This couples orchestration to bootstrap concerns, and the `actions-no-app-context` depguard rule rejects it. Take `(ctx context.Context, deps Deps, opts Options)`, with an exported consumer-side `Engine` interface in `Deps` (see `internal/actions/scope`), and build the deps in `internal/app/actiondeps` or the adapter.
 
 3. **Action rendering output**: Return structured results or emit events. Let CLI/TUI/API adapters decide how to present them.
 

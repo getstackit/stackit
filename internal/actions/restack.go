@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/term"
@@ -27,19 +26,6 @@ type RestackDeps struct {
 	// terminal they decide whether RestackAction may prompt to enable rerere.
 	Interactive bool
 	Quiet       bool
-}
-
-// RestackDepsFrom builds RestackDeps from the command's runtime context.
-func RestackDepsFrom(ctx *app.Context) RestackDeps {
-	return RestackDeps{
-		Engine:      ctx.Engine,
-		Out:         ctx.Output,
-		Log:         ctx.Logger,
-		RepoRoot:    ctx.RepoRoot,
-		Snapshots:   SnapshotsFrom(ctx),
-		Interactive: ctx.Interactive,
-		Quiet:       ctx.Quiet,
-	}
 }
 
 // RestackOptions contains options for the restack command

@@ -4,7 +4,6 @@ import (
 	"context"
 	"slices"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 )
 
@@ -18,12 +17,6 @@ type TopologyEngine interface {
 // Warner receives user-facing warnings. output.Output satisfies it.
 type Warner interface {
 	Warn(format string, args ...any)
-}
-
-// WarnIfLinearStackRestored is the *app.Context form of WarnIfNonLinearRestore.
-func WarnIfLinearStackRestored(ctx *app.Context, operation string) {
-	linear := ctx.Config != nil && ctx.Config.LinearStacks()
-	WarnIfNonLinearRestore(ctx.Context, ctx.Engine, ctx.Output, linear, operation)
 }
 
 // WarnIfNonLinearRestore reports when snapshot restoration brings back a

@@ -12,9 +12,10 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -33,7 +34,7 @@ func DepsFrom(ctx *app.Context) worktree.Deps {
 		Out:      ctx.Output,
 		Log:      ctx.Logger,
 		RepoRoot: ctx.RepoRoot,
-		Here:     actions.HereFrom(ctx),
+		Here:     actiondeps.Here(ctx),
 		Config:   ctx.Config,
 		Prompts:  ctx.Prompts(),
 	}

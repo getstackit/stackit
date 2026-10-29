@@ -4,6 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/actions/freeze"
 	"github.com/getstackit/stackit/internal/actions/get"
 
@@ -12,7 +16,6 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
-	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 
 	"github.com/getstackit/stackit/testhelpers"
@@ -158,12 +161,12 @@ func stackWithLandedParent(t *testing.T, land mergeMethod, forget forgottenMetad
 func restackBranchOntoStack(t *testing.T, sh *scenario.Scenario, branch string) {
 	t.Helper()
 	sh.Checkout(branch)
-	plan, err := actions.PlanRestack(sh.Context, actions.RestackDepsFrom(sh.Context), actions.RestackOptions{
+	plan, err := actions.PlanRestack(sh.Context, actiondeps.Restack(sh.Context), actions.RestackOptions{
 		BranchName: branch,
 		Scope:      engine.StackRangeFull(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, actions.RestackAction(sh.Context, actions.RestackDepsFrom(sh.Context), plan, &actions.NullRestackHandler{}))
+	require.NoError(t, actions.RestackAction(sh.Context, actiondeps.Restack(sh.Context), plan, &actions.NullRestackHandler{}))
 	sh.Rebuild()
 }
 

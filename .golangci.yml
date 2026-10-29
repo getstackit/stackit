@@ -56,53 +56,20 @@ linters:
                 actions must not import the TUI adapter; define a prompt or
                 handler interface next to the action and implement it in
                 internal/cli (see docs/architecture.md).
-        # Actions migrated off *app.Context take context.Context plus a Deps
-        # struct of narrow interfaces. Add each package here as it converts so
-        # it cannot drift back to the bootstrap bundle.
+        # Actions take context.Context plus a Deps struct of narrow
+        # interfaces; bootstrap wiring builds the deps (internal/app/actiondeps
+        # and internal/cli/common). Tests may still build deps from a
+        # scenario's app.Context.
         actions-no-app-context:
           files:
+            - "**/internal/actions/**"
             - "!$test"
-            - "**/internal/actions/abort/**"
-            - "**/internal/actions/absorb/**"
-            - "**/internal/actions/checkout/**"
-            - "**/internal/actions/create/**"
-            - "**/internal/actions/debug/**"
-            - "**/internal/actions/delete/**"
-            - "**/internal/actions/describe/**"
-            - "**/internal/actions/doctor/**"
-            - "**/internal/actions/flatten/**"
-            - "**/internal/actions/fold/**"
-            - "**/internal/actions/foreach/**"
-            - "**/internal/actions/freeze/**"
-            - "**/internal/actions/get/**"
-            - "**/internal/actions/integrations/**"
-            - "**/internal/actions/lock/**"
-            - "**/internal/actions/merge/**"
-            - "**/internal/actions/modify/**"
-            - "**/internal/actions/move/**"
-            - "**/internal/actions/navigation/**"
-            - "**/internal/actions/openpr/**"
-            - "**/internal/actions/pluck/**"
-            - "**/internal/actions/pop/**"
-            - "**/internal/actions/rename/**"
-            - "**/internal/actions/reorder/**"
-            - "**/internal/actions/restack/**"
-            - "**/internal/actions/scope/**"
-            - "**/internal/actions/share/**"
-            - "**/internal/actions/split/**"
-            - "**/internal/actions/squash/**"
-            - "**/internal/actions/state/**"
-            - "**/internal/actions/submit/**"
-            - "**/internal/actions/sync/**"
-            - "**/internal/actions/track/**"
-            - "**/internal/actions/undo/**"
-            - "**/internal/actions/untrack/**"
-            - "**/internal/actions/worktree/**"
           deny:
             - pkg: github.com/getstackit/stackit/internal/app
               desc: >-
-                this action takes (ctx context.Context, deps Deps, ...); add what
-                it needs to Deps instead of reaching for app.Context (see
+                actions take (ctx context.Context, deps Deps, ...); add what
+                the action needs to its Deps and build it in
+                internal/app/actiondeps or the adapter (see
                 .claude/rules/package-dependencies.md).
     forbidigo:
       forbid:

@@ -4,9 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
@@ -564,5 +565,5 @@ func TestPluckAction(t *testing.T) {
 }
 
 func deps(s *scenario.Scenario) Deps {
-	return Deps{Engine: s.Context.Engine, Log: s.Context.Logger, MutationDeps: actions.MutationDepsFrom(s.Context)}
+	return Deps{Engine: s.Context.Engine, Log: s.Context.Logger, MutationDeps: actiondeps.Mutation(s.Context)}
 }

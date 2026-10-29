@@ -3,9 +3,10 @@ package branch
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/term"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/lock"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -79,7 +80,7 @@ func lockDeps(ctx *app.Context) lock.Deps {
 	return lock.Deps{
 		Engine: ctx.Engine,
 		Out:    ctx.Output,
-		PRSync: actions.PRSyncFrom(ctx),
+		PRSync: actiondeps.PRSync(ctx),
 		Submit: common.SubmitDeps(ctx),
 	}
 }

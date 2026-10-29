@@ -4,9 +4,10 @@ package stack
 import (
 	"errors"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/move"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -61,7 +62,7 @@ If no --onto is specified, opens an interactive selector to choose the target.`,
 				}
 
 				// Run move action
-				return move.Action(ctx.Context, move.Deps{Engine: ctx.Engine, MutationDeps: actions.MutationDepsFrom(ctx)}, move.Options{
+				return move.Action(ctx.Context, move.Deps{Engine: ctx.Engine, MutationDeps: actiondeps.Mutation(ctx)}, move.Options{
 					Source:      sourceBranch,
 					Onto:        ontoBranch,
 					SkipConfirm: yes,

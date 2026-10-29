@@ -3,7 +3,8 @@ package navigation
 import (
 	"context"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/actions/checkout"
 	"github.com/getstackit/stackit/internal/actions/navigation"
 	"github.com/getstackit/stackit/internal/app"
@@ -20,7 +21,7 @@ func navigationDeps(ctx *app.Context) navigation.Deps {
 		Out:    ctx.Output,
 		Log:    ctx.Logger,
 		Quiet:  ctx.Quiet,
-		Here:   actions.HereFrom(ctx),
+		Here:   actiondeps.Here(ctx),
 	}
 }
 

@@ -3,9 +3,10 @@ package navigation
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
@@ -18,7 +19,7 @@ func deps(s *scenario.Scenario) Deps {
 		Out:    s.Context.Output,
 		Log:    s.Context.Logger,
 		Quiet:  s.Context.Quiet,
-		Here:   actions.HereFrom(s.Context),
+		Here:   actiondeps.Here(s.Context),
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/restack"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
@@ -40,17 +39,6 @@ type ContinueDeps struct {
 	Restack restack.Runner
 	// Conflicts prints the conflict status when the rebase stops again.
 	Conflicts *restack.ConflictReporter
-}
-
-// ContinueDepsFrom builds ContinueDeps from the command's runtime context.
-func ContinueDepsFrom(ctx *app.Context) ContinueDeps {
-	return ContinueDeps{
-		Engine:    ctx.Engine,
-		Out:       ctx.Output,
-		RepoRoot:  ctx.RepoRoot,
-		Restack:   RestackRunner(ctx),
-		Conflicts: &restack.ConflictReporter{Engine: ctx.Engine, Out: ctx.Output, RepoRoot: ctx.RepoRoot},
-	}
 }
 
 // ContinueAction performs the continue operation

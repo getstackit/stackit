@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -36,7 +38,7 @@ func (h *interactiveTestHandler) PromptConfirmMove(p Preview) (bool, error) {
 }
 
 func deps(s *scenario.Scenario) Deps {
-	return Deps{Engine: s.Context.Engine, MutationDeps: actions.MutationDepsFrom(s.Context)}
+	return Deps{Engine: s.Context.Engine, MutationDeps: actiondeps.Mutation(s.Context)}
 }
 
 // writeAndCommit writes content to a file at the repo root and commits it with
@@ -620,7 +622,7 @@ func TestMoveAction(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.ResolveMergeConflicts())
 		require.NoError(t, s.Scene.Repo.MarkMergeConflictsAsResolved())
 
-		require.NoError(t, actions.ContinueAction(t.Context(), actions.ContinueDepsFrom(s.Context), actions.ContinueOptions{}))
+		require.NoError(t, actions.ContinueAction(t.Context(), actiondeps.Continue(s.Context), actions.ContinueOptions{}))
 		require.False(t, s.Git.IsRebaseInProgress(s.Context.Context),
 			"rebase should be complete after stackit continue")
 	})

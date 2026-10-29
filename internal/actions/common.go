@@ -14,7 +14,6 @@ import (
 	"github.com/getstackit/stackit/internal/actions/restack"
 	"github.com/getstackit/stackit/internal/output"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 )
 
@@ -33,11 +32,6 @@ type Snapshots struct {
 	Log     DebugLogger
 }
 
-// SnapshotsFrom builds Snapshots from the command's runtime context.
-func SnapshotsFrom(ctx *app.Context) Snapshots {
-	return Snapshots{Engine: ctx.Engine, Enabled: ctx.Config == nil || ctx.Config.UndoEnabled(), Log: ctx.Output}
-}
-
 // Take records an undo snapshot and logs failures without aborting the
 // action. When undo is disabled, it clears the rollback binding without
 // writing a snapshot.
@@ -51,11 +45,6 @@ func (s Snapshots) Take(ctx context.Context, opts engine.SnapshotOptions) {
 	}
 }
 
-// TakeBestEffortSnapshot is the *app.Context form of Snapshots.Take.
-func TakeBestEffortSnapshot(ctx *app.Context, opts engine.SnapshotOptions) {
-	SnapshotsFrom(ctx).Take(ctx.Context, opts)
-}
-
 // MutationDeps are the collaborators every branch-rewriting action shares.
 // Embed it in an action's Deps next to the action's own Engine interface.
 type MutationDeps struct {
@@ -63,23 +52,6 @@ type MutationDeps struct {
 	Here      Here
 	Snapshots Snapshots
 	Restack   restack.Runner
-}
-
-// MutationDepsFrom builds MutationDeps from the command's runtime context.
-func MutationDepsFrom(ctx *app.Context) MutationDeps {
-	return MutationDeps{
-		Out:       ctx.Output,
-		Here:      HereFrom(ctx),
-		Snapshots: SnapshotsFrom(ctx),
-		Restack:   RestackRunner(ctx),
-	}
-}
-
-// RestackRunner builds the restack runner for the command's runtime context,
-// printing per-branch results as plain text.
-func RestackRunner(ctx *app.Context) restack.Runner {
-	planner, executor := restackerFor(RestackDepsFrom(ctx), nil)
-	return restack.Runner{Planner: planner, Executor: executor}
 }
 
 // wordBranch is the pluralizable noun passed to PluralSuffix/Pluralize by

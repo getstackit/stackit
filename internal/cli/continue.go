@@ -3,6 +3,8 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -20,7 +22,7 @@ This command will continue the rebase and resume restacking remaining branches.`
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				return actions.ContinueAction(ctx.Context, actions.ContinueDepsFrom(ctx), actions.ContinueOptions{
+				return actions.ContinueAction(ctx.Context, actiondeps.Continue(ctx), actions.ContinueOptions{
 					AddAll: addAll,
 				})
 			})

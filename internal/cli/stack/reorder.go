@@ -4,11 +4,12 @@ package stack
 import (
 	"errors"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/term"
 
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/reorder"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -34,7 +35,7 @@ branches will be restacked in the new order.`,
 				if term.IsInteractive() {
 					opts.Editor = tuiOrderEditor{}
 				}
-				return reorder.Action(ctx.Context, reorder.Deps{Engine: ctx.Engine, MutationDeps: actions.MutationDepsFrom(ctx)}, opts)
+				return reorder.Action(ctx.Context, reorder.Deps{Engine: ctx.Engine, MutationDeps: actiondeps.Mutation(ctx)}, opts)
 			})
 		},
 	}

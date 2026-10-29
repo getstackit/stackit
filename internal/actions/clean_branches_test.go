@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -16,7 +18,7 @@ import (
 
 // cleanBranches plans and executes branch deletions in one step.
 func cleanBranches(ctx *app.Context, opts actions.CleanBranchesOptions) (*actions.CleanBranchesResult, error) {
-	deps := actions.CleanBranchesDepsFrom(ctx)
+	deps := actiondeps.CleanBranches(ctx)
 	plan, err := actions.PlanBranchDeletions(ctx, deps, opts)
 	if err != nil {
 		return nil, err
@@ -358,7 +360,7 @@ func TestCleanBranches(t *testing.T) {
 
 		s.Checkout("main")
 
-		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesDepsFrom(s.Context), actions.CleanBranchesOptions{
+		plan, err := actions.PlanBranchDeletions(s.Context, actiondeps.CleanBranches(s.Context), actions.CleanBranchesOptions{
 			Force: true,
 		})
 		require.NoError(t, err)
@@ -384,7 +386,7 @@ func TestCleanBranches(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.RunGitCommand("push", "origin", "--delete", "branch1"))
 		require.NoError(t, s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoClosed(1)))
 
-		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesDepsFrom(s.Context), actions.CleanBranchesOptions{Force: true})
+		plan, err := actions.PlanBranchDeletions(s.Context, actiondeps.CleanBranches(s.Context), actions.CleanBranchesOptions{Force: true})
 		require.NoError(t, err)
 		require.Contains(t, plan.BranchesToDelete, "branch1")
 		require.True(t, plan.UnpushedBranches["branch1"], "missing remote must preserve unverifiable local work")
@@ -402,7 +404,7 @@ func TestCleanBranches(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.RunGitCommand("push", "origin", "--delete", "branch1"))
 		require.NoError(t, s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoMerged(1, "main")))
 
-		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesDepsFrom(s.Context), actions.CleanBranchesOptions{Force: true})
+		plan, err := actions.PlanBranchDeletions(s.Context, actiondeps.CleanBranches(s.Context), actions.CleanBranchesOptions{Force: true})
 		require.NoError(t, err)
 		require.Contains(t, plan.BranchesToDelete, "branch1")
 		require.False(t, plan.UnpushedBranches["branch1"])
@@ -420,7 +422,7 @@ func TestCleanBranches(t *testing.T) {
 		err := s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("branch1"), prInfo)
 		require.NoError(t, err)
 
-		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesDepsFrom(s.Context), actions.CleanBranchesOptions{
+		plan, err := actions.PlanBranchDeletions(s.Context, actiondeps.CleanBranches(s.Context), actions.CleanBranchesOptions{
 			Force: true,
 		})
 		require.NoError(t, err)
@@ -443,7 +445,7 @@ func TestCleanBranches(t *testing.T) {
 		err := s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("branch1"), prInfo)
 		require.NoError(t, err)
 
-		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesDepsFrom(s.Context), actions.CleanBranchesOptions{
+		plan, err := actions.PlanBranchDeletions(s.Context, actiondeps.CleanBranches(s.Context), actions.CleanBranchesOptions{
 			Force: true,
 			RemoteStatuses: engine.BranchRemoteStatuses{
 				"branch1": {
@@ -479,7 +481,7 @@ func TestCleanBranches(t *testing.T) {
 		err = s.Engine.UpsertPrInfo(t.Context(), branch, prInfo)
 		require.NoError(t, err)
 
-		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesDepsFrom(s.Context), actions.CleanBranchesOptions{
+		plan, err := actions.PlanBranchDeletions(s.Context, actiondeps.CleanBranches(s.Context), actions.CleanBranchesOptions{
 			Force: true,
 		})
 		require.NoError(t, err)

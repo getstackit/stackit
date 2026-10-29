@@ -5,16 +5,18 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/cli/common"
+
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/getstackit/stackit/internal/actions/get"
 
 	"github.com/google/go-github/v93/github"
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/git"
 	githubpkg "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/testhelpers"
@@ -28,7 +30,7 @@ func getDeps(ctx *app.Context) get.Deps {
 		Out:         ctx.Output,
 		GitHub:      ctx.GitHub,
 		GitHubError: ctx.GitHubError,
-		Restack:     actions.RestackDepsFrom(ctx),
+		Restack:     actiondeps.Restack(ctx),
 	}
 }
 

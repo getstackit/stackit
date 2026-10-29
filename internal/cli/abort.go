@@ -1,10 +1,11 @@
 package cli
 
 import (
-	"github.com/getstackit/stackit/internal/term"
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+	"github.com/getstackit/stackit/internal/term"
+
 	"github.com/getstackit/stackit/internal/actions/abort"
 	"github.com/getstackit/stackit/internal/actions/absorb"
 	"github.com/getstackit/stackit/internal/app"
@@ -52,7 +53,7 @@ Examples:
 				}
 				continuation, continuationErr := config.GetContinuationState(ctx.RepoRoot)
 				ownedByContinuation := continuationErr == nil && abort.ContinuationOwnsAbort(ctx.Context, abortDeps.Engine, continuation)
-				absorbDeps := absorb.Deps{Engine: ctx.Engine, MutationDeps: actions.MutationDepsFrom(ctx)}
+				absorbDeps := absorb.Deps{Engine: ctx.Engine, MutationDeps: actiondeps.Mutation(ctx)}
 				if !ownedByContinuation && absorb.IsAbsorbInProgress(ctx.Context, absorbDeps) {
 					return absorb.Abort(ctx.Context, absorbDeps)
 				}

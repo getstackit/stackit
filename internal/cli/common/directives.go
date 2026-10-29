@@ -3,7 +3,6 @@ package common
 import (
 	"os"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/checkout"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/output"
@@ -13,18 +12,6 @@ import (
 // The shell wrapper sets STACKIT_SHELL_INTEGRATION=1 when running commands.
 func HasShellIntegration() bool {
 	return os.Getenv("STACKIT_SHELL_INTEGRATION") == "1"
-}
-
-// CheckoutDeps builds the checkout action's collaborators from the runtime
-// context.
-func CheckoutDeps(ctx *app.Context) checkout.Deps {
-	return checkout.Deps{
-		Engine: ctx.Engine,
-		Out:    ctx.Output,
-		Log:    ctx.Logger,
-		Quiet:  ctx.Quiet,
-		Here:   actions.HereFrom(ctx),
-	}
 }
 
 // HandleCheckoutResult handles the worktree switch result from checkout.Action.

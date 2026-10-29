@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app/actiondeps"
 
 	"github.com/stretchr/testify/require"
 
@@ -657,5 +657,5 @@ func TestFoldAction(t *testing.T) {
 }
 
 func deps(s *scenario.Scenario) Deps {
-	return Deps{Engine: s.Context.Engine, MutationDeps: actions.MutationDepsFrom(s.Context)}
+	return Deps{Engine: s.Context.Engine, MutationDeps: actiondeps.Mutation(s.Context)}
 }

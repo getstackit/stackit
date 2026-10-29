@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -109,12 +111,12 @@ func TestRestackOnSyncedTrunkMatrix(t *testing.T) {
 			}
 
 			sh.Checkout("child")
-			plan, err := actions.PlanRestack(sh.Context, actions.RestackDepsFrom(sh.Context), actions.RestackOptions{
+			plan, err := actions.PlanRestack(sh.Context, actiondeps.Restack(sh.Context), actions.RestackOptions{
 				BranchName: "child",
 				Scope:      engine.StackRangeFull(),
 			})
 			require.NoError(t, err)
-			require.NoError(t, actions.RestackAction(sh.Context, actions.RestackDepsFrom(sh.Context), plan, &actions.NullRestackHandler{}))
+			require.NoError(t, actions.RestackAction(sh.Context, actiondeps.Restack(sh.Context), plan, &actions.NullRestackHandler{}))
 			sh.Rebuild()
 
 			require.Equal(t, mainName, sh.Engine.GetBranch("child").Parent().Name(),

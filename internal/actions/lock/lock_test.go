@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/lock"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/engine"
@@ -50,7 +51,7 @@ func deps(s *scenario.Scenario) lock.Deps {
 	return lock.Deps{
 		Engine: ctx.Engine,
 		Out:    ctx.Output,
-		PRSync: actions.PRSyncFrom(ctx),
+		PRSync: actiondeps.PRSync(ctx),
 		Submit: submit.Deps{
 			Engine:      ctx.Engine,
 			Out:         ctx.Output,
@@ -58,9 +59,9 @@ func deps(s *scenario.Scenario) lock.Deps {
 			GitHub:      ctx.GitHub,
 			GitHubError: ctx.GitHubError,
 			GHRunner:    ctx.GHRunner,
-			PRSync:      actions.PRSyncFrom(ctx),
-			Restack:     actions.RestackDepsFrom(ctx),
-			Snapshots:   actions.SnapshotsFrom(ctx),
+			PRSync:      actiondeps.PRSync(ctx),
+			Restack:     actiondeps.Restack(ctx),
+			Snapshots:   actiondeps.Snapshots(ctx),
 			Prompts:     ctx.Prompts(),
 			Verify:      ctx.Verify,
 			Config:      ctx.Config,

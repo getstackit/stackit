@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/app/actiondeps"
+
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/track"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -38,7 +39,7 @@ func (h *testTrackHandler) Cleanup() {}
 func (h *testTrackHandler) IsInteractive() bool { return h.isInteractive }
 
 func deps(s *scenario.Scenario) track.Deps {
-	return track.Deps{Engine: s.Context.Engine, Out: s.Context.Output, Here: actions.HereFrom(s.Context)}
+	return track.Deps{Engine: s.Context.Engine, Out: s.Context.Output, Here: actiondeps.Here(s.Context)}
 }
 
 func TestTrackAction(t *testing.T) {

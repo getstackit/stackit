@@ -91,12 +91,9 @@ func HasForeachWork(ctx context.Context, deps Deps, opts Options) (bool, error) 
 		branches = graph.Range(targetBranch, opts.Scope)
 	}
 
-	for _, branch := range branches {
-		if !branch.IsTrunk() {
-			return true, nil
-		}
-	}
-	return false, nil
+	return slices.ContainsFunc(branches, func(branch engine.Branch) bool {
+		return !branch.IsTrunk()
+	}), nil
 }
 
 // Action executes a command on each branch in the stack with event handling

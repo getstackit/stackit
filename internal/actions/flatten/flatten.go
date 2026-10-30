@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/getstackit/stackit/internal/actions"
 	basehandler "github.com/getstackit/stackit/internal/actions/handler"
@@ -62,12 +63,9 @@ func HasFlattenWork(ctx context.Context, deps Deps, opts Options) (bool, error) 
 	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	branches := graph.FullStack(branch)
 	trunk := eng.Trunk()
-	for _, b := range branches {
-		if !b.IsTrunk() && b.Name() != trunk.Name() {
-			return true, nil
-		}
-	}
-	return false, nil
+	return slices.ContainsFunc(branches, func(b engine.Branch) bool {
+		return !b.IsTrunk() && b.Name() != trunk.Name()
+	}), nil
 }
 
 // Action performs the flatten operation.

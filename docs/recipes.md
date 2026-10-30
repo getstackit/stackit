@@ -70,14 +70,17 @@ cross-worktree corruption: the mutation lands under a ref whose worktree still
 holds the old content, and the next `modify -a` there commits the divergence.
 
 ```go
-if err := actions.EnsureCanModifyNamesHere(ctx, branchName); err != nil {
+if err := actions.EnsureCanModifyNames(ctx, deps.Engine, deps.Here, branchName); err != nil {
     return err
 }
 // or, when you already hold engine.Branch values:
-if err := actions.EnsureCanModifyHere(ctx, branches...); err != nil {
+if err := actions.EnsureCanModify(ctx, deps.Engine, deps.Here, branches...); err != nil {
     return err
 }
 ```
+
+`deps.Here` records where the command runs; adapters build it with
+`actiondeps.Here`, so the action never reads `*app.Context` itself.
 
 Call it **before** taking a snapshot or mutating anything, so a refusal is a
 no-op. `create` is the example to copy (`internal/actions/create/create.go`):

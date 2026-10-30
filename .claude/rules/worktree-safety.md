@@ -29,9 +29,10 @@ disappear from a branch they were not touching.
 
 ### Required Behavior
 
-- Guard with `actions.EnsureCanModifyNamesHere(ctx, names...)` or
-  `actions.EnsureCanModifyHere(ctx, branches...)`
-  (`internal/actions/worktree_ownership.go`).
+- Guard with `actions.EnsureCanModifyNames(ctx, eng, deps.Here, names...)` or
+  `actions.EnsureCanModify(ctx, eng, deps.Here, branches...)`
+  (`internal/actions/worktree_ownership.go`). Adapters fill `Deps.Here` with
+  `actiondeps.Here`; a zero `Here` reads as the main repository.
 - Call it **before** taking a snapshot or mutating anything, so a refusal is a
   no-op.
 - Guard every branch the operation touches, not just the current one — `create`

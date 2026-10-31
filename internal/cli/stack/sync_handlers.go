@@ -260,6 +260,14 @@ func (h *SimpleSyncHandler) printGitHubEvent(event syncAction.Event) {
 }
 
 func (h *SimpleSyncHandler) printCleanEvent(event syncAction.Event) {
+	if event.Type == syncAction.EventCompleted && event.Reparented {
+		h.item(event.Phase, "  %s Reparented %s from %s to %s",
+			style.MarkSuccess(),
+			style.ColorBranchName(event.Branch),
+			style.ColorBranchName(event.OldParent),
+			style.ColorBranchName(event.NewParent))
+		return
+	}
 	if event.Type == syncAction.EventCompleted && event.Branch != "" {
 		prInfo := ""
 		if event.PRNumber != nil {
@@ -462,6 +470,9 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 			}
 		}
 	case syncAction.PhaseClean:
+		if event.Type == syncAction.EventCompleted && event.Reparented {
+			return fmt.Sprintf("Reparented %s from %s to %s", event.Branch, event.OldParent, event.NewParent), syncComponent.MarkDone
+		}
 		if event.Type == syncAction.EventCompleted && event.Branch != "" {
 			prInfo := ""
 			if event.PRNumber != nil {
@@ -749,6 +760,11 @@ func formatSyncSummaryParts(summary syncAction.Summary) []string {
 	}
 	if summary.BranchesRestacked > 0 {
 		parts = append(parts, fmt.Sprintf("restacked %d", summary.BranchesRestacked))
+	}
+	// Reparenting changed the shape of the user's stack, so it belongs in the
+	// one-line summary and not only in the detail rows above it.
+	if summary.BranchesReparented > 0 {
+		parts = append(parts, fmt.Sprintf("reparented %d", summary.BranchesReparented))
 	}
 	if summary.BranchesDeleted > 0 {
 		parts = append(parts, fmt.Sprintf("deleted %d", summary.BranchesDeleted))

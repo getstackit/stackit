@@ -2,12 +2,14 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	stdruntime "runtime"
 	"slices"
 
 	"github.com/getstackit/stackit/internal/actions/restack"
 	"github.com/getstackit/stackit/internal/engine"
+	stackErrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/rerere"
 	"github.com/getstackit/stackit/internal/workpool"
@@ -78,9 +80,10 @@ type RestackRequest struct {
 // RestackOutcome is the result of RunRestack.
 type RestackOutcome struct {
 	Summary RestackSummary
-	// EnteredConflictWorkflow is true when the user chose to resolve a
-	// conflict and the run handed off to the conflict workflow. The handler's
-	// OnRestackComplete is not called in that case: the restack is unfinished.
+	// EnteredConflictWorkflow is true when the run handed off to the conflict
+	// workflow, which stopped on a conflict for the user to resolve. The
+	// handler's OnRestackComplete is not called in that case: the workflow's
+	// continue/abort guidance must be the last thing the user sees.
 	EnteredConflictWorkflow bool
 }
 
@@ -91,10 +94,30 @@ type RestackOutcome struct {
 // Worktree holds and snapshots are the caller's responsibility, because the
 // commands disagree on scope: restack and sync filter holds before choosing
 // branches, and only some callers have a rollback point worth taking.
+//
+// Every run that starts reports OnRestackComplete exactly once, marking the
+// summary Failed on an unexpected error, except a handoff to the conflict
+// workflow (see RestackOutcome.EnteredConflictWorkflow).
 func RunRestack(ctx context.Context, deps RestackDeps, req RestackRequest, handler RestackHandler) (RestackOutcome, error) {
 	if handler == nil {
 		handler = &NullRestackHandler{}
 	}
+	outcome, started, err := runRestack(ctx, deps, req, handler)
+	switch {
+	case !started:
+	case errors.Is(err, stackErrors.ErrConflictWorkflow):
+		outcome.EnteredConflictWorkflow = true
+	default:
+		// A canceled conflict workflow is the user's choice, not a failure.
+		outcome.Summary.Failed = err != nil && !errors.Is(err, stackErrors.ErrCanceled)
+		handler.OnRestackComplete(outcome.Summary)
+	}
+	return outcome, err
+}
+
+// runRestack does the work of RunRestack and reports whether the run started
+// (had any branch to restack), leaving completion to the caller.
+func runRestack(ctx context.Context, deps RestackDeps, req RestackRequest, handler RestackHandler) (RestackOutcome, bool, error) {
 	groups := req.groups
 	if groups == nil && len(req.Branches) > 0 {
 		groups = []restackPlannedGroup{{sortedBranches: req.Branches}}
@@ -104,7 +127,7 @@ func RunRestack(ctx context.Context, deps RestackDeps, req RestackRequest, handl
 		branchCount += len(g.sortedBranches)
 	}
 	if branchCount == 0 {
-		return RestackOutcome{}, nil
+		return RestackOutcome{}, false, nil
 	}
 
 	pauser := req.Pauser
@@ -132,8 +155,7 @@ func RunRestack(ctx context.Context, deps RestackDeps, req RestackRequest, handl
 		err := restackGroupsParallel(ctx, deps, req.Jobs, groups, tally, activity, newWorktreeEngine)
 		summary := tally.result()
 		deps.Log.Info("restack completed (parallel) restacked=%v conflicts=%v blocked=%v", summary.Restacked, len(summary.Conflicts), len(summary.Blocked))
-		handler.OnRestackComplete(summary)
-		return RestackOutcome{Summary: summary}, err
+		return RestackOutcome{Summary: summary}, true, err
 	}
 
 	mode := restack.ConflictContinue
@@ -147,7 +169,7 @@ func RunRestack(ctx context.Context, deps RestackDeps, req RestackRequest, handl
 			tally.record(p)
 		}
 		if err := restackWithPlan(ctx, deps, group.sortedBranches, group.enginePlan, progress, mode, activity); err != nil {
-			return RestackOutcome{Summary: tally.result()}, err
+			return RestackOutcome{Summary: tally.result()}, true, err
 		}
 	}
 
@@ -157,10 +179,13 @@ func RunRestack(ctx context.Context, deps RestackDeps, req RestackRequest, handl
 	if req.ConflictPolicy == RestackConflictPrompt && len(summary.Conflicts) > 0 &&
 		req.Prompter != nil && req.Prompter.IsInteractive() {
 		resolve, err := req.Prompter.PromptResolveConflicts(summary.Conflicts)
-		if err != nil {
-			return RestackOutcome{Summary: summary}, fmt.Errorf("failed to prompt for conflict resolution: %w", err)
-		}
-		if resolve {
+		switch {
+		case errors.Is(err, stackErrors.ErrCanceled):
+			// Canceling the prompt is a decline: report the conflicts as
+			// incomplete work, not as a failed restack.
+		case err != nil:
+			return RestackOutcome{Summary: summary}, true, fmt.Errorf("failed to prompt for conflict resolution: %w", err)
+		case resolve:
 			// The run used restack.ConflictContinue, which held back the whole
 			// conflicted stack — ancestors included. Entering the conflict
 			// directly from that state would rebase the conflict branch onto
@@ -169,13 +194,17 @@ func RunRestack(ctx context.Context, deps RestackDeps, req RestackRequest, handl
 			// (exempt from per-stack atomicity on purpose), so its ancestors
 			// apply first and the conflict is entered on top of them.
 			stack := conflictedStack(deps.Engine, groups, summary.Conflicts[0])
-			return RestackOutcome{Summary: summary, EnteredConflictWorkflow: true},
-				restackWithPlan(ctx, deps, stack, nil, nil, restack.ConflictEnterWorkflow, nil)
+			workflowErr := restackWithPlan(ctx, deps, stack, nil, nil, restack.ConflictEnterWorkflow, nil)
+			if workflowErr == nil {
+				// The workflow finished without stopping (e.g. rerere resolved
+				// every conflict), so the stack was restacked after all.
+				summary = summary.resolveStack(stack.Names())
+			}
+			return RestackOutcome{Summary: summary}, true, workflowErr
 		}
 	}
 
-	handler.OnRestackComplete(summary)
-	return RestackOutcome{Summary: summary}, nil
+	return RestackOutcome{Summary: summary}, true, nil
 }
 
 // conflictedStack returns the branches of the group containing conflictBranch

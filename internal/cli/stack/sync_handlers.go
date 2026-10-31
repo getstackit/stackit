@@ -331,6 +331,11 @@ type InteractiveSyncHandler struct {
 	// restack-only: count of already-current branches whose rows were
 	// suppressed, reported as a summary count instead.
 	restackUpToDate int
+
+	// released is set once a conflict prompt handed the terminal to the
+	// conflict workflow. The runner is gone, so a later outcome prints as
+	// plain output instead of through the TUI.
+	released bool
 }
 
 // NewInteractiveSyncHandler creates a new InteractiveSyncHandler
@@ -472,10 +477,19 @@ func (h *InteractiveSyncHandler) Complete(summary syncAction.Summary) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Build summary message
-	summaryMsg := h.formatSummary(summary)
+	h.finish(h.formatSummary(summary))
+}
 
-	// Send complete message
+// finish delivers the final outcome line: through the TUI while it runs, or
+// as plain output once a conflict prompt released the terminal. Callers hold h.mu.
+func (h *InteractiveSyncHandler) finish(summaryMsg string) {
+	if h.released {
+		if summaryMsg != "" {
+			h.output.Newline()
+			h.output.Info("%s", summaryMsg)
+		}
+		return
+	}
 	h.runner.Send(syncComponent.CompleteMsg{Summary: summaryMsg})
 	h.runner.Wait()
 }
@@ -490,19 +504,23 @@ func (h *InteractiveSyncHandler) formatSummary(summary syncAction.Summary) strin
 // Anything left outstanding makes it read as incomplete, never as success.
 func formatSyncSummary(summary syncAction.Summary, indent string) string {
 	incomplete := summary.Incomplete()
-	if summary.UpToDate && !incomplete {
+	if summary.UpToDate && !incomplete && !summary.Failed {
 		return "✨ Everything is up to date!"
 	}
 	parts := formatSyncSummaryParts(summary)
-	if len(parts) == 0 && !incomplete {
-		// Nothing happened worth summarizing (e.g. sync stopped on an error).
+	prefix := "✅ Summary: "
+	switch {
+	case summary.Failed:
+		// A failure always reports, even when it stopped before any work.
+		prefix = "✗ Sync failed: "
+	case incomplete:
+		prefix = "⚠ Sync incomplete: "
+	case len(parts) == 0:
+		// Nothing happened worth summarizing.
 		return ""
 	}
-	prefix := "✅ Summary: "
-	if incomplete {
-		prefix = "⚠ Sync incomplete: "
-	}
-	return common.WithResolveHints(prefix+strings.Join(parts, ", "), summary.ConflictBranches, indent)
+	line := strings.TrimSuffix(prefix+strings.Join(parts, ", "), ": ")
+	return common.WithResolveHints(line, summary.ConflictBranches, indent)
 }
 
 // OnRestackActivity reports checks before the engine applies validated results.
@@ -580,12 +598,7 @@ func (h *InteractiveSyncHandler) OnRestackComplete(summary actions.RestackSummar
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Build summary message
-	summaryMsg := h.formatRestackSummary(summary)
-
-	// Send complete message
-	h.runner.Send(syncComponent.CompleteMsg{Summary: summaryMsg})
-	h.runner.Wait()
+	h.finish(h.formatRestackSummary(summary))
 }
 
 // Cleanup is a no-op - terminal cleanup is handled by the runner via defer.
@@ -674,12 +687,26 @@ func describeRestackConflicts(out output.Output, conflictBranches []string) {
 
 // PromptResolveConflicts implements Handler. Pauses TUI, displays conflicts, prompts user.
 func (h *InteractiveSyncHandler) PromptResolveConflicts(conflictBranches []string) (bool, error) {
+	return h.promptResolveConflicts(conflictBranches, tui.PromptConfirm)
+}
+
+func (h *InteractiveSyncHandler) promptResolveConflicts(conflictBranches []string, prompt func(string, bool) (bool, error)) (bool, error) {
 	h.runner.Pause()
-	defer h.runner.Resume()
-
 	describeRestackConflicts(h.output, conflictBranches)
-
-	return tui.PromptConfirm("Resolve conflicts now?", false)
+	resolve, err := prompt("Resolve conflicts now?", false)
+	if !resolve || err != nil {
+		h.runner.Resume()
+		return resolve, err
+	}
+	// The action now hands off to the real conflict workflow. Release the
+	// terminal permanently so file lists and continue/abort advice are visible.
+	h.runner.Send(syncComponent.CompleteMsg{})
+	h.runner.Wait()
+	h.runner.Cleanup()
+	h.mu.Lock()
+	h.released = true
+	h.mu.Unlock()
+	return resolve, err
 }
 
 // buildDeletionOptions returns the alphabetically sorted branch names alongside

@@ -124,6 +124,61 @@ func TestSimpleSubmitHandlerReportsPush(t *testing.T) {
 	require.Equal(t, got, ansi.Strip(got), "non-TTY output must be plain text")
 }
 
+func TestCompactPlanRetainsExceptionalSkips(t *testing.T) {
+	t.Parallel()
+	out := output.NewTestOutput()
+	h := NewSimpleSubmitHandler(out, SubmitCompact)
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: "feat/current", Skipped: true, SkipReason: "no existing PR", IsCurrent: true})
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: "feat/parent", Skipped: true, SkipReason: "no changes"})
+	h.OnEvent(submitAction.PlanningCompleteEvent{})
+	require.Contains(t, out.String(), "feat/current skipped: no existing PR")
+	require.NotContains(t, out.String(), "feat/parent")
+}
+
+func TestCompactPlanGroupsSkipsByReason(t *testing.T) {
+	t.Parallel()
+	out := output.NewTestOutput()
+	h := NewSimpleSubmitHandler(out, SubmitCompact)
+	for _, name := range []string{"skip-a", "skip-b", "skip-c", "skip-d", "skip-e"} {
+		h.OnEvent(submitAction.BranchPlanEvent{BranchName: name, Skipped: true, SkipReason: "no existing PR"})
+	}
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: "locked", Skipped: true, SkipReason: "locked"})
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: "empty", Action: "create", Empty: true})
+	h.OnEvent(submitAction.PlanningCompleteEvent{})
+
+	got := out.String()
+	require.Equal(t, 1, strings.Count(got, "no existing PR"), "one line per skip reason")
+	require.Contains(t, got, "○ skip-a, skip-b, skip-c and 2 more skipped: no existing PR")
+	require.NotContains(t, got, "skip-d")
+	require.Contains(t, got, "○ locked skipped: locked")
+	require.Contains(t, got, "○ empty has no commits")
+}
+
+func TestSimpleSubmitHandlerCompactPrintsFullBranchNames(t *testing.T) {
+	t.Parallel()
+	out := output.NewTestOutput()
+	h := NewSimpleSubmitHandler(out, SubmitCompact)
+	skipped := "alice/20260901000000/fix-tests"
+	created := "bob/20260905000000/add-feature"
+	updated := "bob/20260905000001/update-docs"
+
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: skipped, Skipped: true, SkipReason: "no existing PR"})
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: created, Action: "create"})
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: updated, Action: "update", PRNumber: new(git.PRNumber(7))})
+	h.OnEvent(submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{
+		{Name: created, Action: "create"},
+		{Name: updated, Action: "update", PRNumber: new(git.PRNumber(7))},
+	}})
+	h.OnEvent(submitAction.BranchProgressEvent{BranchName: created, Status: submitAction.StatusDone, URL: "https://github.com/o/r/pull/8"})
+	h.OnEvent(submitAction.BranchProgressEvent{BranchName: updated, Status: submitAction.StatusDone, URL: "https://github.com/o/r/pull/7"})
+	h.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete})
+
+	got := out.String()
+	require.Contains(t, got, "○ "+skipped+" skipped: no existing PR")
+	require.Contains(t, got, created+"  #8  https://github.com/o/r/pull/8")
+	require.Contains(t, got, updated+"  #7 updated")
+}
+
 func TestSimpleSubmitHandlerStreamsOneListWithURLsOnCreates(t *testing.T) {
 	t.Parallel()
 
@@ -152,8 +207,10 @@ func TestSimpleSubmitHandlerStreamsOneListWithURLsOnCreates(t *testing.T) {
 
 	got := out.String()
 	require.Contains(t, got, "Submitting 2 branches")
-	require.Contains(t, got, "✓ guard-runner.repoRoot-reads-with-repoMu-to-fix #934 updated")
-	require.Contains(t, got, "✓ add-feature #935 created")
+	// Piped output keeps full branch names so they can be passed back to
+	// `stackit checkout`.
+	require.Contains(t, got, "✓ "+updated+" #934 updated")
+	require.Contains(t, got, "✓ "+created+" #935 created")
 	// Only the newly created PR prints its raw URL; no trailing summary block
 	// repeats the list.
 	require.Contains(t, got, "     https://github.com/getstackit/stackit/pull/935")
@@ -192,7 +249,7 @@ func TestSimpleSubmitHandlerPreservesURLAcrossFooterSync(t *testing.T) {
 	got := out.String()
 	require.Equal(t, 1, strings.Count(got, "https://github.com/getstackit/stackit/pull/934"))
 	require.NotContains(t, got, "syncing")
-	require.Equal(t, 1, strings.Count(got, "✓ guard-runner"), "footer sync must not re-report a finished branch")
+	require.Equal(t, 1, strings.Count(got, "✓ "+branch), "footer sync must not re-report a finished branch")
 }
 
 func TestSimpleSubmitHandlerMergesPlanIntoStackList(t *testing.T) {
@@ -224,7 +281,7 @@ func TestSimpleSubmitHandlerMergesPlanIntoStackList(t *testing.T) {
 	got := ansi.Strip(out.String())
 	require.Contains(t, got, "Submit plan → main")
 	require.Contains(t, got, "Will submit (1)")
-	require.Contains(t, got, "● current-branch [CORE] → create")
+	require.Contains(t, got, "● "+current+" [CORE] → create")
 	require.Contains(t, got, "No changes (1)")
 	// Small skip groups list their names even when there is active work.
 	require.Contains(t, got, "skipped-branch")
@@ -517,11 +574,11 @@ func TestSimpleSubmitHandlerCompactReportsOutcomeNotPerBranchRows(t *testing.T) 
 	// Only the created PR's URL is worth pasting; the updated one is not.
 	require.Contains(t, got, "https://github.com/getstackit/stackit/pull/51")
 	require.NotContains(t, got, "https://github.com/getstackit/stackit/pull/42")
-	// The per-branch audit trail belongs to --verbose.
+	// Compact output preserves PR identity without repeating the full plan.
 	require.NotContains(t, got, "Submit plan")
 	require.NotContains(t, got, "Will submit (2)")
-	require.NotContains(t, got, "update-me #42 updated")
-	require.NotContains(t, got, "add-feature #51 created")
+	require.Contains(t, got, "update-me  #42 updated")
+	require.Contains(t, got, "add-feature  #51  https://")
 }
 
 func TestSimpleSubmitHandlerCompactStaysSilentWhenNothingToSubmit(t *testing.T) {
@@ -571,4 +628,23 @@ func TestRegenerateNeedsConfirm(t *testing.T) {
 			require.Equal(t, tt.want, regenerateNeedsConfirm(&tt.flags, tt.interactive))
 		})
 	}
+}
+
+func TestInteractiveSubmitRowsFallBackToFullNamesOnCollision(t *testing.T) {
+	t.Parallel()
+	alice := "alice/20260901000000/fix-tests"
+	bob := "bob/20260905000000/fix-tests"
+	docs := "carol/20260906000000/docs"
+	model := submitComponent.NewModel(nil)
+	h := NewInteractiveSubmitHandler(tui.NewMockRunner(), model, output.NewTestOutput(), SubmitCompact)
+	h.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{Branches: []string{alice, bob, docs}, TrunkBranch: "main"}})
+	h.OnEvent(submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{
+		{Name: bob, Action: "update"},
+		{Name: docs, Action: "create"},
+	}})
+
+	require.Equal(t, bob, model.Items[0].DisplayName, "bob's short name is shared with alice")
+	require.Equal(t, "docs", model.Items[1].DisplayName)
+	row := ansi.Strip(submitComponent.FormatCompactRow(model.Items[0], 120, "*", submitComponent.DefaultStyles()))
+	require.Contains(t, row, bob)
 }

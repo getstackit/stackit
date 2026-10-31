@@ -190,6 +190,7 @@ func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error
 	// Merge trunk summary
 	summary.TrunkUpdated = trunkSummary.TrunkUpdated
 	summary.TrunkRevision = trunkSummary.TrunkRevision
+	summary.HeldBranches = append(summary.HeldBranches, trunkSummary.HeldBranches...)
 
 	// GitHub failure aborts sync (per spec)
 	if githubErr != nil {
@@ -360,13 +361,29 @@ type Summary struct {
 	UpToDate          bool     // Everything was already current
 	WorktreesCleaned  int      // Number of orphaned worktrees cleaned up
 	SkippedStacks     []string // Stacks skipped due to dirty worktrees
+	HeldBranches      []string // Branches (trunk included) a worktree held back
 }
 
-// HasChanges returns true if any operations were performed
+// HasChanges returns true if any operations were performed or anything was
+// held back. A hold is not "up to date": the work is still outstanding.
 func (s *Summary) HasChanges() bool {
 	return s.TrunkUpdated || s.BranchesSynced > 0 || s.BranchesRestacked > 0 ||
 		s.BranchesDeleted > 0 || s.BranchesSkipped > 0 || s.BranchesBlocked > 0 ||
-		s.WorktreesCleaned > 0 || len(s.SkippedStacks) > 0
+		s.WorktreesCleaned > 0 || len(s.SkippedStacks) > 0 || len(s.HeldBranches) > 0
+}
+
+// Incomplete reports whether sync left work outstanding: conflicts, blocked or
+// skipped stacks, or branches a worktree held back.
+func (s *Summary) Incomplete() bool {
+	return s.BranchesSkipped > 0 || len(s.ConflictBranches) > 0 || s.BranchesBlocked > 0 ||
+		len(s.SkippedStacks) > 0 || len(s.HeldBranches) > 0
+}
+
+// recordHold notes a branch a worktree held back, once per branch.
+func (s *Summary) recordHold(branch string) {
+	if !slices.Contains(s.HeldBranches, branch) {
+		s.HeldBranches = append(s.HeldBranches, branch)
+	}
 }
 
 // Handler abstracts TTY vs non-TTY output for sync operations

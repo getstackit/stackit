@@ -24,8 +24,8 @@ func TestSyncScenarioReplayUsesProductionHandler(t *testing.T) {
 	require.Contains(t, got, "Deleted stack-merge-stack-1784862381 merged into main")
 	require.Contains(t, got, "Restacked info-query-cli-rendering (PR #936) on main → 9e49378")
 	require.Contains(t, got, "Skipped jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits (PR #754) (conflict)")
-	require.Contains(t, got, "✅ Summary: restacked 5, deleted 2, skipped 1 (conflict)")
-	require.Contains(t, got, "Run st restack jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits to resolve and continue")
+	require.Contains(t, got, "⚠ Sync incomplete: restacked 5, deleted 2, skipped 1 (conflict)")
+	require.Contains(t, got, "Run st restack --branch jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits to resolve and continue")
 }
 
 func TestLookupSyncScenario(t *testing.T) {

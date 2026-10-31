@@ -175,8 +175,12 @@ func (h *SimpleGetHandler) Complete(summary get.Summary) {
 		return
 	}
 
-	// Print summary parts
+	// Print summary parts. Holds lead, as in sync and restack: the remedy is
+	// in another worktree.
 	parts := []string{}
+	if len(summary.Held) > 0 {
+		parts = append(parts, fmt.Sprintf("held %d (worktree)", len(summary.Held)))
+	}
 	if summary.BranchesCreated > 0 {
 		parts = append(parts, fmt.Sprintf("synced %d new", summary.BranchesCreated))
 	}
@@ -187,7 +191,10 @@ func (h *SimpleGetHandler) Complete(summary get.Summary) {
 		parts = append(parts, fmt.Sprintf("restacked %d", summary.Restacked))
 	}
 
-	if len(parts) > 0 {
+	switch {
+	case len(summary.Held) > 0:
+		h.Output.Info("⚠ Get incomplete: %s", strings.Join(parts, ", "))
+	case len(parts) > 0:
 		h.Output.Info("✅ Summary: %s", strings.Join(parts, ", "))
 	}
 
@@ -291,11 +298,13 @@ func (h *SimpleGetHandler) OnRestackComplete(summary actions.RestackSummary) {
 	h.Lock()
 	defer h.Unlock()
 
-	if !common.RestackChanged(summary) {
-		return // No restack summary needed if nothing happened
+	// A conflict ends get here (Complete never runs), so an incomplete
+	// restack uses the shared outcome line: it must never read as success.
+	if summary.Incomplete() {
+		h.Output.Info("%s", common.FormatRestackOutcome(summary, 0, "  "))
+		return
 	}
-	h.Output.Info("  %s", common.FormatRestackSummary(summary, 0))
-	for _, conflict := range summary.Conflicts {
-		h.Output.Info("  %s", common.FormatRestackResolveHint(conflict))
+	if summary.Restacked > 0 {
+		h.Output.Info("  %s", common.FormatRestackSummary(summary, 0))
 	}
 }

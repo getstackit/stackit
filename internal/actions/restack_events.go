@@ -98,6 +98,22 @@ type RestackSummary struct {
 	Restacked int
 	Conflicts []string // branches skipped because they conflicted
 	Blocked   []string
+	// Held lists every branch a worktree held back, whether restack pruned it
+	// while planning or the engine held it mid-run. A held branch is reported
+	// as unneeded per branch, so this is the only place an adapter can tell
+	// "protected your work" from "nothing to do".
+	Held []RestackHeldInfo
+}
+
+// RestackHeldInfo is a branch a worktree held back, with the reason.
+type RestackHeldInfo struct {
+	Branch string `json:"branch"`
+	Reason string `json:"reason"`
+}
+
+// Incomplete reports whether the restack left any branch behind.
+func (s RestackSummary) Incomplete() bool {
+	return len(s.Conflicts) > 0 || len(s.Blocked) > 0 || len(s.Held) > 0
 }
 
 // NullRestackHandler is a no-op handler for testing or when output is not needed
@@ -157,6 +173,9 @@ func (t *restackTally) record(p restack.Progress) {
 		event.Result = RestackDone
 	case engine.RestackUnneeded:
 		event.Result = RestackUnneeded
+		if p.HeldBy != "" {
+			t.summary.Held = append(t.summary.Held, RestackHeldInfo{Branch: p.Branch, Reason: p.HeldBy})
+		}
 	case engine.RestackConflict:
 		t.summary.Conflicts = append(t.summary.Conflicts, p.Branch)
 		event.Result = RestackConflict

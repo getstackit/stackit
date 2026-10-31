@@ -138,7 +138,8 @@ func getRemoteRepository(ctx context.Context, runner GitCommandRunner) (git.Remo
 
 	repo, err := git.ParseRemoteRepository(remoteURL)
 	if err != nil {
-		if strings.HasPrefix(strings.TrimSpace(remoteURL), "http://") || strings.HasPrefix(strings.TrimSpace(remoteURL), "https://") {
+		trimmedURL := strings.TrimSpace(remoteURL)
+		if strings.HasPrefix(trimmedURL, "http://") || strings.HasPrefix(trimmedURL, "https://") {
 			return git.RemoteRepository{}, fmt.Errorf("invalid HTTPS remote URL: %w", err)
 		}
 		return git.RemoteRepository{}, err

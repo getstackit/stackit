@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/getstackit/stackit/internal/app/actiondeps"
 
@@ -14,6 +15,8 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/term"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // NewRestackCmd creates the restack command
@@ -149,6 +152,20 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 					return actions.RestackAction(ctx, deps, plan, NewSimpleSyncHandler(ctx.Output))
 				}
 
+				if term.IsInteractive() {
+					scope := RestackScope{
+						Target:         targetBranch,
+						Trunk:          ctx.Engine.Trunk().Name(),
+						ExplicitBranch: branch != "",
+						Only:           only,
+						Upstack:        upstack,
+						Downstack:      downstack,
+						AllStacks:      allStacks,
+						Stacks:         stacks,
+					}
+					ctx.Output.Info("%s", RestackHeadline(scope, plan.BranchCount()))
+				}
+
 				// Create runner (manages terminal state) and handler (processes events)
 				runner, handler := NewSyncUI(ctx.Output, ctx.Logger)
 				defer runner.Cleanup()
@@ -170,4 +187,52 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output results in JSON format.")
 
 	return cmd
+}
+
+// RestackScope describes which branches a restack invocation targets, as the
+// flags resolved them. It only feeds the interactive headline.
+type RestackScope struct {
+	Target         string   // resolved target branch; empty for multi-stack
+	Trunk          string   // trunk branch name
+	ExplicitBranch bool     // target came from --branch
+	Only           bool     // --only
+	Upstack        bool     // --upstack
+	Downstack      bool     // --downstack
+	AllStacks      bool     // --all-stacks
+	Stacks         []string // --stacks roots
+}
+
+// Label names the restack scope for humans, e.g. "current stack" or
+// "upstack from feat/api".
+func (s RestackScope) Label() string {
+	switch {
+	case s.AllStacks:
+		return "all stacks"
+	case len(s.Stacks) == 1:
+		return "stack " + style.DisplayBranchName(s.Stacks[0])
+	case len(s.Stacks) > 1:
+		names := make([]string, len(s.Stacks))
+		for i, root := range s.Stacks {
+			names[i] = style.DisplayBranchName(root)
+		}
+		return "stacks " + strings.Join(names, ", ")
+	case s.Only:
+		return style.DisplayBranchName(s.Target)
+	case s.Upstack:
+		return "upstack from " + style.DisplayBranchName(s.Target)
+	case s.Downstack:
+		return "downstack from " + style.DisplayBranchName(s.Target)
+	case s.Target != "" && s.Target == s.Trunk:
+		// Trunk's "stack" is every trunk-rooted branch.
+		return "all stacks"
+	case s.ExplicitBranch:
+		return "stack containing " + style.DisplayBranchName(s.Target)
+	default:
+		return "current stack"
+	}
+}
+
+// RestackHeadline is the line printed before the interactive restack UI.
+func RestackHeadline(scope RestackScope, branchCount int) string {
+	return fmt.Sprintf("Restacking %s · %d %s", scope.Label(), branchCount, pluralizeBranches(branchCount))
 }

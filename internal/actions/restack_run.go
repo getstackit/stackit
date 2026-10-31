@@ -41,6 +41,15 @@ type RestackRequest struct {
 	// groups replaces Branches when PlanRestack has already split the work
 	// into independent stacks and computed their engine plans.
 	groups []restackPlannedGroup
+	// Activity receives live rebase-validation events. nil uses the handler
+	// when it implements RestackActivityHandler.
+	Activity engine.RebaseProgressFunc
+
+	// newWorktreeEngine builds parallel workers' engines. nil uses
+	// engine.NewEngineForWorktree; a test injects failures here rather than
+	// through a package variable, which would race other parallel tests.
+	newWorktreeEngine worktreeEngineFactory
+
 	// held seeds the summary with branches PlanRestack pruned for worktree
 	// holds. They never reach the engine, so only the plan knows them.
 	held []RestackHeldInfo
@@ -106,12 +115,21 @@ func RunRestack(ctx context.Context, deps RestackDeps, req RestackRequest, handl
 		deps.Out.Warn("Failed to enable git rerere: %v", err)
 	}
 
+	activity := req.Activity
+	if activity == nil {
+		activity = RestackActivity(handler)
+	}
+
 	handler.OnRestackStart(branchCount)
 	tally := newRestackTally(deps.Engine, handler, req.PRNumber)
 	tally.summary.Held = slices.Clone(req.held)
 
 	if req.Parallel && len(groups) > 1 {
-		err := restackGroupsParallel(ctx, deps, req.Jobs, groups, tally)
+		newWorktreeEngine := req.newWorktreeEngine
+		if newWorktreeEngine == nil {
+			newWorktreeEngine = engine.NewEngineForWorktree
+		}
+		err := restackGroupsParallel(ctx, deps, req.Jobs, groups, tally, activity, newWorktreeEngine)
 		summary := tally.result()
 		deps.Log.Info("restack completed (parallel) restacked=%v conflicts=%v blocked=%v", summary.Restacked, len(summary.Conflicts), len(summary.Blocked))
 		handler.OnRestackComplete(summary)
@@ -128,7 +146,7 @@ func RunRestack(ctx context.Context, deps RestackDeps, req RestackRequest, handl
 			p.StackRoot = groupRoot
 			tally.record(p)
 		}
-		if err := restackWithPlan(ctx, deps, group.sortedBranches, group.enginePlan, progress, mode); err != nil {
+		if err := restackWithPlan(ctx, deps, group.sortedBranches, group.enginePlan, progress, mode, activity); err != nil {
 			return RestackOutcome{Summary: tally.result()}, err
 		}
 	}
@@ -152,7 +170,7 @@ func RunRestack(ctx context.Context, deps RestackDeps, req RestackRequest, handl
 			// apply first and the conflict is entered on top of them.
 			stack := conflictedStack(deps.Engine, groups, summary.Conflicts[0])
 			return RestackOutcome{Summary: summary, EnteredConflictWorkflow: true},
-				restackWithPlan(ctx, deps, stack, nil, nil, restack.ConflictEnterWorkflow)
+				restackWithPlan(ctx, deps, stack, nil, nil, restack.ConflictEnterWorkflow, nil)
 		}
 	}
 
@@ -188,7 +206,15 @@ func conflictedStack(eng engine.Engine, groups []restackPlannedGroup, conflictBr
 // Each worker plans its own restack against the worktree-local engine; the
 // parent's pre-computed plan in restackPlannedGroup.enginePlan is not portable
 // across engines.
-func restackGroupsParallel(ctx context.Context, deps RestackDeps, jobs int, groups []restackPlannedGroup, tally *restackTally) error {
+func restackGroupsParallel(
+	ctx context.Context,
+	deps RestackDeps,
+	jobs int,
+	groups []restackPlannedGroup,
+	tally *restackTally,
+	activity engine.RebaseProgressFunc,
+	newWorktreeEngine worktreeEngineFactory,
+) error {
 	eng := deps.Engine
 
 	numJobs := jobs
@@ -257,7 +283,7 @@ func restackGroupsParallel(ctx context.Context, deps RestackDeps, jobs int, grou
 		// down, so entering it would silently destroy what the user needs to resolve.
 		// Per-branch outcomes reach the tally through the callback before any
 		// error surfaces, so only the error itself needs recording.
-		if err := restackWithPlan(ctx, wtDeps, group.sortedBranches, nil, progress, restack.ConflictContinue); err != nil {
+		if err := restackWithPlan(ctx, wtDeps, group.sortedBranches, nil, progress, restack.ConflictContinue, activity); err != nil {
 			wrappedErr := fmt.Errorf("stack %s: %w", group.rootBranch, err)
 			deps.Log.Warn("parallel restack group failed: %v", wrappedErr)
 			return wrappedErr
@@ -290,9 +316,10 @@ func restackerFor(deps RestackDeps, report restack.ProgressFunc) (restack.Planne
 }
 
 // restackWithPlan plans and executes a fresh (non-resumed) restack. When prePlan is non-nil the engine plan is reused
-// rather than recomputed.
-func restackWithPlan(ctx context.Context, deps RestackDeps, branches engine.Branches, prePlan *engine.RestackPlan, report restack.ProgressFunc, mode restack.ConflictMode) error {
+// rather than recomputed; activity, when non-nil, receives live validation events.
+func restackWithPlan(ctx context.Context, deps RestackDeps, branches engine.Branches, prePlan *engine.RestackPlan, report restack.ProgressFunc, mode restack.ConflictMode, activity engine.RebaseProgressFunc) error {
 	planner, executor := restackerFor(deps, report)
+	planner.Activity = activity
 	plan, err := planner.Plan(ctx, branches, prePlan)
 	if err != nil {
 		return err

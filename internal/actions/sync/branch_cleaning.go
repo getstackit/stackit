@@ -16,13 +16,7 @@ import (
 func cleanBranches(ctx context.Context, deps Deps, opts *Options, dirtyAnchors dirtyAnchorSet, remoteStatuses engine.BranchRemoteStatuses, handler Handler, summary *Summary) (*actions.CleanBranchesResult, error) {
 	// Only emit phase start if we have branches that might need cleaning
 	allBranches := deps.Engine.AllBranches()
-	hasBranchesToCheck := false
-	for _, b := range allBranches {
-		if !b.IsTrunk() {
-			hasBranchesToCheck = true
-			break
-		}
-	}
+	hasBranchesToCheck := slices.ContainsFunc(allBranches, func(b engine.Branch) bool { return !b.IsTrunk() })
 
 	if hasBranchesToCheck {
 		handler.EmitEvent(Event{Phase: PhaseClean, Type: EventStarted})

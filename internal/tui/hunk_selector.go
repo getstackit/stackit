@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/getstackit/stackit/internal/term"
@@ -206,13 +207,7 @@ func (m *HunkSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.Submit):
 			// Require at least one selection before allowing submit
-			hasSelection := false
-			for _, item := range m.items {
-				if item.Selected {
-					hasSelection = true
-					break
-				}
-			}
+			hasSelection := slices.ContainsFunc(m.items, func(item HunkItem) bool { return item.Selected })
 			if !hasSelection {
 				// Don't allow submit with zero selections - user should select at least one hunk
 				// or press cancel/escape to abort
@@ -566,13 +561,9 @@ func (m *HunkSelectorModel) toggleFileSelection() {
 	currentFile := m.items[m.cursor].Hunk.File
 
 	// Find all hunks in this file and check if any are unselected
-	anyUnselected := false
-	for _, item := range m.items {
-		if item.Hunk.File == currentFile && !item.Selected {
-			anyUnselected = true
-			break
-		}
-	}
+	anyUnselected := slices.ContainsFunc(m.items, func(item HunkItem) bool {
+		return item.Hunk.File == currentFile && !item.Selected
+	})
 
 	// Toggle: if any unselected, select all; otherwise deselect all
 	for i := range m.items {

@@ -214,13 +214,7 @@ func RestackAction(ctx context.Context, deps RestackDeps, plan *RestackPlan, han
 // remote-tracking trunk ref (local-only, never fetched, fresh clone), which the
 // engine reports via HasRemoteRef=false.
 func guardUnpushedTrunk(ctx context.Context, eng engine.BranchReader, groups []restackBranchGroup) error {
-	hasBranches := false
-	for _, g := range groups {
-		if len(g.branches) > 0 {
-			hasBranches = true
-			break
-		}
-	}
+	hasBranches := slices.ContainsFunc(groups, func(g restackBranchGroup) bool { return len(g.branches) > 0 })
 	if !hasBranches {
 		return nil
 	}

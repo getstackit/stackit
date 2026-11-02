@@ -792,14 +792,7 @@ func (r *runner) CheckCommutation(ctx context.Context, hunk Hunk, commitSHA, par
 
 	commitHunks := parseDiffHunks(commitDiff, hunk.File)
 
-	fileInDiff := false
-	for line := range strings.SplitSeq(commitDiff, "\n") {
-		if strings.Contains(line, hunk.File) {
-			fileInDiff = true
-			break
-		}
-	}
-	if !fileInDiff {
+	if !strings.Contains(commitDiff, hunk.File) {
 		return true, nil
 	}
 

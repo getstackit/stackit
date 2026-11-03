@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/xslices"
 )
 
 // RemoteMetadataView provides read-only access to the remote metadata cache.
@@ -302,10 +303,7 @@ func buildMetadataDiff(branch string, local, remote *git.Meta) *MetadataDiff {
 func (e *engineImpl) ComputeAllMetadataDiffs() ([]*MetadataDiff, error) {
 	e.mu.RLock()
 	// Filter to only include branches that exist locally (as git branches)
-	localBranches := make(map[string]bool)
-	for _, b := range e.state.branches {
-		localBranches[b] = true
-	}
+	localBranches := xslices.Set(e.state.branches)
 
 	branches := make([]string, 0, len(e.remoteMetaCache))
 	remotes := make(map[string]*git.Meta, len(e.remoteMetaCache))
@@ -424,10 +422,7 @@ func (e *engineImpl) FindOrphanedLocalMetadata(ctx context.Context) ([]OrphanedM
 	}
 
 	// Create a map of local branches for faster lookup
-	localBranches := make(map[string]bool)
-	for _, b := range e.state.branches {
-		localBranches[b] = true
-	}
+	localBranches := xslices.Set(e.state.branches)
 
 	branchNames := make([]string, 0, len(localRefs))
 	for refName := range localRefs {

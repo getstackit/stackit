@@ -12,6 +12,7 @@ import (
 	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/tui/components/tree"
 	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/xslices"
 )
 
 // View renders the dashboard.
@@ -556,10 +557,7 @@ func (m *shippableModel) renderStackTree(stack *shippable.Stack) (lines []string
 		renderer = m.cache.treeRenderer
 	} else {
 		// Fallback: create a filtered renderer (shouldn't happen after refresh)
-		stackBranches := make(map[string]bool)
-		for _, branch := range stack.Stack.AllBranches {
-			stackBranches[branch] = true
-		}
+		stackBranches := xslices.Set(stack.Stack.AllBranches)
 		renderer = tui.NewStackTreeRendererWithFilter(m.ctx.Context, m.engine, func(branchName string) bool {
 			return stackBranches[branchName]
 		})

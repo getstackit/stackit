@@ -18,6 +18,7 @@ import (
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/workpool"
+	"github.com/getstackit/stackit/internal/xslices"
 )
 
 // Engine lists exactly the engine methods get calls: the branch reads (which
@@ -936,10 +937,7 @@ func unfreezeForRestack(ctx context.Context, deps Deps, names []string, pendingF
 		return pendingFreeze
 	}
 
-	unfreezing := make(map[string]bool, len(names))
-	for _, name := range names {
-		unfreezing[name] = true
-	}
+	unfreezing := xslices.Set(names)
 
 	eng := deps.Engine
 	thaw := engine.NewBranchesBuilder(len(names))

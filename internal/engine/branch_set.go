@@ -1,5 +1,7 @@
 package engine
 
+import "github.com/getstackit/stackit/internal/xslices"
+
 // BranchSet provides O(1) branch name lookups with a cached set.
 // Use BranchNames() on StackNavigator to get a cached instance.
 type BranchSet struct {
@@ -9,10 +11,7 @@ type BranchSet struct {
 
 // newBranchSet creates a BranchSet from a slice of branch names.
 func newBranchSet(branches []string) *BranchSet {
-	names := make(map[string]bool, len(branches))
-	for _, name := range branches {
-		names[name] = true
-	}
+	names := xslices.Set(branches)
 	return &BranchSet{
 		names: names,
 		list:  branches,

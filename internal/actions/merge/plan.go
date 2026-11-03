@@ -14,6 +14,7 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/xslices"
 )
 
 // Strategy defines how PRs in the stack should be merged
@@ -271,10 +272,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 
 	// 3. Identify upstack branches that need restacking (moved up for batch loading)
 	upstackBranches := []string{}
-	mergedMap := make(map[string]bool, len(allBranches))
-	for _, b := range allBranches {
-		mergedMap[b] = true
-	}
+	mergedMap := xslices.Set(allBranches)
 	if opts.Scope != "" {
 		// In scope mode, find all tracked branches with the scope that are not being merged
 		for _, branch := range eng.AllBranches() {
@@ -446,10 +444,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	}
 
 	// 6. Detect branching stacks (siblings)
-	mergedSet := make(map[string]bool)
-	for _, branch := range allBranches {
-		mergedSet[branch] = true
-	}
+	mergedSet := xslices.Set(allBranches)
 
 	for _, ancestor := range allBranches {
 		if ancestor == eng.Trunk().Name() {

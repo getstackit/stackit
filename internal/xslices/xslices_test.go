@@ -26,3 +26,11 @@ func TestUnique(t *testing.T) {
 		})
 	}
 }
+
+func TestSet(t *testing.T) {
+	t.Parallel()
+
+	require.Empty(t, Set[string](nil))
+	require.Equal(t, map[string]bool{"a": true, "b": true}, Set([]string{"a", "b", "a"}))
+	require.False(t, Set([]string{"a"})["missing"])
+}

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/xslices"
 )
 
 // stackStateEngine lists the engine methods the stack-state checks call,
@@ -43,10 +44,7 @@ func checkStackState(ctx context.Context, eng stackStateEngine, handler Handler,
 	}
 
 	// Check for orphaned metadata (metadata for branches that don't exist)
-	branchSet := make(map[string]bool)
-	for _, branch := range allBranches {
-		branchSet[branch] = true
-	}
+	branchSet := xslices.Set(allBranches)
 
 	var orphanedBranches []string
 	for branchName := range metadataRefs {

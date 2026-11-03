@@ -18,6 +18,7 @@ import (
 	"github.com/getstackit/stackit/internal/tui"
 	syncComponent "github.com/getstackit/stackit/internal/tui/components/sync"
 	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/xslices"
 )
 
 // NewSyncUI creates a runner and handler pair for sync operations.
@@ -711,10 +712,7 @@ func (h *InteractiveSyncHandler) PromptBranchDeletions(branches map[string]strin
 	}
 
 	// Map selected options back to branch names
-	selectedSet := make(map[string]bool)
-	for _, opt := range selected {
-		selectedSet[opt] = true
-	}
+	selectedSet := xslices.Set(selected)
 
 	for i, name := range names {
 		confirmed[name] = selectedSet[options[i]]

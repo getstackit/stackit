@@ -14,6 +14,7 @@ import (
 	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/xslices"
 )
 
 // ErrCanceled is returned by an OrderEditor when the user cancels.
@@ -248,10 +249,7 @@ func parseEditorContent(content string, originalBranches []string) ([]string, er
 	branches := []string{}
 
 	// Create a set of original branches for validation
-	originalSet := make(map[string]bool)
-	for _, b := range originalBranches {
-		originalSet[b] = true
-	}
+	originalSet := xslices.Set(originalBranches)
 
 	// Parse lines, ignoring comments and empty lines
 	for _, line := range lines {

@@ -15,6 +15,7 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/xslices"
 )
 
 // splitByFileEngine is a minimal interface needed for splitting by file
@@ -557,10 +558,7 @@ func splitByFileSibling(ctx context.Context, branchToSplit engine.Branch, parent
 // filterHunksByFiles filters hunks to only those affecting the specified files.
 func filterHunksByFiles(hunks []git.Hunk, files []string) []git.Hunk {
 	// Create a map for O(1) lookup
-	fileSet := make(map[string]bool)
-	for _, f := range files {
-		fileSet[f] = true
-	}
+	fileSet := xslices.Set(files)
 
 	var filtered []git.Hunk
 	for _, h := range hunks {

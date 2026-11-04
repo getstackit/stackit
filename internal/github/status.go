@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -308,6 +309,9 @@ func parseCheckRollup(rollup map[string]any, reviewDecision ReviewDecision, auth
 		}
 		checks = append(checks, *detail)
 	}
+	// checksByName is a map, so sort to keep the order stable across calls
+	// (it reaches the API and web UI).
+	slices.SortFunc(checks, func(a, b CheckDetail) int { return strings.Compare(a.Name, b.Name) })
 
 	return &CheckStatus{
 		Passing:        !hasFailing,

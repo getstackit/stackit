@@ -211,3 +211,31 @@ func TestParseCheckRollup_MultipleDistinctChecks(t *testing.T) {
 	require.True(t, status.Passing)
 	require.Len(t, status.Checks, 3, "should include all distinct checks")
 }
+
+func TestParseCheckRollup_ChecksSortedByName(t *testing.T) {
+	t.Parallel()
+
+	names := []string{"lint", "build", "test", "deploy", "analyze", "docs"}
+	nodes := make([]any, 0, len(names))
+	for _, name := range names {
+		nodes = append(nodes, map[string]any{
+			"__typename":  "CheckRun",
+			"name":        name,
+			"status":      "COMPLETED",
+			"conclusion":  "SUCCESS",
+			"startedAt":   "2024-01-01T10:00:00Z",
+			"completedAt": "2024-01-01T10:05:00Z",
+		})
+	}
+	rollup := map[string]any{"contexts": map[string]any{"nodes": nodes}}
+
+	// Map iteration order is random, so repeat to make an unsorted result fail.
+	for range 20 {
+		status := parseCheckRollup(rollup, "APPROVED", "author")
+		got := make([]string, len(status.Checks))
+		for i, check := range status.Checks {
+			got[i] = check.Name
+		}
+		require.Equal(t, []string{"analyze", "build", "deploy", "docs", "lint", "test"}, got)
+	}
+}

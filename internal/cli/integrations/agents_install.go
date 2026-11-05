@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/xslices"
 	"gopkg.in/yaml.v3"
 )
 
@@ -409,10 +410,7 @@ func cleanupOldCommandFiles(baseDir string, files []string) {
 // stackit-owned skill directories. Sibling skills in skillsBaseDir (user skills,
 // other tools) are never scanned, so only stackit's own files are at risk.
 func pruneStaleSkillFiles(baseDir string, target agentInstallTarget) error {
-	keep := make(map[string]struct{})
-	for _, path := range installedFilePaths(baseDir, target) {
-		keep[path] = struct{}{}
-	}
+	keep := xslices.Set(installedFilePaths(baseDir, target))
 	return pruneOrphans(ownedSkillDirs(baseDir, target), keep)
 }
 
@@ -458,7 +456,7 @@ func ownedSkillDirs(baseDir string, target agentInstallTarget) []string {
 
 // pruneOrphans removes files under ownedDirs that are not in keep, then drops
 // any directories left empty. The root of each owned dir is preserved.
-func pruneOrphans(ownedDirs []string, keep map[string]struct{}) error {
+func pruneOrphans(ownedDirs []string, keep map[string]bool) error {
 	for _, dir := range ownedDirs {
 		if !dirExists(dir) {
 			continue
@@ -471,7 +469,7 @@ func pruneOrphans(ownedDirs []string, keep map[string]struct{}) error {
 			if d.IsDir() {
 				return nil
 			}
-			if _, ok := keep[path]; !ok {
+			if !keep[path] {
 				orphans = append(orphans, path)
 			}
 			return nil

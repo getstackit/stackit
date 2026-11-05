@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/xslices"
 )
 
 // TrackBranch tracks a branch with a parent branch
@@ -562,10 +563,7 @@ func (e *engineImpl) validateLinearSiblingSplit(ctx context.Context, parent, bra
 	}
 
 	graph := e.Graph(ctx, SortStrategyAlphabetical)
-	children := make(map[string]struct{})
-	for _, child := range graph.Children(e.GetBranch(parent)) {
-		children[child] = struct{}{}
-	}
+	children := xslices.Set(graph.Children(e.GetBranch(parent)))
 
 	// The original branch is removed when it is not retained as one of the
 	// split branches. The remaining names all become direct children.
@@ -573,7 +571,7 @@ func (e *engineImpl) validateLinearSiblingSplit(ctx context.Context, parent, bra
 		delete(children, branchToSplit)
 	}
 	for _, branchName := range branchNames {
-		children[branchName] = struct{}{}
+		children[branchName] = true
 	}
 
 	if len(children) <= 1 {

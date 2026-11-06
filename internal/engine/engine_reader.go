@@ -9,6 +9,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/xslices"
 )
 
 // AllBranches returns all branches.
@@ -207,10 +208,7 @@ func (e *engineImpl) FindBranchesForCommits(ctx context.Context, commitSHAs []st
 		return result
 	}
 
-	want := make(map[string]struct{}, len(commitSHAs))
-	for _, sha := range commitSHAs {
-		want[sha] = struct{}{}
-	}
+	want := xslices.Set(commitSHAs)
 
 	e.mu.RLock()
 	branches := make([]string, len(e.state.branches))
@@ -222,7 +220,7 @@ func (e *engineImpl) FindBranchesForCommits(ctx context.Context, commitSHAs []st
 		nodes, _ := commitsByBranch.Get(branchName)
 		for _, node := range nodes {
 			sha := node.SHA
-			if _, ok := want[sha]; !ok {
+			if !want[sha] {
 				continue
 			}
 			if _, mapped := result[sha]; !mapped {

@@ -17,6 +17,7 @@ import (
 	"github.com/getstackit/stackit/internal/tui"
 	mergeComponent "github.com/getstackit/stackit/internal/tui/components/merge"
 	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/xslices"
 )
 
 // NewMergeUI creates a runner and handler pair for merge operations.
@@ -564,10 +565,7 @@ func appendBottomUpGroups(groups []Group, plan *mergeAction.Plan, assigned map[i
 	// 2. Create group for upstack branches
 	if len(plan.UpstackBranches) > 0 {
 		// Build set for O(1) lookup instead of O(n) per step
-		upstackSet := make(map[string]bool, len(plan.UpstackBranches))
-		for _, ub := range plan.UpstackBranches {
-			upstackSet[ub] = true
-		}
+		upstackSet := xslices.Set(plan.UpstackBranches)
 
 		var indices []int
 		for i, step := range plan.Steps {

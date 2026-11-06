@@ -885,10 +885,7 @@ func (targets *syncTargets) nearestAvailableAncestor(branchName string, unavaila
 // that a branch created moments ago counts as frozen alongside one that already
 // was.
 func (targets *syncTargets) staleAfterReanchor(ctx context.Context, eng Engine, reanchored map[string]Reanchored, pendingFreeze engine.Branches) []StaleBranch {
-	inSync := make(map[string]bool, len(targets.branches))
-	for _, name := range targets.branches {
-		inSync[name] = true
-	}
+	inSync := xslices.Set(targets.branches)
 
 	graph := eng.Graph(ctx, engine.SortStrategyAlphabetical)
 	anchored := make(map[string]bool, len(reanchored))

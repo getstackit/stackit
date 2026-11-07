@@ -51,7 +51,7 @@ type SyncManager interface {
 	Rebase(ctx context.Context, spec git.RebaseSpec) (RestackResult, error)
 
 	// Validation
-	ValidateRebases(ctx context.Context, specs []RebaseSpec) (*RebaseValidation, error)
+	ValidateRebases(ctx context.Context, specs []RebaseSpec, opts ValidateRebasesOpts) (*RebaseValidation, error)
 }
 
 // StackRewriter provides operations for modifying commit history and branch structure

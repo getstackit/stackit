@@ -224,3 +224,20 @@ func (e *engineImpl) BatchBranchStats(ctx context.Context, branches Branches) ma
 	}
 	return result
 }
+
+// CommitCountBetween returns the commit count in (base, head], sharing the
+// revision-keyed cache the batched stats readers use.
+func (e *engineImpl) CommitCountBetween(ctx context.Context, rr git.RevRange) (int, error) {
+	if rr.Base == rr.Head {
+		return 0, nil
+	}
+	if count, ok := e.commitCountCache.Load(rr); ok {
+		return count.(int), nil
+	}
+	count, err := e.git.ReadCommitCounts(ctx, rr).One()
+	if err != nil {
+		return 0, err
+	}
+	e.commitCountCache.Store(rr, count)
+	return count, nil
+}

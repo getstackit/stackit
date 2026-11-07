@@ -54,6 +54,16 @@ func TestRestackWorktreeHoldWarning(t *testing.T) {
 	}
 }
 
+func TestRestackWorktreeHoldHeldBy(t *testing.T) {
+	t.Parallel()
+
+	branch := RestackWorktreeHold{Scope: RestackWorktreeHoldBranch, Branch: "y", WorktreePath: "/tmp/y", Reason: "uncommitted changes"}
+	require.Equal(t, "worktree /tmp/y has uncommitted changes", branch.heldBy())
+
+	stack := RestackWorktreeHold{Scope: RestackWorktreeHoldStack, StackRoot: "x", WorktreePath: "/tmp/x", Reason: "rebase in progress"}
+	require.Equal(t, "worktree /tmp/x has a rebase in progress (holds the stack rooted at x)", stack.heldBy())
+}
+
 func TestRestackWorktreeHoldReportBlocks(t *testing.T) {
 	t.Parallel()
 
@@ -68,9 +78,14 @@ func TestRestackWorktreeHoldReportBlocks(t *testing.T) {
 		},
 	}}
 
-	require.True(t, report.blocks("stack-a-child", "stack-a"))
-	require.True(t, report.blocks("branch-b", "stack-b"))
-	require.False(t, report.blocks("branch-c", "stack-b"))
+	hold, ok := report.holdFor("stack-a-child", "stack-a")
+	require.True(t, ok)
+	require.Equal(t, RestackWorktreeHoldStack, hold.Scope)
+	hold, ok = report.holdFor("branch-b", "stack-b")
+	require.True(t, ok)
+	require.Equal(t, "branch-b", hold.Branch)
+	_, ok = report.holdFor("branch-c", "stack-b")
+	require.False(t, ok)
 	require.True(t, report.blocksStack("stack-a"))
 	require.False(t, report.blocksStack("stack-b"))
 }

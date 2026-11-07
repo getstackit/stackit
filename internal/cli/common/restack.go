@@ -87,11 +87,16 @@ func FormatRestackLines(event actions.RestackBranchEvent) []string {
 	return append(lines, fmt.Sprintf("  %s %s", status.Mark(), row))
 }
 
-// FormatRestackSummary renders "restacked N, skipped M (conflict), blocked K,
-// P already current". upToDate is the count of rows the caller suppressed.
-// Returns "" when there is nothing to summarize.
+// FormatRestackSummary renders "held H (worktree), restacked N, skipped M
+// (conflict), blocked K, P already current". upToDate is the count of rows the
+// caller suppressed. Holds lead: the remedy lives in another worktree the user
+// is not looking at, so it must not be buried behind routine counts. Returns ""
+// when there is nothing to summarize.
 func FormatRestackSummary(summary actions.RestackSummary, upToDate int) string {
 	var parts []string
+	if n := len(summary.Held); n > 0 {
+		parts = append(parts, fmt.Sprintf("held %d (worktree)", n))
+	}
 	if summary.Restacked > 0 {
 		parts = append(parts, fmt.Sprintf("restacked %d", summary.Restacked))
 	}
@@ -107,13 +112,37 @@ func FormatRestackSummary(summary actions.RestackSummary, upToDate int) string {
 	return strings.Join(parts, ", ")
 }
 
-// RestackChanged reports whether a restack moved, conflicted on, or blocked any
-// branch — anything other than "everything was already current".
+// RestackChanged reports whether a restack moved, conflicted on, blocked, or
+// held back any branch — anything other than "everything was already current".
 func RestackChanged(summary actions.RestackSummary) bool {
-	return summary.Restacked > 0 || len(summary.Conflicts) > 0 || len(summary.Blocked) > 0
+	return summary.Restacked > 0 || summary.Incomplete()
+}
+
+// FormatRestackOutcome renders the final restack line plus a resolve hint per
+// conflict, each hint on its own line behind indent. Holds, conflicts, and
+// blocked branches make the outcome incomplete so it never reads as success.
+func FormatRestackOutcome(summary actions.RestackSummary, upToDate int, indent string) string {
+	if !RestackChanged(summary) {
+		return "✨ Everything is up to date!"
+	}
+	prefix := "✅ Summary: "
+	if summary.Incomplete() {
+		prefix = "⚠ Restack incomplete: "
+	}
+	return WithResolveHints(prefix+FormatRestackSummary(summary, upToDate), summary.Conflicts, indent)
+}
+
+// WithResolveHints appends a resolve-and-continue line for every conflict.
+func WithResolveHints(line string, conflicts []string, indent string) string {
+	lines := make([]string, 0, 1+len(conflicts))
+	lines = append(lines, line)
+	for _, branch := range conflicts {
+		lines = append(lines, indent+FormatRestackResolveHint(branch))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // FormatRestackResolveHint renders the follow-up command for a conflicted branch.
 func FormatRestackResolveHint(branch string) string {
-	return fmt.Sprintf("Run %s to resolve and continue", style.ColorCyan("st restack "+branch))
+	return fmt.Sprintf("Run %s to resolve and continue", style.ColorCyan("st restack --branch "+branch))
 }

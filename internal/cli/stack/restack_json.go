@@ -124,9 +124,15 @@ func (h *JSONRestackHandler) OnRestackComplete(summary actions.RestackSummary) {
 		}
 	}
 
-	if h.Result.ConflictCount > 0 {
+	// Status follows the summary alone so it never depends on whether the
+	// caller also reports the error via SetError. Conflicts outrank a failure,
+	// matching SetError.
+	switch {
+	case h.Result.ConflictCount > 0:
 		h.Result.Status = RestackJSONStatusConflict
-	} else {
+	case summary.Failed:
+		h.Result.Status = RestackJSONStatusError
+	default:
 		h.Result.Status = RestackJSONStatusSuccess
 	}
 }

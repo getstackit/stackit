@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"slices"
 	"sync"
 
 	"github.com/getstackit/stackit/internal/actions/restack"
@@ -115,6 +116,9 @@ func (e RestackBranchEvent) IsPlainUpToDate() bool {
 
 // RestackSummary contains aggregate outcomes from a restack operation.
 type RestackSummary struct {
+	// Failed marks an unexpected operation error, possibly after partial
+	// progress. A conflict is not a failure; it is incomplete work.
+	Failed    bool
 	Restacked int
 	Conflicts []string // branches skipped because they conflicted
 	Blocked   []string
@@ -123,6 +127,18 @@ type RestackSummary struct {
 	// as unneeded per branch, so this is the only place an adapter can tell
 	// "protected your work" from "nothing to do".
 	Held []RestackHeldInfo
+}
+
+// resolveStack records that the conflict workflow finished a stack without
+// stopping (e.g. rerere resolved every conflict): its conflicted and blocked
+// branches were restacked after all, so they no longer count as left behind.
+func (s RestackSummary) resolveStack(stack []string) RestackSummary {
+	inStack := func(name string) bool { return slices.Contains(stack, name) }
+	conflicts := slices.DeleteFunc(slices.Clone(s.Conflicts), inStack)
+	blocked := slices.DeleteFunc(slices.Clone(s.Blocked), inStack)
+	s.Restacked += len(s.Conflicts) - len(conflicts) + len(s.Blocked) - len(blocked)
+	s.Conflicts, s.Blocked = conflicts, blocked
+	return s
 }
 
 // RestackHeldInfo is a branch a worktree held back, with the reason.

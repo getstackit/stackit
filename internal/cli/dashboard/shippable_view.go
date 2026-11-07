@@ -313,6 +313,10 @@ func (m *shippableModel) formatBranchBlockingStatus(branchName string) string {
 		return style.ColorYellow("no PR")
 	case shippable.ReasonNotPushed:
 		return style.ColorYellow("not pushed")
+	case shippable.ReasonPRClosed:
+		return style.ColorRed("PR closed")
+	case shippable.ReasonPRMerged:
+		return style.ColorDim("PR merged")
 	default:
 		return ""
 	}
@@ -329,6 +333,8 @@ func (m *shippableModel) getStatusIcon(status shippable.Status) string {
 		return style.ColorRed("✗")
 	case shippable.StatusIncomplete:
 		return style.ColorDim("○")
+	case shippable.StatusUnverified:
+		return style.ColorDim("?")
 	default:
 		return "?"
 	}

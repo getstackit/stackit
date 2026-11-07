@@ -3,17 +3,21 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/shippable"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/tui/components/tree"
 	"github.com/getstackit/stackit/internal/tui/core"
 	"github.com/getstackit/stackit/internal/watcher"
 )
@@ -27,6 +31,7 @@ const (
 // it opens the existing shipping dashboard.
 type CompanionOptions struct {
 	RunLocalCI bool
+	StackOnly  bool
 }
 
 type workingTreeSummary struct {
@@ -78,6 +83,7 @@ type companionModel struct {
 	git         statusReader
 	analysis    *shippable.AnalysisResult
 	workingTree workingTreeSummary
+	renderer    *tree.StackTreeRenderer
 
 	watcher refWatcher
 
@@ -94,6 +100,7 @@ type (
 	companionReloadMsg struct {
 		analysis    *shippable.AnalysisResult
 		workingTree workingTreeSummary
+		renderer    *tree.StackTreeRenderer
 		err         error
 	}
 	companionWorkingTreeMsg struct {
@@ -187,6 +194,7 @@ func (m *companionModel) handleBackgroundMsg(msg tea.Msg) (tea.Cmd, bool) {
 		} else {
 			m.analysis = msg.analysis
 			m.workingTree = msg.workingTree
+			m.renderer = msg.renderer
 			m.lastRefresh = time.Now()
 			m.errorMessage = ""
 		}
@@ -237,13 +245,46 @@ func (m *companionModel) reload() tea.Cmd {
 		if err != nil {
 			return companionReloadMsg{err: fmt.Errorf("analyze local stack state: %w", err)}
 		}
+		analysis = filterCompanionStacks(eng, analysis, m.options.StackOnly)
 
 		workingTree, err := readWorkingTree(ctx, runner)
 		if err != nil {
 			return companionReloadMsg{err: err}
 		}
-		return companionReloadMsg{analysis: analysis, workingTree: workingTree}
+		return companionReloadMsg{
+			analysis:    analysis,
+			workingTree: workingTree,
+			renderer:    buildCompanionRenderer(eng),
+		}
 	}
+}
+
+func filterCompanionStacks(eng engine.Engine, analysis *shippable.AnalysisResult, stackOnly bool) *shippable.AnalysisResult {
+	currentBranch := eng.CurrentBranchName()
+	if !stackOnly || analysis == nil || currentBranch == eng.Trunk().GetName() {
+		return analysis
+	}
+	return analysis.Filter(func(stack shippable.Stack) bool {
+		return slices.Contains(stack.Stack.AllBranches, currentBranch)
+	})
+}
+
+func buildCompanionRenderer(eng engine.Engine) *tree.StackTreeRenderer {
+	branches := eng.AllBranches()
+	stats := eng.BatchBranchStats(branches)
+	statuses := eng.ReadBranchStatuses(branches)
+	annotations := make(map[string]tree.BranchAnnotation, len(branches))
+	for _, branch := range branches {
+		annotation := tui.TreeAnnotation(stackview.BaseAnnotation(eng, branch, stats[branch.GetName()], stackview.AnnotationOptions{
+			SkipCommitMessages: true,
+		}))
+		annotation.NeedsRestack = !statuses.IsUpToDate(branch)
+		annotations[branch.GetName()] = annotation
+	}
+
+	renderer := tui.NewStackTreeRenderer(eng)
+	renderer.SetAnnotations(annotations)
+	return renderer
 }
 
 func (m *companionModel) readWorkingTree() tea.Cmd {

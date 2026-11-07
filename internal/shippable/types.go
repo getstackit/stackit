@@ -181,6 +181,19 @@ func (r *AnalysisResult) FilterByAuthor(author string) *AnalysisResult {
 	return result
 }
 
+// Filter returns the stacks keep accepts, with the per-status counts
+// recomputed for just those stacks.
+func (r *AnalysisResult) Filter(keep func(Stack) bool) *AnalysisResult {
+	result := &AnalysisResult{}
+	for _, stack := range r.Stacks {
+		if keep(stack) {
+			result.Stacks = append(result.Stacks, stack)
+			result.addCount(stack.Status)
+		}
+	}
+	return result
+}
+
 // addCount increments the per-status counter for one analyzed stack.
 func (r *AnalysisResult) addCount(status Status) {
 	switch status {

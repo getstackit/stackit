@@ -183,8 +183,20 @@ func TestFormatCompactRowTruncatesLongErrors(t *testing.T) {
 
 	require.NotContains(t, row, "\n", "row must stay on one line")
 	require.NotContains(t, row, "hint:")
-	require.Contains(t, row, "...")
-	require.LessOrEqual(t, lipgloss.Width(row), 80+maxErrorDetailWidth, "detail must be capped")
+	require.Contains(t, row, "…")
+	require.LessOrEqual(t, lipgloss.Width(row), 80, "detail must fit the terminal")
+}
+
+func TestCompactRowsRespectDisplayWidth(t *testing.T) {
+	t.Parallel()
+	for _, width := range []int{1, 20, 40, 80} {
+		for _, status := range []Status{StatusPending, StatusSubmitting, StatusSyncing, StatusDone, StatusError} {
+			item := Item{BranchName: strings.Repeat("界", 40), Action: ActionCreate, Status: status, Error: errors.New(strings.Repeat("error ", 30))}
+			row := FormatCompactRow(item, width, "*", DefaultStyles())
+			require.LessOrEqual(t, lipgloss.Width(row), width)
+			require.NotContains(t, row, "\n")
+		}
+	}
 }
 
 func TestFormatClosingSummary(t *testing.T) {
@@ -222,7 +234,7 @@ func TestFormatOutcomeSummary(t *testing.T) {
 	require.Empty(t, FormatOutcomeSummary(nil, time.Second))
 }
 
-func TestFormatCreatedURLs(t *testing.T) {
+func TestFormatPRResults(t *testing.T) {
 	t.Parallel()
 
 	items := []Item{
@@ -231,9 +243,32 @@ func TestFormatCreatedURLs(t *testing.T) {
 		{BranchName: "c", Action: ActionCreate, Status: StatusError, URL: "https://github.com/o/r/pull/3"},
 	}
 
-	// Only the created, done PR is listed — not the updated or failed one.
-	require.Equal(t, "  #1  https://github.com/o/r/pull/1", FormatCreatedURLs(items))
-	require.Empty(t, FormatCreatedURLs(items[1:2]))
+	// Every successful branch retains its PR identity; failures stay separate.
+	require.Equal(t, "  a  #1  https://github.com/o/r/pull/1\n  b  #2 updated", ansi.Strip(FormatPRResults(items, PRLinksHyperlink)))
+	require.Contains(t, FormatPRResults(items, PRLinksHyperlink), "\x1b]8;;https://github.com/o/r/pull/2")
+	require.Equal(t, "  a  #1  https://github.com/o/r/pull/1\n  b  #2 updated", FormatPRResults(items, PRLinksPlain), "plain output carries no escape sequences")
+	require.Empty(t, FormatPRResults(items[2:], PRLinksHyperlink))
+}
+
+func TestFormatPRResultsBranchNamesByMode(t *testing.T) {
+	t.Parallel()
+	branch := "alice/20260901000000/fix-tests"
+	items := []Item{{BranchName: branch, Action: ActionUpdate, Status: StatusDone, URL: "https://github.com/o/r/pull/2"}}
+
+	// Terminals shorten names; plain output must stay passable to `stackit checkout`.
+	require.Equal(t, "  fix-tests  #2 updated", ansi.Strip(FormatPRResults(items, PRLinksHyperlink)))
+	require.Equal(t, "  "+branch+"  #2 updated", FormatPRResults(items, PRLinksPlain))
+}
+
+func TestTruncateMiddleRespectsDisplayWidth(t *testing.T) {
+	t.Parallel()
+	for _, s := range []string{strings.Repeat("界", 10), "a" + strings.Repeat("界", 10), strings.Repeat("界", 5) + "abc" + strings.Repeat("界", 5)} {
+		for width := 1; width <= 12; width++ {
+			got := TruncateMiddle(s, width)
+			require.LessOrEqual(t, lipgloss.Width(got), width, "TruncateMiddle(%q, %d) = %q", s, width, got)
+		}
+	}
+	require.Equal(t, "ab…yz", TruncateMiddle("abcdefghijklmnopqrstuvwxyz", 5))
 }
 
 func TestFormatFailureSummaryWithoutErrorDetail(t *testing.T) {

@@ -36,7 +36,6 @@ func ParseDiffOutput(diffOutput string) (Hunks, error) {
 	}
 
 	var hunks Hunks
-	lines := strings.Split(diffOutput, "\n")
 
 	var currentHunk *Hunk
 	var currentFile string
@@ -46,7 +45,7 @@ func ParseDiffOutput(diffOutput string) (Hunks, error) {
 	var currentFileMode string
 	var hunkLines []string
 
-	for _, line := range lines {
+	for line := range strings.SplitSeq(diffOutput, "\n") {
 		line = strings.TrimRight(line, "\r")
 		// Check for file header (starts with "diff --git" or "--- a/" or "+++ b/")
 		if strings.HasPrefix(line, "diff --git") {

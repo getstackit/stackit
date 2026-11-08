@@ -37,13 +37,12 @@ func parseDiffHunks(diffOutput, targetFile string) []Hunk {
 	}
 
 	var hunks []Hunk
-	lines := strings.Split(diffOutput, "\n")
 
 	var currentHunk *Hunk
 	var currentFile string
 	var hunkLines []string
 
-	for _, line := range lines {
+	for line := range strings.SplitSeq(diffOutput, "\n") {
 		line = strings.TrimRight(line, "\r")
 		if strings.HasPrefix(line, "diff --git") {
 			if currentHunk != nil {

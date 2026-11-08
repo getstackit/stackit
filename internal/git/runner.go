@@ -584,13 +584,12 @@ func (r *runner) GetCommitTemplate(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("failed to get git status: %w", err)
 	}
 
-	lines := strings.Split(status, "\n")
 	var sb strings.Builder
 	sb.WriteString("\n")
 	sb.WriteString("# Please enter the commit message for your changes. Lines starting\n")
 	sb.WriteString("# with '#' will be ignored, and an empty message aborts the commit.\n")
 	sb.WriteString("#\n")
-	for _, line := range lines {
+	for line := range strings.SplitSeq(status, "\n") {
 		sb.WriteString("# ")
 		sb.WriteString(line)
 		sb.WriteString("\n")

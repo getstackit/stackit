@@ -651,9 +651,7 @@ func (m *shippableModel) renderStackTree(stack *shippable.Stack) (lines []string
 		}
 		selectedLineEnd = nextEnd - 1
 	}
-	if selectedLineEnd < selectedLine {
-		selectedLineEnd = selectedLine
-	}
+	selectedLineEnd = max(selectedLineEnd, selectedLine)
 
 	// The topmost branch in the rendered tree is the first entry
 	isTopmost = selectedIdx == 0

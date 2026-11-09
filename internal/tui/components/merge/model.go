@@ -535,10 +535,7 @@ func (m *Model) renderProgressBar(elapsed, estimate time.Duration) string {
 	if estimate == 0 {
 		return ""
 	}
-	progress := float64(elapsed) / float64(estimate)
-	if progress > 1.0 {
-		progress = 1.0
-	}
+	progress := min(float64(elapsed)/float64(estimate), 1.0)
 	filled := int(progress * float64(width))
 
 	var b strings.Builder

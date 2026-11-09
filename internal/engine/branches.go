@@ -17,9 +17,7 @@ type BranchesBuilder struct {
 
 // NewBranchesBuilder creates a builder sized for up to capHint branches.
 func NewBranchesBuilder(capHint int) *BranchesBuilder {
-	if capHint < 0 {
-		capHint = 0
-	}
+	capHint = max(capHint, 0)
 	return &BranchesBuilder{
 		branches: make([]Branch, 0, capHint),
 		seen:     make(map[string]struct{}, capHint),

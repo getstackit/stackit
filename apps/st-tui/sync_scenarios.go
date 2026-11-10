@@ -8,8 +8,6 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 )
 
-func prNumberPointer(n git.PRNumber) *git.PRNumber { return &n }
-
 // SyncScenario is a deterministic replay of the action events emitted by sync.
 // It drives the production Handler, not the Bubble Tea model directly, so its
 // terminal lifecycle and event formatting match the sync command.
@@ -87,13 +85,13 @@ var SyncScenarios = []SyncScenario{
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "stack-merge-stack-1784862381", Message: "merged into main"}),
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "jonnii/20260724022739/make-restack-output-terse-and-outcome-focused", Message: "merged into main"}),
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted}),
-			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "info-query-cli-rendering", PRNumber: prNumberPointer(936), Parent: "main", NewRevision: "9e49378"}),
-			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "jonnii/20260529015605/add-user-menu-to-header-and-extend-it-to-repo", PRNumber: prNumberPointer(1070), Parent: "main", NewRevision: "15d7955"}),
-			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", PRNumber: prNumberPointer(1164), Parent: "main", NewRevision: "b0d42a4"}),
-			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", PRNumber: prNumberPointer(1242), Parent: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", NewRevision: "e1d9f30"}),
-			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "jonnii/20260605033020/route-insert-s-child-select-prompt-through-the", PRNumber: prNumberPointer(1241), Parent: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", NewRevision: "4cb45e0"}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "info-query-cli-rendering", PRNumber: new(git.PRNumber(936)), Parent: "main", NewRevision: "9e49378"}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "jonnii/20260529015605/add-user-menu-to-header-and-extend-it-to-repo", PRNumber: new(git.PRNumber(1070)), Parent: "main", NewRevision: "15d7955"}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", PRNumber: new(git.PRNumber(1164)), Parent: "main", NewRevision: "b0d42a4"}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", PRNumber: new(git.PRNumber(1242)), Parent: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", NewRevision: "e1d9f30"}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "jonnii/20260605033020/route-insert-s-child-select-prompt-through-the", PRNumber: new(git.PRNumber(1241)), Parent: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", NewRevision: "4cb45e0"}),
 			restackEvent(actions.RestackBranchEvent{Result: actions.RestackUnneeded, Branch: "jonnii/20260219034124/prompt-notes-wt"}),
-			restackEvent(actions.RestackBranchEvent{Result: actions.RestackConflict, Branch: "jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits", PRNumber: prNumberPointer(754)}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackConflict, Branch: "jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits", PRNumber: new(git.PRNumber(754))}),
 		},
 		Summary: syncAction.Summary{
 			BranchesDeleted:   2,

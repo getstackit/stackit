@@ -158,8 +158,8 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	// branch or its metadata refs were already absent.
 	if err := e.git.DeleteRefs(ctx, []string{
 		"refs/heads/" + branchName,
-		git.MetadataRefPrefix + branchName,
-		git.LocalMetadataRefPrefix + branchName,
+		git.MetadataRefName(branchName),
+		git.LocalMetadataRefName(branchName),
 	}...); err != nil {
 		return fmt.Errorf("failed to delete branch refs: %w", err)
 	}
@@ -400,8 +400,8 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 	// orphaned refs are reconciled by `sync`.
 	_ = e.metadata.RenameMetadata(ctx, oldName, newName)
 
-	oldLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, oldName)
-	newLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, newName)
+	oldLocalRef := git.LocalMetadataRefName(oldName)
+	newLocalRef := git.LocalMetadataRefName(newName)
 	if sha, err := e.git.ReadRevisions(ctx, oldLocalRef).One(); err == nil {
 		if updateErr := e.git.UpdateRefs(ctx, []git.RefUpdate{{RefName: newLocalRef, NewSHA: sha}}, ""); updateErr == nil {
 			_ = e.git.DeleteRefs(ctx, oldLocalRef)

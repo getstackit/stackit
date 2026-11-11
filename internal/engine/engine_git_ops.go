@@ -228,7 +228,7 @@ func (e *engineImpl) BatchReadMetadataRaw(ctx context.Context, branchNames []str
 func (e *engineImpl) DeleteMetadataRefsBatch(ctx context.Context, branchNames []string) error {
 	refNames := make([]string, len(branchNames))
 	for i, branchName := range branchNames {
-		refNames[i] = git.MetadataRefPrefix + branchName
+		refNames[i] = git.MetadataRefName(branchName)
 	}
 	return e.git.DeleteRefs(ctx, refNames...)
 }

@@ -393,7 +393,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		}))
 		blobs, err := runner.CreateBlobs(t.Context(), "{not json")
 		require.NoError(t, err)
-		require.NoError(t, scene.Repo.RunGitCommand("update-ref", git.WorktreeRefPrefix+"broken", blobs[0]))
+		require.NoError(t, scene.Repo.RunGitCommand("update-ref", git.WorktreeRefName("broken"), blobs[0]))
 
 		entries, err := runner.ListWorktreeRegistrations(t.Context())
 		require.NoError(t, err)

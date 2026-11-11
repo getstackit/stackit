@@ -416,7 +416,7 @@ func (e *engineImpl) FindOrphanedLocalMetadata(ctx context.Context) ([]OrphanedM
 	defer e.mu.RUnlock()
 
 	// List all local metadata refs
-	localRefs, err := e.git.ListRefs(ctx, "refs/stackit/metadata/")
+	localRefs, err := e.git.ListRefs(ctx, git.MetadataRefPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -426,7 +426,7 @@ func (e *engineImpl) FindOrphanedLocalMetadata(ctx context.Context) ([]OrphanedM
 
 	branchNames := make([]string, 0, len(localRefs))
 	for refName := range localRefs {
-		branchNames = append(branchNames, refName[len("refs/stackit/metadata/"):])
+		branchNames = append(branchNames, strings.TrimPrefix(refName, git.MetadataRefPrefix))
 	}
 	// Sorted so sync prompts in a stable order rather than map order.
 	slices.Sort(branchNames)

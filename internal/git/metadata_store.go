@@ -126,7 +126,7 @@ func (r *MetadataStore) ReadMetadata(ctx context.Context, branchNames ...string)
 	// Build ref names for all cache misses.
 	refs := make([]string, len(misses))
 	for i, name := range misses {
-		refs[i] = fmt.Sprintf("%s%s", MetadataRefPrefix, name)
+		refs[i] = MetadataRefName(name)
 	}
 
 	// Single burst: all ref lookups + blob reads in one pipe transaction.
@@ -187,7 +187,7 @@ func (r *MetadataStore) ReadLocalMetadata(ctx context.Context, branchNames ...st
 	}()
 	refs := make([]string, len(branchNames))
 	for i, name := range branchNames {
-		refs[i] = LocalMetadataRefPrefix + name
+		refs[i] = LocalMetadataRefName(name)
 		// Captured before the read: an in-process write racing it bumps the
 		// generation past this value, so the expectation is distrusted rather
 		// than wrongly trusted.
@@ -231,7 +231,7 @@ func (r *MetadataStore) WriteMetadata(ctx context.Context, branchName string, me
 		return fmt.Errorf("failed to create metadata blob: %w", err)
 	}
 
-	refName := fmt.Sprintf("%s%s", MetadataRefPrefix, branchName)
+	refName := MetadataRefName(branchName)
 	generation := r.git.RefGeneration(refName)
 	// This runner moved the ref (a transaction commit, restack, or undo) since
 	// the cached read, so the cached SHA is not what the ref holds. Comparing
@@ -289,7 +289,7 @@ func (r *MetadataStore) updateMetadataRefCAS(ctx context.Context, refName, branc
 func (r *MetadataStore) DeleteMetadata(ctx context.Context, branchName string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	refName := fmt.Sprintf("%s%s", MetadataRefPrefix, branchName)
+	refName := MetadataRefName(branchName)
 	err := r.git.DeleteRefs(ctx, refName)
 	r.metadataCache.Delete(branchName)
 	return err
@@ -439,8 +439,8 @@ func (r *MetadataStore) ResetMetadataCacheStats() {
 func (r *MetadataStore) RenameMetadata(ctx context.Context, oldName, newName string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	oldRefName := fmt.Sprintf("%s%s", MetadataRefPrefix, oldName)
-	newRefName := fmt.Sprintf("%s%s", MetadataRefPrefix, newName)
+	oldRefName := MetadataRefName(oldName)
+	newRefName := MetadataRefName(newName)
 
 	sha, err := r.git.ReadRevisions(ctx, oldRefName).One()
 	if err != nil {
@@ -470,7 +470,7 @@ func (r *MetadataStore) WriteLocalMetadata(ctx context.Context, branchName strin
 		return fmt.Errorf("failed to create local metadata blob: %w", err)
 	}
 
-	refName := fmt.Sprintf("%s%s", LocalMetadataRefPrefix, branchName)
+	refName := LocalMetadataRefName(branchName)
 	generation := r.git.RefGeneration(refName)
 	// Mirrors updateMetadataRefCAS: an expectation we hold is compared even when
 	// the new content matches it, because "matches what I read" is not the same

@@ -92,7 +92,7 @@ func TestRestackBranchPropagatesRevisionReadFailure(t *testing.T) {
 	require.True(t, ok)
 	require.NoError(t, trackingImpl.TrackBranch(ctx, "feature", "main"))
 
-	metaRef := git.MetadataRefPrefix + "feature"
+	metaRef := git.MetadataRefName("feature")
 	realMetadataSHA, err := realGit.ReadRevisions(t.Context(), metaRef).One()
 	require.NoError(t, err)
 	realBranchSHA, err := realGit.ReadRevisions(t.Context(), "feature").One()
@@ -140,7 +140,7 @@ func TestApplyBranchAndMetadataPropagatesRevisionReadFailure(t *testing.T) {
 	require.True(t, ok)
 	require.NoError(t, trackingImpl.TrackBranch(ctx, "feature", "main"))
 
-	metaRef := git.MetadataRefPrefix + "feature"
+	metaRef := git.MetadataRefName("feature")
 	realMetadataSHA, err := realGit.ReadRevisions(t.Context(), metaRef).One()
 	require.NoError(t, err)
 	featureSHA, err := realGit.ReadRevisions(t.Context(), "feature").One()

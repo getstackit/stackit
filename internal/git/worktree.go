@@ -16,6 +16,11 @@ import (
 // WorktreeRefPrefix is the prefix for Git refs where worktree metadata is stored (local-only)
 const WorktreeRefPrefix = "refs/stackit/worktrees/"
 
+// WorktreeRefName returns the full ref name for a stack root's worktree registration.
+func WorktreeRefName(stackRoot string) string {
+	return WorktreeRefPrefix + stackRoot
+}
+
 // WorktreePathRefPrefix is a reverse index from canonical worktree path to
 // its anchor registration. Keeping this alongside WorktreeRefPrefix lets a
 // single update-ref transaction enforce both directions of the ownership
@@ -342,7 +347,7 @@ func (r *runner) PruneWorktrees(ctx context.Context) error {
 
 // ReadWorktreeMeta reads worktree metadata for a stack root from local git refs
 func (r *runner) ReadWorktreeMeta(ctx context.Context, stackRoot string) (*WorktreeMeta, error) {
-	refName := fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot)
+	refName := WorktreeRefName(stackRoot)
 
 	sha, err := r.ReadRevisions(ctx, refName).One()
 	if err != nil {
@@ -386,7 +391,7 @@ func (r *runner) WriteWorktreeMeta(ctx context.Context, stackRoot string, meta *
 	// an ambiguous ownership state.
 	zeroSHA := strings.Repeat("0", len(sha))
 	updates := []RefUpdate{
-		{RefName: fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot), NewSHA: sha, OldSHA: zeroSHA},
+		{RefName: WorktreeRefName(stackRoot), NewSHA: sha, OldSHA: zeroSHA},
 		{RefName: worktreePathRef(meta.Path), NewSHA: sha, OldSHA: zeroSHA},
 	}
 	if err := r.UpdateRefs(ctx, updates, ""); err != nil {
@@ -398,7 +403,7 @@ func (r *runner) WriteWorktreeMeta(ctx context.Context, stackRoot string, meta *
 
 // DeleteWorktreeMeta deletes worktree metadata for a stack root
 func (r *runner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error {
-	refName := fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot)
+	refName := WorktreeRefName(stackRoot)
 	sha, err := r.ReadRevisions(ctx, refName).One()
 	if err != nil {
 		// Preserve DeleteRef's idempotent behavior for absent legacy metadata.

@@ -1,9 +1,6 @@
 package git
 
-import (
-	"fmt"
-	"time"
-)
+import "time"
 
 // LockReason is an enum for the reason why a branch is locked
 type LockReason string
@@ -146,10 +143,10 @@ const (
 
 // MetadataRefName returns the full ref name for a branch's metadata.
 func MetadataRefName(branchName string) string {
-	return fmt.Sprintf("%s%s", MetadataRefPrefix, branchName)
+	return MetadataRefPrefix + branchName
 }
 
 // LocalMetadataRefName returns the full ref name for a branch's local metadata.
 func LocalMetadataRefName(branchName string) string {
-	return fmt.Sprintf("%s%s", LocalMetadataRefPrefix, branchName)
+	return LocalMetadataRefPrefix + branchName
 }

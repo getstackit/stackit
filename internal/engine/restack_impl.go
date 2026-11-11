@@ -333,7 +333,7 @@ func (e *engineImpl) restackWorktreeAnchor(
 	// Atomic update of both branch ref and metadata ref
 	updates := []git.RefUpdate{
 		{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: trunkRev, OldSHA: anchorRev},
-		{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
+		{RefName: git.MetadataRefName(branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 	}
 	if err := e.git.UpdateRefs(ctx, updates, reflogRestackAnchor); err != nil {
 		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to update refs atomically for anchor %s: %w", branchName, err)
@@ -483,7 +483,7 @@ func (e *engineImpl) restackBranch(
 			// Atomic update of both branch ref and metadata ref
 			updates := []git.RefUpdate{
 				{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: remoteSha, OldSHA: localSha},
-				{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
+				{RefName: git.MetadataRefName(branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 			}
 			if err := e.git.UpdateRefs(ctx, updates, reflogRestackFrozen); err != nil {
 				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to update refs atomically for frozen branch %s: %w", branchName, err)
@@ -718,7 +718,7 @@ func (e *engineImpl) restackBranch(
 	// Atomic update of both branch ref and metadata ref with OldSHA verification
 	updates := []git.RefUpdate{
 		{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: newRev, OldSHA: oldBranchSHA},
-		{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
+		{RefName: git.MetadataRefName(branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 	}
 	if err := e.git.UpdateRefs(ctx, updates, reflogRestack); err != nil {
 		return RestackBranchResult{
@@ -894,7 +894,7 @@ func (e *engineImpl) applyMetadataRefresh(
 	}
 
 	updates := []git.RefUpdate{
-		{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
+		{RefName: git.MetadataRefName(branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 	}
 	if err := e.git.UpdateRefs(ctx, updates, reflogRestack); err != nil {
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to update metadata ref: %w", err)
@@ -963,7 +963,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 
 	updates := []git.RefUpdate{
 		{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: newRev, OldSHA: oldBranchSHA},
-		{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
+		{RefName: git.MetadataRefName(branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 	}
 	if err := e.git.UpdateRefs(ctx, updates, reflogRestack); err != nil {
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to update refs atomically: %w", err)

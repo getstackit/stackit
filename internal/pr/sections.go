@@ -231,7 +231,10 @@ func splitGeneratedFooterBlock(body string) (before, after string, found bool) {
 		return "", "", false
 	}
 
-	if _, after, ok := strings.Cut(body, SectionEnd); ok {
+	// Look for the end marker only after the start marker: a stray end marker
+	// earlier in the body would otherwise leave the old footer in "after" and
+	// duplicate it on every update.
+	if _, after, ok := strings.Cut(body[startIdx:], SectionEnd); ok {
 		blockStart := startIdx
 		for range 3 {
 			if blockStart > 0 && body[blockStart-1] == '\n' {
@@ -311,12 +314,14 @@ func UpdatePRBodyLockSection(existingBody, lockSection string) string {
 
 // StripLockSection removes the lock status section from a PR body.
 func StripLockSection(body string) string {
-	if body == "" || !strings.Contains(body, LockSectionStart) {
+	before, rest, found := strings.Cut(body, LockSectionStart)
+	if !found {
 		return body
 	}
 
-	before, _, _ := strings.Cut(body, LockSectionStart)
-	_, after, ok := strings.Cut(body, LockSectionEnd)
+	// Look for the end marker only after the start marker, so a stray end
+	// marker earlier in the body cannot leave the lock section behind.
+	_, after, ok := strings.Cut(rest, LockSectionEnd)
 	if !ok {
 		return body
 	}

@@ -45,6 +45,15 @@ func TestUpdatePRBodyFooter(t *testing.T) {
 		require.Contains(t, result, "Footer stuff")
 	})
 
+	t.Run("stray end marker before the section does not duplicate the footer", func(t *testing.T) {
+		t.Parallel()
+		body := "Description quoting " + SectionEnd + " inline" + footer
+		result := UpdatePRBodyFooter(body, footer)
+
+		require.Equal(t, body, result)
+		require.Equal(t, 1, strings.Count(result, SectionStart))
+	})
+
 	t.Run("idempotency - multiple updates", func(t *testing.T) {
 		t.Parallel()
 		body := "Description"
@@ -675,6 +684,14 @@ func TestStripLockSection(t *testing.T) {
 		t.Parallel()
 		result := StripLockSection(lockSection)
 		require.Empty(t, result)
+	})
+
+	t.Run("stray end marker before the section does not leave it behind", func(t *testing.T) {
+		t.Parallel()
+		body := "Intro " + LockSectionEnd + "\n\n" + lockSection + "\n\n## Description"
+		result := StripLockSection(body)
+		require.Equal(t, "Intro "+LockSectionEnd+"\n## Description", result)
+		require.NotContains(t, result, LockSectionStart)
 	})
 
 	t.Run("preserves navigation footer", func(t *testing.T) {

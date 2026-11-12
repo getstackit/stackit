@@ -64,6 +64,12 @@ func TestReplaceWorkflowBlock(t *testing.T) {
 			expected: "# Header\n\n<!-- stackit:end -->\n\n<!-- stackit:start -->\n",
 		},
 		{
+			name:     "replaces block when a stray end marker precedes it",
+			content:  "# Header\n\n<!-- stackit:end -->\n\n<!-- stackit:start -->\nold block\n<!-- stackit:end -->\n\nAfter",
+			newBlock: "<!-- stackit:start -->\nnew block\n<!-- stackit:end -->",
+			expected: "# Header\n\n<!-- stackit:end -->\n\n<!-- stackit:start -->\nnew block\n<!-- stackit:end -->\nAfter",
+		},
+		{
 			name:     "handles empty before section",
 			content:  "<!-- stackit:start -->\nold\n<!-- stackit:end -->\n\nAfter",
 			newBlock: "<!-- stackit:start -->\nnew\n<!-- stackit:end -->",

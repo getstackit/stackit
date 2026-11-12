@@ -102,14 +102,18 @@ func installWorkflowBlock(repoRoot, targetFile string, fileInfo agentsFileInfo, 
 // replaceWorkflowBlock replaces the existing stackit block with new content.
 func replaceWorkflowBlock(content, newBlock string) string {
 	startIdx := strings.Index(content, workflowBlockStart)
-	endIdx := strings.Index(content, workflowBlockEnd)
-
-	// Handle missing or malformed markers
-	if startIdx == -1 || endIdx == -1 || endIdx < startIdx {
+	if startIdx == -1 {
 		return content
 	}
 
-	endIdx += len(workflowBlockEnd)
+	// Look for the end marker only after the start marker, so a stray end
+	// marker earlier in the file does not block replacing a well-formed block.
+	endIdx := strings.Index(content[startIdx:], workflowBlockEnd)
+	if endIdx == -1 {
+		return content
+	}
+
+	endIdx += startIdx + len(workflowBlockEnd)
 
 	// Preserve content before and after the block
 	before := content[:startIdx]

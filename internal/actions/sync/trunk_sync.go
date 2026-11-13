@@ -13,6 +13,14 @@ import (
 func syncFetchedTrunk(ctx context.Context, deps Deps, opts *Options, handler Handler, summary *Summary) error {
 	eng := deps.Engine
 
+	// Capture trunk's tip before the pull so the report can say how far the
+	// world moved, which is the context a developer reads a sync for.
+	// Without it the report omits the delta; the sync itself is unaffected.
+	oldTrunkRev, err := eng.Trunk().Revision(ctx)
+	if err != nil {
+		deps.Log.Debug("read trunk revision before pull failed error=%v", err)
+	}
+
 	updateStart := time.Now()
 	pullResult, err := eng.UpdateTrunkFromRemote(ctx)
 	deps.Log.Info("update trunk from remote completed durationMs=%d", time.Since(updateStart).Milliseconds())
@@ -34,10 +42,10 @@ func syncFetchedTrunk(ctx context.Context, deps Deps, opts *Options, handler Han
 		return nil
 	}
 
-	return handleTrunkPullResult(ctx, deps, opts, handler, summary, pullResult)
+	return handleTrunkPullResult(ctx, deps, opts, handler, summary, pullResult, oldTrunkRev)
 }
 
-func handleTrunkPullResult(ctx context.Context, deps Deps, opts *Options, handler Handler, summary *Summary, pullResult engine.PullResult) error {
+func handleTrunkPullResult(ctx context.Context, deps Deps, opts *Options, handler Handler, summary *Summary, pullResult engine.PullResult, oldTrunkRev string) error {
 	eng := deps.Engine
 	out := deps.Out
 	trunk := eng.Trunk()
@@ -50,11 +58,13 @@ func handleTrunkPullResult(ctx context.Context, deps Deps, opts *Options, handle
 		revShort := git.ShortRevision(rev, 0)
 		summary.TrunkUpdated = true
 		summary.TrunkRevision = revShort
+		summary.TrunkCommits = trunkCommitsPulled(ctx, deps, oldTrunkRev, rev)
 		handler.EmitEvent(Event{
 			Phase:       PhaseTrunk,
 			Type:        EventCompleted,
 			Branch:      trunkName,
 			NewRevision: revShort,
+			Commits:     summary.TrunkCommits,
 		})
 	case engine.PullUnneeded:
 		handler.EmitEvent(Event{
@@ -82,14 +92,30 @@ func handleTrunkPullResult(ctx context.Context, deps Deps, opts *Options, handle
 			revShort := git.ShortRevision(rev, 0)
 			summary.TrunkUpdated = true
 			summary.TrunkRevision = revShort
+			summary.TrunkCommits = trunkCommitsPulled(ctx, deps, oldTrunkRev, rev)
 			handler.EmitEvent(Event{
 				Phase:       PhaseTrunk,
 				Type:        EventCompleted,
 				Branch:      trunkName,
 				NewRevision: revShort,
+				Commits:     summary.TrunkCommits,
 			})
 		}
 	}
 
 	return nil
+}
+
+// trunkCommitsPulled reports how many commits trunk advanced by. A failure to
+// count is not worth failing a sync over — the report simply omits the delta.
+func trunkCommitsPulled(ctx context.Context, deps Deps, oldRev, newRev string) int {
+	if oldRev == "" || newRev == "" || oldRev == newRev {
+		return 0
+	}
+	count, err := deps.Engine.CommitCountBetween(ctx, git.RevRange{Base: oldRev, Head: newRev})
+	if err != nil {
+		deps.Log.Debug("count trunk commits pulled failed error=%v", err)
+		return 0
+	}
+	return count
 }

@@ -187,3 +187,17 @@ func TestAnalyzeAllLocalNeverReportsShippable(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalysisResultFilterRecountsStatuses(t *testing.T) {
+	t.Parallel()
+
+	result := &AnalysisResult{Stacks: []Stack{
+		{Status: StatusUnverified},
+		{Status: StatusBlocked},
+		{Status: StatusUnverified},
+	}}
+	filtered := result.Filter(func(stack Stack) bool { return stack.Status == StatusUnverified })
+	require.Len(t, filtered.Stacks, 2)
+	require.Equal(t, 2, filtered.UnverifiedCount)
+	require.Zero(t, filtered.BlockedCount)
+}

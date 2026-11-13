@@ -41,6 +41,9 @@ type RestackRequest struct {
 	// groups replaces Branches when PlanRestack has already split the work
 	// into independent stacks and computed their engine plans.
 	groups []restackPlannedGroup
+	// held seeds the summary with branches PlanRestack pruned for worktree
+	// holds. They never reach the engine, so only the plan knows them.
+	held []RestackHeldInfo
 
 	ConflictPolicy RestackConflictPolicy
 	// Prompter is consulted under RestackConflictPrompt. A nil or
@@ -105,6 +108,7 @@ func RunRestack(ctx context.Context, deps RestackDeps, req RestackRequest, handl
 
 	handler.OnRestackStart(branchCount)
 	tally := newRestackTally(deps.Engine, handler, req.PRNumber)
+	tally.summary.Held = slices.Clone(req.held)
 
 	if req.Parallel && len(groups) > 1 {
 		err := restackGroupsParallel(ctx, deps, req.Jobs, groups, tally)

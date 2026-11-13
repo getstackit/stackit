@@ -324,6 +324,12 @@ rather than printing "up to date":
 - `restack --json` lists them under `held` as `{branch, reason}`. They also stay
   in `skipped`, so an empty `conflicts` list must not be read as "the whole
   stack moved".
+- `sync`, `restack`, and `get` summaries count every hold and never claim
+  success: the final line reads `⚠ Sync incomplete: held N (worktree), …` or
+  `⚠ Restack incomplete: held N (worktree), …`, and `get` reports
+  `⚠ Get incomplete: …`. The count comes from the action's summary
+  (`sync.Summary.HeldBranches`, `actions.RestackSummary.Held`), not from
+  handler bookkeeping, so the streaming, interactive, and JSON outputs agree.
 
 A branch held because an *ancestor* is held reports the ancestor's reason
 prefixed with which ancestor it is, since the remedy lives there.
@@ -337,6 +343,11 @@ sync's orphan cleanup can retire it. `restack` reads the full report
 stack-scoped part (`ManagedWorktreeHolds`) and leaves single-branch holds to the
 engine, which reports them per row. Rebase-in-progress detection is still
 missing from the engine snapshot — see "What holds a branch" above.
+
+`restack` warns as it prunes plan-time holds and carries each pruned branch on
+the plan into `RestackSummary.Held`, so a plan-time hold still makes the outcome
+incomplete (and appears in `restack --json`'s `held`) even though the engine
+never sees the branch.
 
 **Source**: `internal/engine/engine_sync.go` (hold set construction),
 `internal/engine/restack_impl.go` (`holdBranch`, `branchHeldBack`),

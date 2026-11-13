@@ -25,6 +25,7 @@ func syncFetchedTrunk(ctx context.Context, deps Deps, opts *Options, handler Han
 		if !ok {
 			return fmt.Errorf("failed to update trunk from remote: %w", err)
 		}
+		summary.recordHold(held.Branch)
 		handler.EmitEvent(Event{
 			Phase:  PhaseTrunk,
 			Type:   EventCompleted,

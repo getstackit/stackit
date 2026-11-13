@@ -10,7 +10,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/getstackit/stackit/internal/tui/core"
-	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Model is the bubbletea model for submit progress.
@@ -91,7 +90,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case WarningMsg:
-		m.Warnings = append(m.Warnings, fmt.Sprintf("⚠️  %s: %s", style.DisplayBranchName(msg.BranchName), msg.Warning))
+		name := Item{BranchName: msg.BranchName}.displayName()
+		for _, item := range m.Items {
+			if item.BranchName == msg.BranchName {
+				name = item.displayName()
+				break
+			}
+		}
+		m.Warnings = append(m.Warnings, fmt.Sprintf("⚠️  %s: %s", name, msg.Warning))
 		return m, nil
 
 	case ProgressUpdateMsg:
@@ -139,7 +145,7 @@ func (m *Model) finalSummary(msg ProgressCompleteMsg) string {
 		}
 	} else {
 		summary = FormatOutcomeSummary(m.Items, msg.Elapsed)
-		if urls := FormatCreatedURLs(m.Items); urls != "" {
+		if urls := FormatPRResults(m.Items, PRLinksHyperlink); urls != "" {
 			if summary != "" {
 				summary += "\n"
 			}

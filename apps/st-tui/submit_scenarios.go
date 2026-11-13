@@ -71,7 +71,7 @@ var SubmitScenarios = []SubmitScenario{
 				ParentMap:     map[string]string{"feat/api": "main"},
 				FixedMap:      map[string]bool{"feat/api": true},
 			}},
-			submitAction.BranchPlanEvent{BranchName: "feat/api", Skipped: true, SkipReason: "already up to date"},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Skipped: true, SkipReason: "no changes"},
 			submitAction.PlanningCompleteEvent{},
 			submitAction.CompletionEvent{Outcome: submitAction.OutcomeUpToDate, Message: "All pull requests are up to date"},
 		},

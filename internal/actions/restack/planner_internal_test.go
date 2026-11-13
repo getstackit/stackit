@@ -273,3 +273,21 @@ func TestClassifyValidatedBranches(t *testing.T) {
 		require.Equal(t, "a", success[0].Name())
 	})
 }
+
+func TestPlanParentActivity(t *testing.T) {
+	t.Parallel()
+	plan := &engine.RestackPlan{Items: map[string]engine.RestackPlanItem{
+		"feat/web": {Branch: "feat/web", NewParent: "feat/api"},
+	}}
+
+	require.Nil(t, planParentActivity(plan, nil), "no callback means no reporting closure")
+
+	var got []engine.RebaseProgress
+	report := planParentActivity(plan, func(event engine.RebaseProgress) { got = append(got, event) })
+	report(engine.RebaseProgress{Branch: "feat/web", Parent: "0123456789abcdef"})
+	report(engine.RebaseProgress{Branch: "unplanned", Parent: "fedcba9876543210", Finished: true})
+	require.Equal(t, []engine.RebaseProgress{
+		{Branch: "feat/web", Parent: "feat/api"},
+		{Branch: "unplanned", Parent: "fedcba9876543210", Finished: true},
+	}, got)
+}

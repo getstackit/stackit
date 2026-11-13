@@ -30,13 +30,17 @@ type PlanEngine interface {
 	BatchRevisions(ctx context.Context, branches engine.Branches) engine.RevisionMap
 	GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error)
 	PlanRestack(ctx context.Context, branches engine.Branches) (*engine.RestackPlan, error)
-	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec) (*engine.RebaseValidation, error)
+	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec, opts engine.ValidateRebasesOpts) (*engine.RebaseValidation, error)
 }
 
 // Planner computes Plans.
 type Planner struct {
 	Engine PlanEngine
 	Log    Logger
+	// Activity, when non-nil, receives live rebase-validation events with
+	// Parent mapped to the planned parent branch name. See
+	// engine.RebaseProgressFunc for its concurrency contract.
+	Activity engine.RebaseProgressFunc
 }
 
 // Plan is a restack worked out in full before anything moves.
@@ -92,7 +96,7 @@ func (p Planner) Plan(ctx context.Context, branches engine.Branches, prePlan *en
 
 	plan.Validation = &engine.RebaseValidation{Success: true, NewSHAs: map[string]string{}, RerereResolved: map[string]int{}}
 	if len(plan.Engine.Specs) > 0 {
-		validation, err := p.Engine.ValidateRebases(ctx, plan.Engine.Specs)
+		validation, err := p.Engine.ValidateRebases(ctx, plan.Engine.Specs, engine.ValidateRebasesOpts{Progress: planParentActivity(plan.Engine, p.Activity)})
 		if err != nil {
 			return nil, fmt.Errorf("failed to validate rebases: %w", err)
 		}
@@ -113,6 +117,22 @@ func (p Planner) Plan(ctx context.Context, branches engine.Branches, prePlan *en
 
 	plan.Apply, plan.Conflicts, plan.Blocked = classifyValidatedBranches(branches, plan.Engine, plan.Validation)
 	return plan, nil
+}
+
+// planParentActivity adapts an activity callback for display: specs name the
+// rebase target by revision, so Parent is replaced with the planned parent
+// branch name. Returns nil when there is no callback so validation skips
+// reporting entirely.
+func planParentActivity(plan *engine.RestackPlan, activity engine.RebaseProgressFunc) engine.RebaseProgressFunc {
+	if activity == nil {
+		return nil
+	}
+	return func(event engine.RebaseProgress) {
+		if item, ok := plan.Items[event.Branch]; ok {
+			event.Parent = item.NewParent
+		}
+		activity(event)
+	}
 }
 
 // validateAncestry performs pre-flight checks on branch ancestry relationships.

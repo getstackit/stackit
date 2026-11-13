@@ -108,14 +108,6 @@ func TestRestackAction(t *testing.T) {
 				"beta-root":   "main",
 			})
 
-		originalNewWorktreeEngine := newWorktreeEngine
-		newWorktreeEngine = func(context.Context, engine.WorktreeEngineOptions) (engine.Engine, error) {
-			return nil, errors.New("boom")
-		}
-		t.Cleanup(func() {
-			newWorktreeEngine = originalNewWorktreeEngine
-		})
-
 		recorder := &recordingRestackHandler{}
 		plan, err := PlanRestack(s.Context, restackDepsFrom(s.Context), RestackOptions{
 			AllStacks: true,
@@ -123,6 +115,9 @@ func TestRestackAction(t *testing.T) {
 			Jobs:      2,
 		})
 		require.NoError(t, err)
+		plan.newWorktreeEngine = func(context.Context, engine.WorktreeEngineOptions) (engine.Engine, error) {
+			return nil, errors.New("boom")
+		}
 		err = RestackAction(s.Context, restackDepsFrom(s.Context), plan, recorder)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "restack failed")

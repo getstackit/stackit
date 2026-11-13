@@ -74,6 +74,11 @@ func restackBranches(ctx context.Context, deps Deps, branchesToRestack []string,
 	// Sync opens the restack phase and reports its own summary, so only the
 	// per-branch events reach the handler.
 	pauser, _ := handler.(rerere.Pauser)
+	// Total is every branch handed to restack. Each normally reports exactly
+	// one result, but PlanRestack drops a branch whose revision, metadata, or
+	// merge base it cannot read, and that branch reports nothing — so the k/N
+	// counter can finish short of N rather than overshoot it.
+	handler.EmitEvent(Event{Phase: PhaseRestack, Type: EventStarted, Total: len(sortedBranches)})
 	restackStart := time.Now()
 	outcome, err := actions.RunRestack(ctx, deps.Restack, actions.RestackRequest{
 		Branches:       sortedBranches,
@@ -81,6 +86,7 @@ func restackBranches(ctx context.Context, deps Deps, branchesToRestack []string,
 		Prompter:       handler,
 		PromptRerere:   deps.Restack.Interactive && !deps.Restack.Quiet && handler.IsInteractive(),
 		Pauser:         pauser,
+		Activity:       actions.RestackActivity(handler),
 	}, actions.RestackBranchFunc(handler.OnRestackBranch))
 
 	summary.BranchesRestacked += outcome.Summary.Restacked

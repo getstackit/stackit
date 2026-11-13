@@ -14,18 +14,23 @@ import (
 // callback) and revoked elsewhere (logout, TTL sweep).
 func RequireSession(store Store, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie := readCookie(r, sessionCookieName)
-		if cookie == "" {
-			writeUnauthorized(w)
-			return
-		}
-		sess, ok := store.Get(cookie)
+		sess, ok := sessionFromRequest(store, r)
 		if !ok {
 			writeUnauthorized(w)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(contextWithSession(r.Context(), sess)))
 	})
+}
+
+// sessionFromRequest resolves the request's session cookie against store.
+// A missing cookie and an unknown or expired session both report false.
+func sessionFromRequest(store Store, r *http.Request) (*Session, bool) {
+	cookie := readCookie(r, sessionCookieName)
+	if cookie == "" {
+		return nil, false
+	}
+	return store.Get(cookie)
 }
 
 func writeUnauthorized(w http.ResponseWriter) {

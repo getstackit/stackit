@@ -14,7 +14,6 @@ import (
 type SyncScenario struct {
 	Name        string
 	Description string
-	TotalOps    int
 	Steps       []SyncStep
 	Summary     syncAction.Summary
 }
@@ -33,7 +32,7 @@ func restackEvent(e actions.RestackBranchEvent) SyncStep { return SyncStep{Resta
 // Replay sends this scenario through a sync handler. delay makes individual
 // command states visible in the terminal; zero is useful for automated checks.
 func (s SyncScenario) Replay(handler syncAction.Handler, delay time.Duration) {
-	handler.Start(s.TotalOps)
+	handler.Start()
 	pause(delay)
 	for _, step := range s.Steps {
 		if step.Restack != nil {
@@ -51,13 +50,13 @@ var SyncScenarios = []SyncScenario{
 	{
 		Name:        "success",
 		Description: "Trunk update, PR refresh, cleanup, and restack.",
-		TotalOps:    6,
 		Steps: []SyncStep{
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventStarted}),
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventStarted}),
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventCompleted, Branch: "main", NewRevision: "a1b2c3d"}),
-			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventProgress, Branch: "feat/api"}),
-			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventCompleted, Message: "Updated PR #42 for feat/api"}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventCompleted, Message: "Updated PR info for 1 branch"}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventProgress, Message: "Updating PR metadata for 1 branch..."}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventCompleted, Message: "Updated PR metadata for 1 branch"}),
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseBranches, Type: syncAction.EventStarted}),
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseBranches, Type: syncAction.EventCompleted, Branch: "feat/api"}),
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseClean, Type: syncAction.EventStarted}),
@@ -75,7 +74,6 @@ var SyncScenarios = []SyncScenario{
 	{
 		Name:        "large-stack",
 		Description: "A multi-branch sync with merged cleanup and one restack conflict.",
-		TotalOps:    11,
 		Steps: []SyncStep{
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventStarted}),
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventStarted}),
@@ -103,7 +101,6 @@ var SyncScenarios = []SyncScenario{
 	{
 		Name:        "diverged",
 		Description: "A remote branch diverges and an affected restack conflicts.",
-		TotalOps:    3,
 		Steps: []SyncStep{
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventStarted}),
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventStarted}),
@@ -121,7 +118,6 @@ var SyncScenarios = []SyncScenario{
 	{
 		Name:        "current",
 		Description: "The lightweight no-op path where trunk is already current.",
-		TotalOps:    1,
 		Steps: []SyncStep{
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventStarted}),
 			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventStarted}),

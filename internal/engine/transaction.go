@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/timeutil"
 )
 
 // Transaction retry configuration
@@ -450,10 +451,8 @@ func (e *engineImpl) WithRetry(ctx context.Context, operation func() error) erro
 				jitter := time.Duration(rand.Int64N(int64(baseDelay / 2))) //nolint:gosec
 				delay := baseDelay - baseDelay/4 + jitter
 
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(delay):
+				if err := timeutil.Sleep(ctx, delay); err != nil {
+					return err
 				}
 
 				// Refresh cache before retry.

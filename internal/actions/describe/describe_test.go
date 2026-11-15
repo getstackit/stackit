@@ -239,6 +239,24 @@ func TestTruncateDescription(t *testing.T) {
 			maxLen: 4,
 			want:   "h...",
 		},
+		{
+			name:   "multi-byte characters are never split",
+			input:  "héllo wörld",
+			maxLen: 5,
+			want:   "hé...",
+		},
+		{
+			name:   "wide characters are measured in display cells",
+			input:  "日本語の説明",
+			maxLen: 7,
+			want:   "日本...",
+		},
+		{
+			name:   "multi-byte string within width is unchanged",
+			input:  "日本語",
+			maxLen: 6,
+			want:   "日本語",
+		},
 	}
 
 	for _, tt := range tests {

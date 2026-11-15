@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
@@ -30,15 +32,13 @@ type FlattenPreviewData struct {
 	ExcludedBranches []FlattenExcludedBranch // Branches excluded due to conflicts
 }
 
-// truncateBranchName truncates a branch name to maxLen chars, adding ellipsis if needed.
+// truncateBranchName truncates a branch name to maxLen display cells, adding
+// an ellipsis if needed. Truncation never splits a multi-byte character.
 func truncateBranchName(name string, maxLen int) string {
-	if len(name) <= maxLen {
-		return name
-	}
 	if maxLen <= 3 {
-		return name[:maxLen]
+		return ansi.Truncate(name, maxLen, "")
 	}
-	return name[:maxLen-3] + "..."
+	return ansi.Truncate(name, maxLen, "...")
 }
 
 // RenderFlattenPreview renders a flatten preview showing:

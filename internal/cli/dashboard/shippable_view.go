@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/getstackit/stackit/internal/shippable"
 	"github.com/getstackit/stackit/internal/tui"
@@ -228,10 +229,7 @@ func (m *shippableModel) renderStackLine(stack shippable.Stack, focused bool) st
 		// Minimum readable length
 		20)
 
-	// Truncate if needed
-	if len(name) > maxNameLen {
-		name = name[:maxNameLen-3] + "..."
-	}
+	name = ansi.Truncate(name, maxNameLen, "...")
 
 	// Apply current stack styling to the name
 	if isCurrentStack {
@@ -413,9 +411,7 @@ func (m *shippableModel) renderDetailsPanelHeader(stack *shippable.Stack, width 
 	// Truncate title if needed to fit badge
 	badgeWidth := lipgloss.Width(statusBadge)
 	maxTitleWidth := max(width-badgeWidth-2, 10)
-	if lipgloss.Width(title) > maxTitleWidth {
-		title = title[:maxTitleWidth-3] + "..."
-	}
+	title = ansi.Truncate(title, maxTitleWidth, "...")
 
 	titleLine := commonStyles().Bold.Render(title) + " " + statusBadge
 

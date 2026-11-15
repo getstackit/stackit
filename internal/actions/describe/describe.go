@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/getstackit/stackit/internal/term"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -270,18 +272,16 @@ func ParseEditorContent(content string) *git.StackDescription {
 }
 
 // TruncateDescription truncates a description string for display.
-// It returns the first line, truncated to maxLen characters if needed.
+// It returns the first line, truncated to maxLen display cells if needed.
 func TruncateDescription(s string, maxLen int) string {
-	// Get first line or truncate
-	lines := strings.Split(s, "\n")
-	first := lines[0]
-	if len(first) > maxLen {
-		if maxLen < 0 || maxLen <= 3 {
+	first, _, multiline := strings.Cut(s, "\n")
+	if ansi.StringWidth(first) > maxLen {
+		if maxLen <= 3 {
 			return "..."
 		}
-		return first[:maxLen-3] + "..."
+		return ansi.Truncate(first, maxLen, "...")
 	}
-	if len(lines) > 1 {
+	if multiline {
 		return first + "..."
 	}
 	return first

@@ -53,12 +53,8 @@ func parseDiffHunks(diffOutput, targetFile string) []Hunk {
 				currentHunk = nil
 				hunkLines = nil
 			}
-			parts := strings.Split(line, " ")
-			if len(parts) >= 4 {
-				bPath := parts[len(parts)-1]
-				if after, ok := strings.CutPrefix(bPath, "b/"); ok {
-					currentFile = after
-				}
+			if path, ok := diffGitHeaderPath(line); ok {
+				currentFile = path
 			}
 			continue
 		}

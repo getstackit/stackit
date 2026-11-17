@@ -66,7 +66,7 @@ func buildPRInfoByBranchQuery(repo Repo, branches []string) (string, map[string]
 		graphqlVarRepo:  repo.Name,
 	}
 	for i, name := range branches {
-		variables[fmt.Sprintf("b%d", i)] = "refs/heads/" + name
+		variables[fmt.Sprintf("b%d", i)] = git.BranchRefName(name)
 	}
 	return b.String(), variables
 }

@@ -76,7 +76,7 @@ func (r *runner) fetchRemoteShas(ctx context.Context, remote string) (RemoteBran
 			continue
 		}
 		// Only branches: refs/heads/<name>
-		branchName, ok := strings.CutPrefix(ref, "refs/heads/")
+		branchName, ok := strings.CutPrefix(ref, BranchRefPrefix)
 		if !ok {
 			continue
 		}

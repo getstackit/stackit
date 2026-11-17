@@ -24,7 +24,7 @@ const (
 // fetch as a non-fast-forward update. This mirrors the '+' in Git's default
 // "+refs/heads/*:refs/remotes/origin/*" fetch refspec.
 func BranchFetchRefspec(remote, branch string) string {
-	return fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", branch, remote, branch)
+	return "+" + BranchRefName(branch) + ":" + RemoteBranchRefName(remote, branch)
 }
 
 func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (PullResult, error) {
@@ -54,7 +54,7 @@ func (r *runner) UpdateBranchFromRemote(ctx context.Context, remote, branchName 
 	}
 
 	// Get the SHA of the remote branch
-	remoteRev, err := r.ReadRevisions(ctx, "refs/remotes/"+remote+"/"+branchName).One()
+	remoteRev, err := r.ReadRevisions(ctx, RemoteBranchRefName(remote, branchName)).One()
 	if err != nil {
 		// If we can't get remote rev, we can't pull, but it might just be because there's no remote
 		return PullUnneeded, nil //nolint:nilerr

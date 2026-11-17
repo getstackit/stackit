@@ -44,7 +44,7 @@ func (r *runner) RefDecorations(ctx context.Context) (map[string][]RefDecoration
 
 		if tag, ok := strings.CutPrefix(refname, "refs/tags/"); ok {
 			result[sha] = append(result[sha], RefDecoration{Name: tag, IsTag: true})
-		} else if branch, ok := strings.CutPrefix(refname, "refs/heads/"); ok {
+		} else if branch, ok := strings.CutPrefix(refname, BranchRefPrefix); ok {
 			result[sha] = append(result[sha], RefDecoration{Name: branch})
 		}
 	}

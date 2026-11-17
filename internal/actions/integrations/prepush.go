@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/getstackit/stackit/internal/git"
 )
 
 const (
@@ -52,7 +54,7 @@ func PrepushVerifyFromReader(deps Deps, reader io.Reader) error {
 		localRef := parts[0]
 
 		// Extract branch name from refs/heads/branch-name
-		branchName, ok := strings.CutPrefix(localRef, "refs/heads/")
+		branchName, ok := strings.CutPrefix(localRef, git.BranchRefPrefix)
 		if !ok {
 			continue // Not a branch ref, skip (could be tags, etc.)
 		}

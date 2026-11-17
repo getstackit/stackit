@@ -29,6 +29,32 @@ type Hunks []Hunk
 // Example: @@ -10,5 +10,6 @@
 var hunkHeaderRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
 
+// diffGitHeaderPath extracts the post-image path from a
+// "diff --git a/<old> b/<new>" header line.
+//
+// Git does not quote paths that contain spaces, so splitting the header on
+// spaces misreads them ("a/my file.go b/my file.go" would yield "file.go").
+// When the old and new paths match (everything but renames and copies), the
+// header is two equal halves around " b/", which also handles paths that
+// themselves contain " b/". Otherwise the last " b/" starts the new path.
+func diffGitHeaderPath(line string) (string, bool) {
+	rest, ok := strings.CutPrefix(line, "diff --git a/")
+	if !ok {
+		return "", false
+	}
+	if half := len(rest) - len(" b/"); half > 0 && half%2 == 0 {
+		n := half / 2
+		if rest[n:n+3] == " b/" && rest[:n] == rest[n+3:] {
+			return rest[:n], true
+		}
+	}
+	i := strings.LastIndex(rest, " b/")
+	if i < 0 {
+		return "", false
+	}
+	return rest[i+len(" b/"):], true
+}
+
 // ParseDiffOutput parses a diff output into structured hunks
 func ParseDiffOutput(diffOutput string) (Hunks, error) {
 	if diffOutput == "" {
@@ -56,15 +82,8 @@ func ParseDiffOutput(diffOutput string) (Hunks, error) {
 				currentHunk = nil
 				hunkLines = nil
 			}
-			// Extract file path from "diff --git a/path b/path"
-			// Format: "diff --git a/path/to/file b/path/to/file"
-			parts := strings.Split(line, " ")
-			if len(parts) >= 4 {
-				// parts[2] = "a/path/to/file", parts[3] = "b/path/to/file"
-				bPath := parts[len(parts)-1]
-				if after, ok := strings.CutPrefix(bPath, "b/"); ok {
-					currentFile = after
-				}
+			if path, ok := diffGitHeaderPath(line); ok {
+				currentFile = path
 			}
 			// Reset state for new file diff
 			currentIndexLine = ""

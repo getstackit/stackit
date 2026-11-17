@@ -68,3 +68,28 @@ index abc123..0000000
 		}
 	})
 }
+
+func TestParseDiffHunks_PathWithSpaces(t *testing.T) {
+	t.Parallel()
+
+	diff := `diff --git a/other.go b/other.go
+--- a/other.go
++++ b/other.go
+@@ -1 +1 @@
+-a
++b
+diff --git a/my file.go b/my file.go
+--- a/my file.go
++++ b/my file.go
+@@ -5 +5 @@
+-c
++d`
+
+	if hunks := parseDiffHunks(diff, "my file.go"); len(hunks) != 1 || hunks[0].OldStart != 5 {
+		t.Fatalf("expected the one hunk at line 5 of %q, got %+v", "my file.go", hunks)
+	}
+	// Before the fix the second header kept "other.go" as the current file.
+	if hunks := parseDiffHunks(diff, "other.go"); len(hunks) != 1 {
+		t.Fatalf("expected 1 hunk for other.go, got %d", len(hunks))
+	}
+}

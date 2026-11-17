@@ -332,7 +332,7 @@ func (e *engineImpl) restackWorktreeAnchor(
 
 	// Atomic update of both branch ref and metadata ref
 	updates := []git.RefUpdate{
-		{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: trunkRev, OldSHA: anchorRev},
+		{RefName: git.BranchRefName(branchName), NewSHA: trunkRev, OldSHA: anchorRev},
 		{RefName: git.MetadataRefName(branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 	}
 	if err := e.git.UpdateRefs(ctx, updates, reflogRestackAnchor); err != nil {
@@ -482,7 +482,7 @@ func (e *engineImpl) restackBranch(
 
 			// Atomic update of both branch ref and metadata ref
 			updates := []git.RefUpdate{
-				{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: remoteSha, OldSHA: localSha},
+				{RefName: git.BranchRefName(branchName), NewSHA: remoteSha, OldSHA: localSha},
 				{RefName: git.MetadataRefName(branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 			}
 			if err := e.git.UpdateRefs(ctx, updates, reflogRestackFrozen); err != nil {
@@ -717,7 +717,7 @@ func (e *engineImpl) restackBranch(
 
 	// Atomic update of both branch ref and metadata ref with OldSHA verification
 	updates := []git.RefUpdate{
-		{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: newRev, OldSHA: oldBranchSHA},
+		{RefName: git.BranchRefName(branchName), NewSHA: newRev, OldSHA: oldBranchSHA},
 		{RefName: git.MetadataRefName(branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 	}
 	if err := e.git.UpdateRefs(ctx, updates, reflogRestack); err != nil {
@@ -962,7 +962,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 	}
 
 	updates := []git.RefUpdate{
-		{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: newRev, OldSHA: oldBranchSHA},
+		{RefName: git.BranchRefName(branchName), NewSHA: newRev, OldSHA: oldBranchSHA},
 		{RefName: git.MetadataRefName(branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 	}
 	if err := e.git.UpdateRefs(ctx, updates, reflogRestack); err != nil {

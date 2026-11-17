@@ -71,9 +71,9 @@ func (r *runner) PushBranches(ctx context.Context, remote string, specs []PushSp
 		for _, s := range specs {
 			switch s.LeaseMode {
 			case PushLeaseExplicit:
-				args = append(args, fmt.Sprintf("--force-with-lease=refs/heads/%s:%s", s.BranchName, s.ExpectedRemoteSHA))
+				args = append(args, "--force-with-lease="+BranchRefName(s.BranchName)+":"+s.ExpectedRemoteSHA)
 			case PushLeaseTracking:
-				args = append(args, "--force-with-lease=refs/heads/"+s.BranchName)
+				args = append(args, "--force-with-lease="+BranchRefName(s.BranchName))
 			case PushLeaseNone:
 				// Git rejects non-fast-forward updates without a force option.
 			}
@@ -131,7 +131,7 @@ func parsePushPorcelain(out string, results map[string]error) {
 		if !ok {
 			continue
 		}
-		branch, ok := strings.CutPrefix(to, "refs/heads/")
+		branch, ok := strings.CutPrefix(to, BranchRefPrefix)
 		if !ok {
 			continue
 		}

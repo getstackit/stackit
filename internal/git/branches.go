@@ -43,7 +43,7 @@ func (r *runner) readHeadBranch(ctx context.Context) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	name, ok := strings.CutPrefix(strings.TrimSpace(string(data)), "ref: refs/heads/")
+	name, ok := strings.CutPrefix(strings.TrimSpace(string(data)), "ref: "+BranchRefPrefix)
 	if !ok || name == "" {
 		return "", false
 	}
@@ -184,7 +184,7 @@ func (r *runner) CreateAndCheckoutBranch(ctx context.Context, branchName string)
 }
 
 func (r *runner) DeleteBranch(ctx context.Context, branchName string) error {
-	refName := fmt.Sprintf("refs/heads/%s", branchName)
+	refName := BranchRefName(branchName)
 
 	if err := r.ensureBranchesNotCheckedOut(ctx, []string{branchName}); err != nil {
 		return fmt.Errorf("failed to delete branch %s: %w", branchName, err)
@@ -223,7 +223,7 @@ func (r *runner) RenameBranch(ctx context.Context, oldName, newName string) erro
 }
 
 func (r *runner) CreateBranch(ctx context.Context, branchName, startPoint string) error {
-	refName := fmt.Sprintf("refs/heads/%s", branchName)
+	refName := BranchRefName(branchName)
 
 	// Existence check via show-ref — exit 0 means the ref exists; exit 1 means
 	// it doesn't (or anything else, which we map to "doesn't exist" for the
@@ -251,7 +251,7 @@ func (r *runner) CreateBranchForce(ctx context.Context, branchName, revision str
 	if err != nil {
 		return err
 	}
-	refName := fmt.Sprintf("refs/heads/%s", branchName)
+	refName := BranchRefName(branchName)
 	if _, err := r.Run(ctx, "update-ref", refName, sha); err != nil {
 		return fmt.Errorf("failed to force-create branch %s at %s: %w", branchName, revision, err)
 	}
@@ -270,7 +270,7 @@ func (r *runner) UpdateBranchRef(ctx context.Context, branchName, revision strin
 	if err != nil {
 		return fmt.Errorf("failed to resolve revision %s: %w", revision, err)
 	}
-	refName := fmt.Sprintf("refs/heads/%s", branchName)
+	refName := BranchRefName(branchName)
 	if _, err := r.Run(ctx, "update-ref", "-m", "stackit: update branch ref", refName, sha); err != nil {
 		return fmt.Errorf("failed to update branch ref: %w", err)
 	}
@@ -299,7 +299,7 @@ func (r *runner) UpdateBranchRefCAS(ctx context.Context, update BranchRefUpdate)
 		return fmt.Errorf("expected old revision is required when updating branch %s", branchName)
 	}
 	if err := r.UpdateRefs(ctx, []RefUpdate{{
-		RefName: "refs/heads/" + branchName,
+		RefName: BranchRefName(branchName),
 		NewSHA:  sha,
 		OldSHA:  expectedOld,
 	}}, ""); err != nil {
@@ -331,7 +331,7 @@ func (r *runner) GetMergedBranches(ctx context.Context, target string) (map[stri
 		"for-each-ref",
 		"--format=%(refname:short)",
 		"--merged", target,
-		"refs/heads/",
+		BranchRefPrefix,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list branches merged into %s: %w", target, err)
@@ -350,7 +350,7 @@ func (r *runner) GetMergedBranches(ctx context.Context, target string) (map[stri
 // allBranchHashes returns a map of local branch name → SHA via a single
 // `git for-each-ref` invocation.
 func (r *runner) allBranchHashes(ctx context.Context) (map[string]string, error) {
-	refs, err := r.forEachRef(ctx, []string{atomRefName + ":short", atomObjectName}, "refs/heads/")
+	refs, err := r.forEachRef(ctx, []string{atomRefName + ":short", atomObjectName}, BranchRefPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list branches: %w", err)
 	}

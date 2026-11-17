@@ -625,7 +625,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 
 	for branchName, sha := range snapshot.BranchSHAs {
 		updates = append(updates, git.RefUpdate{
-			RefName: fmt.Sprintf("refs/heads/%s", branchName),
+			RefName: git.BranchRefName(branchName),
 			NewSHA:  sha,
 		})
 	}

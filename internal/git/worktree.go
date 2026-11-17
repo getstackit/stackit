@@ -176,7 +176,7 @@ func (l WorktreeList) Paths() []WorktreePath {
 func (r *runner) ensureRefBranchesNotCheckedOut(ctx context.Context, refNames []string) error {
 	branchNames := make([]string, 0, len(refNames))
 	for _, refName := range refNames {
-		if branchName, ok := strings.CutPrefix(refName, "refs/heads/"); ok {
+		if branchName, ok := strings.CutPrefix(refName, BranchRefPrefix); ok {
 			branchNames = append(branchNames, branchName)
 		}
 	}
@@ -323,7 +323,7 @@ func (r *runner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 			flush()
 			current.Path = WorktreePath(strings.TrimPrefix(line, "worktree "))
 		case strings.HasPrefix(line, "branch "):
-			current.Branch = strings.TrimPrefix(strings.TrimPrefix(line, "branch "), "refs/heads/")
+			current.Branch = strings.TrimPrefix(strings.TrimPrefix(line, "branch "), BranchRefPrefix)
 		case line == "prunable" || strings.HasPrefix(line, "prunable "):
 			prunable = true
 		}

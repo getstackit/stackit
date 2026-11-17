@@ -11,14 +11,14 @@ import (
 // GetCommitDate returns the commit date for a branch
 func (e *engineImpl) GetCommitDate(ctx context.Context, branch Branch) (time.Time, error) {
 	branchName := branch.Name()
-	info, err := e.git.ReadCommitInfo(ctx, "refs/heads/"+branchName).One()
+	info, err := e.git.ReadCommitInfo(ctx, git.BranchRefName(branchName)).One()
 	return info.Date, err
 }
 
 // GetCommitAuthor returns the commit author for a branch
 func (e *engineImpl) GetCommitAuthor(ctx context.Context, branch Branch) (string, error) {
 	branchName := branch.Name()
-	info, err := e.git.ReadCommitInfo(ctx, "refs/heads/"+branchName).One()
+	info, err := e.git.ReadCommitInfo(ctx, git.BranchRefName(branchName)).One()
 	return info.Author, err
 }
 
@@ -27,13 +27,13 @@ func (e *engineImpl) GetCommitAuthor(ctx context.Context, branch Branch) (string
 func (e *engineImpl) BatchCommitInfo(ctx context.Context, branches Branches) map[string]git.CommitInfo {
 	names := make([]string, len(branches))
 	for i, b := range branches {
-		names[i] = "refs/heads/" + b.Name()
+		names[i] = git.BranchRefName(b.Name())
 	}
 	data := e.git.ReadCommitInfo(ctx, names...)
 	result := make(map[string]git.CommitInfo, len(branches))
 	for ref, info := range data.All() {
 		if info.Err == nil {
-			result[strings.TrimPrefix(ref, "refs/heads/")] = info.Value
+			result[strings.TrimPrefix(ref, git.BranchRefPrefix)] = info.Value
 		}
 	}
 	return result

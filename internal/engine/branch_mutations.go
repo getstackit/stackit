@@ -157,7 +157,7 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	// update-ref --stdin tolerates missing refs, so this is safe even if the
 	// branch or its metadata refs were already absent.
 	if err := e.git.DeleteRefs(ctx, []string{
-		"refs/heads/" + branchName,
+		git.BranchRefName(branchName),
 		git.MetadataRefName(branchName),
 		git.LocalMetadataRefName(branchName),
 	}...); err != nil {
@@ -294,9 +294,9 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 	for _, b := range branches {
 		name := b.Name()
 		refsToDelete = append(refsToDelete,
-			"refs/heads/"+name,
-			git.MetadataRefPrefix+name,
-			git.LocalMetadataRefPrefix+name,
+			git.BranchRefName(name),
+			git.MetadataRefName(name),
+			git.LocalMetadataRefName(name),
 		)
 	}
 	if err := e.git.DeleteRefs(ctx, refsToDelete...); err != nil {

@@ -332,7 +332,7 @@ func (e *engineImpl) TrunkRemoteState(ctx context.Context) TrunkRemoteState {
 	remote := e.git.GetRemote(ctx)
 	state := TrunkRemoteState{RemoteRef: remote + "/" + trunk}
 
-	remoteSha, err := e.git.ReadRevisions(ctx, "refs/remotes/"+remote+"/"+trunk).One()
+	remoteSha, err := e.git.ReadRevisions(ctx, git.RemoteBranchRefName(remote, trunk)).One()
 	if err != nil || remoteSha == "" {
 		return state
 	}

@@ -34,7 +34,14 @@ func TestReadCommitInfo(t *testing.T) {
 		require.NoError(t, err)
 		wantAuthor, err := runner.Run(t.Context(), "log", "-1", "--format=%an", ref)
 		require.NoError(t, err)
-		require.Equal(t, wantDate, info.Date.Format(time.RFC3339))
+		// Compare instants and offsets rather than strings: git's %aI renders
+		// UTC as "+00:00" where time.RFC3339 renders "Z".
+		parsedDate, err := time.Parse(time.RFC3339, wantDate)
+		require.NoError(t, err)
+		require.True(t, parsedDate.Equal(info.Date), "date %s != %s", info.Date, wantDate)
+		_, wantOffset := parsedDate.Zone()
+		_, gotOffset := info.Date.Zone()
+		require.Equal(t, wantOffset, gotOffset)
 		require.Equal(t, wantAuthor, info.Author)
 	}
 	require.Equal(t, got.Values()["HEAD"], got.Values()["refs/heads/branch1"])

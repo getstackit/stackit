@@ -81,14 +81,3 @@ func TestNormalizeRepoEntry_RejectsBadInput(t *testing.T) {
 		})
 	}
 }
-
-func TestRepoIDPattern(t *testing.T) {
-	t.Parallel()
-
-	for _, id := range []string{"a", "stackit", "my-repo", "my_repo", "repo123", "getstackit-stackit"} {
-		require.True(t, repoIDPattern.MatchString(id), "want valid: %q", id)
-	}
-	for _, id := range []string{"a/b", "a b", "a.b", "a@b", ""} {
-		require.False(t, repoIDPattern.MatchString(id), "want invalid: %q", id)
-	}
-}

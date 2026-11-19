@@ -20,36 +20,38 @@ var (
 	// Valid characters: letters, numbers, -, _, /, .
 	invalidCharsRegex = regexp.MustCompile(`[^-_/.a-zA-Z0-9]+`)
 
-	// trailingDotsSlashesRegex matches trailing slashes and dots that should be removed
-	trailingDotsSlashesRegex = regexp.MustCompile(`[/.]*$`)
-
-	// hyphenRunRegex matches consecutive hyphens for collapsing
+	// hyphenRunRegex, dotRunRegex, and slashRunRegex match runs of the same
+	// separator for collapsing; Git rejects ".." and "//" in branch names.
 	hyphenRunRegex = regexp.MustCompile(`-+`)
+	dotRunRegex    = regexp.MustCompile(`\.{2,}`)
+	slashRunRegex  = regexp.MustCompile(`/{2,}`)
 
 	// conventionalCommitPrefixRegex matches conventional commit prefixes like "feat:", "fix(scope):", etc.
 	conventionalCommitPrefixRegex = regexp.MustCompile(`^(feat|fix|chore|docs|style|refactor|perf|test|build|ci)(\([^)]+\))?:\s*`)
 )
 
-// Sanitize turns arbitrary text into a valid branch name by replacing invalid characters
+// Sanitize turns arbitrary text into a valid branch name by replacing invalid
+// characters. A non-empty result always passes Validate.
 func Sanitize(name string) string {
-	// Remove trailing slashes and dots
-	name = trailingDotsSlashesRegex.ReplaceAllString(name, "")
-
 	// Replace invalid characters with hyphens
 	name = invalidCharsRegex.ReplaceAllString(name, "-")
 
-	// Remove multiple consecutive hyphens
+	// Collapse runs of separators
 	name = hyphenRunRegex.ReplaceAllString(name, "-")
+	name = dotRunRegex.ReplaceAllString(name, ".")
+	name = slashRunRegex.ReplaceAllString(name, "/")
 
-	// Trim leading/trailing hyphens
-	name = strings.Trim(name, "-")
-
-	// Limit length
+	// Limit length before trimming the ends, so a cut that lands on a
+	// separator is cleaned up too
 	if len(name) > MaxByteLength {
 		name = name[:MaxByteLength]
-		// Trim trailing hyphen if we cut at a hyphen
-		name = strings.TrimSuffix(name, "-")
 	}
+
+	// Trim the ends last: replacing a trailing invalid character or cutting
+	// the name can expose a dot or slash that Git rejects there ("see foo.)"
+	// must not become "see-foo.")
+	name = strings.TrimLeft(name, "-/")
+	name = strings.TrimRight(name, "-/.")
 
 	return name
 }

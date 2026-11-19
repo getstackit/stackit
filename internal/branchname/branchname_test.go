@@ -95,6 +95,31 @@ func TestSanitize(t *testing.T) {
 			input:    "!@#$%",
 			expected: "",
 		},
+		{
+			name:     "trailing dot exposed by replaced character removed",
+			input:    "fix bug (see foo.)",
+			expected: "fix-bug-see-foo",
+		},
+		{
+			name:     "trailing slash exposed by replaced character removed",
+			input:    "update docs/!",
+			expected: "update-docs",
+		},
+		{
+			name:     "leading slashes trimmed",
+			input:    "/feature",
+			expected: "feature",
+		},
+		{
+			name:     "consecutive dots collapsed",
+			input:    "v1..2",
+			expected: "v1.2",
+		},
+		{
+			name:     "consecutive slashes collapsed",
+			input:    "feature//my-branch",
+			expected: "feature/my-branch",
+		},
 	}
 
 	for _, tt := range tests {
@@ -129,6 +154,39 @@ func TestSanitize_MaxLengthTrimsTrailingHyphen(t *testing.T) {
 
 	require.LessOrEqual(t, len(result), MaxByteLength)
 	require.False(t, strings.HasSuffix(result, "-"), "result should not end with hyphen")
+}
+
+func TestSanitize_MaxLengthTrimsTrailingDot(t *testing.T) {
+	t.Parallel()
+
+	longName := strings.Repeat("a", MaxByteLength-1) + "." + strings.Repeat("b", 50)
+
+	result := Sanitize(longName)
+
+	require.Equal(t, strings.Repeat("a", MaxByteLength-1), result)
+}
+
+func TestSanitize_ResultPassesValidate(t *testing.T) {
+	t.Parallel()
+
+	inputs := []string{
+		"fix bug (see foo.)",
+		"update docs/!",
+		"/-/feature",
+		"a..b//c",
+		"-./feature/.-",
+		"release v2.0.!",
+		strings.Repeat("a", MaxByteLength-1) + "/" + strings.Repeat("b", 50),
+	}
+
+	for _, input := range inputs {
+		t.Run(input, func(t *testing.T) {
+			t.Parallel()
+			result := Sanitize(input)
+			require.NotEmpty(t, result)
+			require.NoError(t, Validate(result))
+		})
+	}
 }
 
 func TestFromMessage(t *testing.T) {

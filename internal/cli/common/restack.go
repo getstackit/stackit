@@ -141,14 +141,19 @@ func RestackChanged(summary actions.RestackSummary) bool {
 // conflict, each hint on its own line behind indent. Holds, conflicts, and
 // blocked branches make the outcome incomplete so it never reads as success.
 func FormatRestackOutcome(summary actions.RestackSummary, upToDate int, indent string) string {
-	if !RestackChanged(summary) {
+	if !RestackChanged(summary) && !summary.Failed {
 		return "✨ Everything is up to date!"
 	}
 	prefix := "✅ Summary: "
-	if summary.Incomplete() {
+	switch {
+	case summary.Failed:
+		// A failure always reports, even when it stopped before any work.
+		prefix = "✗ Restack failed: "
+	case summary.Incomplete():
 		prefix = "⚠ Restack incomplete: "
 	}
-	return WithResolveHints(prefix+FormatRestackSummary(summary, upToDate), summary.Conflicts, indent)
+	line := strings.TrimSuffix(prefix+FormatRestackSummary(summary, upToDate), ": ")
+	return WithResolveHints(line, summary.Conflicts, indent)
 }
 
 // WithResolveHints appends a resolve-and-continue line for every conflict.

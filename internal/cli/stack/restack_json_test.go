@@ -182,3 +182,18 @@ func TestJSONRestackHandlerReportsHoldsFromSummary(t *testing.T) {
 	require.Equal(t, held, handler.Result.Held)
 	require.ElementsMatch(t, []string{"child", "mid"}, handler.Result.Skipped)
 }
+
+func TestJSONRestackHandlerStatusFromFailedSummary(t *testing.T) {
+	t.Parallel()
+
+	failed := NewJSONRestackHandler()
+	failed.OnRestackBranch(restackEvent("branch-a", actions.RestackDone, "abc123", nil, "main"))
+	failed.OnRestackComplete(actions.RestackSummary{Failed: true, Restacked: 1})
+	require.Equal(t, RestackJSONStatusError, failed.Result.Status)
+	require.Equal(t, 1, failed.Result.RestackCount)
+
+	conflicted := NewJSONRestackHandler()
+	conflicted.OnRestackBranch(restackEvent("branch-a", actions.RestackConflict, "", nil, "main"))
+	conflicted.OnRestackComplete(actions.RestackSummary{Failed: true, Conflicts: []string{"branch-a"}})
+	require.Equal(t, RestackJSONStatusConflict, conflicted.Result.Status)
+}

@@ -20,6 +20,10 @@ const (
 	StatusBlocked Status = "blocked"
 	// StatusIncomplete indicates the stack is missing PRs or has drafts.
 	StatusIncomplete Status = "incomplete"
+	// StatusUnverified indicates every branch has an open, non-draft PR in
+	// local metadata, but CI and review state are unknown because the analysis
+	// ran offline. Only AnalyzeAllLocal produces it; it never means shippable.
+	StatusUnverified Status = "unverified"
 )
 
 // BlockingReason describes why a PR is blocking shippability.
@@ -40,6 +44,10 @@ const (
 	ReasonReviewRequired BlockingReason = "review_required"
 	// ReasonNotPushed indicates the local branch differs from remote.
 	ReasonNotPushed BlockingReason = "not_pushed"
+	// ReasonPRClosed indicates the branch's PR was closed without merging.
+	ReasonPRClosed BlockingReason = "pr_closed"
+	// ReasonPRMerged indicates the branch's PR already merged; the stack needs a sync.
+	ReasonPRMerged BlockingReason = "pr_merged"
 )
 
 // BlockingPR describes a PR that is blocking a stack from being shippable.
@@ -85,6 +93,12 @@ func (s *Stack) IsIncomplete() bool {
 	return s.Status == StatusIncomplete
 }
 
+// IsUnverified returns true if the stack's PRs are open but CI and review
+// state are unknown (offline analysis).
+func (s *Stack) IsUnverified() bool {
+	return s.Status == StatusUnverified
+}
+
 // BranchCount returns the total number of branches in this stack.
 func (s *Stack) BranchCount() int {
 	return len(s.Stack.AllBranches)
@@ -112,6 +126,7 @@ type AnalysisResult struct {
 	PendingCount    int     // Number of pending stacks
 	BlockedCount    int     // Number of blocked stacks
 	IncompleteCount int     // Number of incomplete stacks
+	UnverifiedCount int     // Number of stacks with open PRs but unknown forge state (offline only)
 }
 
 func (r *AnalysisResult) filterByStatus(status Status) []Stack {
@@ -159,20 +174,27 @@ func (r *AnalysisResult) FilterByAuthor(author string) *AnalysisResult {
 	for _, s := range r.Stacks {
 		if s.Author == author {
 			result.Stacks = append(result.Stacks, s)
-			switch s.Status {
-			case StatusShippable:
-				result.ShippableCount++
-			case StatusPending:
-				result.PendingCount++
-			case StatusBlocked:
-				result.BlockedCount++
-			case StatusIncomplete:
-				result.IncompleteCount++
-			}
+			result.addCount(s.Status)
 		}
 	}
 
 	return result
+}
+
+// addCount increments the per-status counter for one analyzed stack.
+func (r *AnalysisResult) addCount(status Status) {
+	switch status {
+	case StatusShippable:
+		r.ShippableCount++
+	case StatusPending:
+		r.PendingCount++
+	case StatusBlocked:
+		r.BlockedCount++
+	case StatusIncomplete:
+		r.IncompleteCount++
+	case StatusUnverified:
+		r.UnverifiedCount++
+	}
 }
 
 // CombinationResult contains the result of checking if stacks can be merged together.

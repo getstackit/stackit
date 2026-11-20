@@ -19,25 +19,18 @@ import (
 func TestInteractiveSyncHandler_Start(t *testing.T) {
 	t.Parallel()
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
-	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
+	handler := NewInteractiveSyncHandler(mockRunner, syncComponent.NewModel(), output.NewNullOutput(), output.NewNullLogger())
 
-	handler.Start(10)
+	handler.Start()
 
-	// Verify that Start sends a ProgressTickMsg
-	messages := mockRunner.Messages()
-	require.Len(t, messages, 1)
-
-	msg, ok := messages[0].(syncComponent.ProgressTickMsg)
-	require.True(t, ok, "expected ProgressTickMsg, got %T", messages[0])
-	require.Equal(t, 0, msg.Completed)
-	require.Equal(t, 10, msg.Total)
+	// Sync has no reliable up-front total, so Start draws nothing.
+	require.Empty(t, mockRunner.Messages())
 }
 
 func TestInteractiveSyncHandler_EmitEvent_PhaseStart(t *testing.T) {
 	t.Parallel()
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	// Emit a phase start event
@@ -58,12 +51,10 @@ func TestInteractiveSyncHandler_EmitEvent_PhaseStart(t *testing.T) {
 func TestInteractiveSyncHandler_EmitEvent_Progress(t *testing.T) {
 	t.Parallel()
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
-	// Set up initial state
-	handler.Start(5)
-	mockRunner.Reset() // Clear the Start message
+	handler.Start()
 
 	// Set current phase to trunk
 	handler.EmitEvent(syncAction.Event{
@@ -80,28 +71,21 @@ func TestInteractiveSyncHandler_EmitEvent_Progress(t *testing.T) {
 		NewRevision: "abc1234",
 	})
 
-	// Should send PhaseDetailMsg and ProgressTickMsg
+	// Sync has no reliable global total; completed events only print detail.
 	messages := mockRunner.Messages()
-	require.Len(t, messages, 2)
-
-	// First message should be PhaseDetailMsg
+	require.Len(t, messages, 1)
 	detailMsg, ok := messages[0].(syncComponent.PhaseDetailMsg)
 	require.True(t, ok, "expected PhaseDetailMsg, got %T", messages[0])
 	require.Equal(t, syncComponent.PhaseTrunk, detailMsg.Phase)
+	require.Equal(t, syncComponent.MarkDone, detailMsg.Mark)
 	require.Contains(t, detailMsg.Message, "main")
 	require.Contains(t, detailMsg.Message, "abc1234")
-
-	// Second message should be ProgressTickMsg
-	progressMsg, ok := messages[1].(syncComponent.ProgressTickMsg)
-	require.True(t, ok, "expected ProgressTickMsg, got %T", messages[1])
-	require.Equal(t, 1, progressMsg.Completed)
-	require.Equal(t, 5, progressMsg.Total)
 }
 
 func TestInteractiveSyncHandler_Complete(t *testing.T) {
 	t.Parallel()
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	handler.Complete(syncAction.Summary{
@@ -120,7 +104,7 @@ func TestInteractiveSyncHandler_Complete(t *testing.T) {
 func TestInteractiveSyncHandler_OnRestackStart(t *testing.T) {
 	t.Parallel()
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	handler.OnRestackStart(3)
@@ -144,7 +128,7 @@ func TestInteractiveSyncHandler_OnRestackStart(t *testing.T) {
 func TestInteractiveSyncHandler_OnRestackBranch(t *testing.T) {
 	t.Parallel()
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	// Set up initial state
@@ -183,7 +167,7 @@ func TestInteractiveSyncHandler_OnRestackBranch(t *testing.T) {
 func TestInteractiveSyncHandler_OnRestackComplete(t *testing.T) {
 	t.Parallel()
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	handler.OnRestackComplete(actions.RestackSummary{Restacked: 5, Conflicts: []string{"x", "y"}})
@@ -201,7 +185,7 @@ func TestInteractiveSyncHandler_OnRestackComplete(t *testing.T) {
 func TestInteractiveSyncHandler_IsInteractive(t *testing.T) {
 	t.Parallel()
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	require.True(t, handler.IsInteractive())
@@ -229,7 +213,7 @@ func TestInteractiveSyncPreservesHeldBranches(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			runner := tui.NewMockRunner()
-			h := NewInteractiveSyncHandler(runner, syncComponent.NewModel(0), output.NewNullOutput(), output.NewNullLogger())
+			h := NewInteractiveSyncHandler(runner, syncComponent.NewModel(), output.NewNullOutput(), output.NewNullLogger())
 			emit(h)
 			detail := runner.Messages()[0].(syncComponent.PhaseDetailMsg)
 			require.Equal(t, syncComponent.MarkWarn, detail.Mark)
@@ -266,7 +250,7 @@ func TestRestackHeldOutcome(t *testing.T) {
 			t.Parallel()
 			runner := tui.NewMockRunner()
 			out := output.NewTestOutput()
-			interactive := NewInteractiveSyncHandler(runner, syncComponent.NewModel(0), output.NewNullOutput(), output.NewNullLogger())
+			interactive := NewInteractiveSyncHandler(runner, syncComponent.NewModel(), output.NewNullOutput(), output.NewNullLogger())
 			simple := NewSimpleSyncHandler(out)
 			for _, h := range []actions.RestackHandler{interactive, simple} {
 				h.OnRestackStart(len(tt.events))
@@ -332,4 +316,100 @@ func TestSyncSummaryOmitsEmptySummaryLine(t *testing.T) {
 	t.Parallel()
 	require.Empty(t, formatSyncSummary(syncAction.Summary{}, "  "))
 	require.Contains(t, formatSyncSummary(syncAction.Summary{SkippedStacks: []string{"feat/api"}}, "  "), "Sync incomplete")
+}
+
+// TestSyncHandlersAgreeOnRoutineRows drives the same sync events through the
+// interactive and streaming handlers: routine "already current" rows are hidden
+// by both, while anything the user must know about prints in both.
+func TestSyncHandlersAgreeOnRoutineRows(t *testing.T) {
+	t.Parallel()
+	ev := func(phase syncAction.Phase, typ syncAction.EventType, branch string) syncAction.Event {
+		return syncAction.Event{Phase: phase, Type: typ, Branch: branch}
+	}
+	heldTrunk := ev(syncAction.PhaseTrunk, syncAction.EventCompleted, "held-trunk")
+	heldTrunk.HeldBy = "worktree /tmp/main has uncommitted changes"
+	diverged := ev(syncAction.PhaseBranches, syncAction.EventSkipped, "diverged-branch")
+	diverged.Conflict = true
+	moved := ev(syncAction.PhaseTrunk, syncAction.EventCompleted, "moved-trunk")
+	moved.NewRevision = "abc1234"
+	metadata := syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventCompleted, Message: "Updated PR metadata for 2 branches"}
+	restack := func(branch string, result actions.RestackResult) actions.RestackBranchEvent {
+		return actions.RestackBranchEvent{Branch: branch, Result: result}
+	}
+	locked := restack("locked-branch", actions.RestackUnneeded)
+	locked.LockReason = git.LockReasonUser
+	frozen := restack("frozen-branch", actions.RestackUnneeded)
+	frozen.Frozen = true
+	held := restack("held-branch", actions.RestackUnneeded)
+	held.HeldBy = "worktree /tmp/held has uncommitted changes"
+
+	tests := []struct {
+		name    string
+		event   *syncAction.Event
+		restack *actions.RestackBranchEvent
+		shown   string // substring expected in both outputs; empty means hidden
+	}{
+		{name: "trunk up to date", event: new(ev(syncAction.PhaseTrunk, syncAction.EventCompleted, "main"))},
+		{name: "synced branch up to date", event: new(ev(syncAction.PhaseBranches, syncAction.EventCompleted, "synced-branch"))},
+		{name: "restacked branch up to date", restack: new(restack("current-branch", actions.RestackUnneeded))},
+		{name: "trunk fast-forwarded", event: &moved, shown: "moved-trunk"},
+		{name: "locked branch", restack: &locked, shown: "locked-branch"},
+		{name: "frozen branch", restack: &frozen, shown: "frozen-branch"},
+		{name: "held branch", restack: &held, shown: "/tmp/held"},
+		{name: "held trunk", event: &heldTrunk, shown: "/tmp/main"},
+		{name: "conflict", restack: new(restack("conflict-branch", actions.RestackConflict)), shown: "conflict-branch"},
+		{name: "diverged branch", event: &diverged, shown: "diverged-branch"},
+		{name: "pr metadata batch", event: &metadata, shown: "Updated PR metadata for 2 branches"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			runner := tui.NewMockRunner()
+			interactive := NewInteractiveSyncHandler(runner, syncComponent.NewModel(), output.NewNullOutput(), output.NewNullLogger())
+			out := output.NewTestOutput()
+			simple := NewSimpleSyncHandler(out)
+			for _, h := range []syncAction.Handler{interactive, simple} {
+				if tt.restack != nil {
+					h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted})
+					h.OnRestackBranch(*tt.restack)
+					continue
+				}
+				h.EmitEvent(syncAction.Event{Phase: tt.event.Phase, Type: syncAction.EventStarted})
+				h.EmitEvent(*tt.event)
+			}
+
+			var details []string
+			for _, msg := range runner.Messages() {
+				if detail, ok := msg.(syncComponent.PhaseDetailMsg); ok {
+					details = append(details, detail.Message)
+				}
+			}
+			if tt.shown == "" {
+				require.Empty(t, details, "interactive handler should hide routine rows")
+				require.Empty(t, out.String(), "streaming handler should hide routine rows")
+				return
+			}
+			require.Len(t, details, 1, "interactive handler should show the row")
+			require.Contains(t, details[0], tt.shown)
+			require.Contains(t, out.String(), tt.shown, "streaming handler should show the row")
+		})
+	}
+}
+
+func TestSyncPRMetadataProgressIsLiveOnly(t *testing.T) {
+	t.Parallel()
+	progress := syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventProgress, Message: "Updating PR metadata for 2 branches..."}
+
+	runner := tui.NewMockRunner()
+	NewInteractiveSyncHandler(runner, syncComponent.NewModel(), output.NewNullOutput(), output.NewNullLogger()).EmitEvent(progress)
+	messages := runner.Messages()
+	require.Len(t, messages, 1)
+	detail, ok := messages[0].(syncComponent.PhaseDetailMsg)
+	require.True(t, ok, "expected PhaseDetailMsg, got %T", messages[0])
+	require.Equal(t, syncComponent.MarkInProgress, detail.Mark, "the batch in flight belongs on the live line")
+	require.Equal(t, progress.Message, detail.Message)
+
+	out := output.NewTestOutput()
+	NewSimpleSyncHandler(out).EmitEvent(progress)
+	require.Contains(t, out.String(), progress.Message)
 }

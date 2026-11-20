@@ -2,7 +2,8 @@
   ✓ main fast-forwarded to a1b2c3d
 
 🔄 Fetching PR info from GitHub...
-  → Updating PR for feat-api
-  ✓ Updated 1 PR description
+  ✓ Updated PR info for 1 branches
+  → Updating PR metadata for 1 branch...
+  ✓ Updated PR metadata for 1 branch
 
 ✅ Summary: pulled trunk

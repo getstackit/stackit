@@ -32,6 +32,12 @@ const watcherDebounce = 200 * time.Millisecond
 // without escaping, keeping the routing surface simple.
 var idPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
+// ValidID reports whether id is a well-formed repo ID. Callers that load IDs
+// from config or storage use it to reject bad entries before they reach Add.
+func ValidID(id string) bool {
+	return idPattern.MatchString(id)
+}
+
 // RepoRef identifies a GitHub repository by its owner/name coordinates.
 type RepoRef struct {
 	Owner string
@@ -244,7 +250,7 @@ func (r *Registry) Add(e *RepoEntry) error {
 	if e.ID == "" {
 		return errors.New("registry: entry has empty ID")
 	}
-	if !idPattern.MatchString(e.ID) {
+	if !ValidID(e.ID) {
 		return fmt.Errorf("registry: invalid repo ID %q (must match %s)", e.ID, idPattern)
 	}
 	r.mu.Lock()

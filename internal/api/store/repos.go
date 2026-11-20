@@ -73,8 +73,8 @@ func (s *Store) GetRepo(ctx context.Context, id string) (Repo, error) {
 }
 
 // AddRepo inserts r and returns the stored row with its server-assigned
-// timestamps. The caller is responsible for validating r.ID (see repoIDPattern
-// in apps/server) before calling.
+// timestamps. The caller is responsible for validating r.ID (see
+// registry.ValidID) before calling.
 func (s *Store) AddRepo(ctx context.Context, r Repo) (Repo, error) {
 	row, err := s.queries.InsertRepo(ctx, reposdb.InsertRepoParams{
 		ID:          r.ID,

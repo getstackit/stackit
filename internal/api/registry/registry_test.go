@@ -228,3 +228,14 @@ func TestRegistry_ConcurrentAddAndGet(t *testing.T) {
 
 	require.Equal(t, n, r.Len())
 }
+
+func TestValidID(t *testing.T) {
+	t.Parallel()
+
+	for _, id := range []string{"a", "stackit", "my-repo", "my_repo", "repo123", "getstackit-stackit"} {
+		require.True(t, ValidID(id), "want valid: %q", id)
+	}
+	for _, id := range []string{"a/b", "a b", "a.b", "a@b", ""} {
+		require.False(t, ValidID(id), "want invalid: %q", id)
+	}
+}

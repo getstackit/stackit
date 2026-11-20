@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"path/filepath"
 
+	"github.com/getstackit/stackit/internal/api/registry"
 	"github.com/getstackit/stackit/internal/api/store"
 )
 
@@ -48,7 +49,9 @@ func loadReposFromDB(ctx context.Context, st *store.Store, reposRoot string) ([]
 			slog.Warn("repo skipped (invalid config)", "repo", r.ID, "error", err)
 			continue
 		}
-		if !repoIDPattern.MatchString(rc.ID) {
+		// Check against the registry's own constraint so a bad ID is skipped
+		// at startup rather than failing at first request.
+		if !registry.ValidID(rc.ID) {
 			slog.Warn("repo skipped (invalid id)", "id", rc.ID)
 			continue
 		}

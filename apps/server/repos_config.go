@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -43,11 +42,6 @@ type repoConfig struct {
 	// mirror-fetch. True for DB-backed repos; false for the -cwd dev repo.
 	Managed bool
 }
-
-// repoIDPattern restricts repo IDs to characters that survive in URL paths
-// without escaping. Mirrors the registry's own constraint so config errors
-// surface at startup, not at first request.
-var repoIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 // normalizeRepoEntry fills in defaults and resolves Path. It enforces that each
 // entry has enough information to locate a checkout — either an explicit path or

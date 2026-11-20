@@ -40,6 +40,9 @@ func (m *MockRunner) Wait() {}
 // IsHealthy returns true if the runner has been started and not stopped.
 func (m *MockRunner) IsHealthy() bool { return m.started && !m.stopped }
 
+// IsRunning returns true if the runner has been started and not stopped.
+func (m *MockRunner) IsRunning() bool { return m.IsHealthy() }
+
 // Send records a message for later inspection.
 func (m *MockRunner) Send(msg tea.Msg) {
 	m.mu.Lock()

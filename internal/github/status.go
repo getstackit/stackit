@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -38,9 +37,6 @@ const (
 	ReviewDecisionChangesRequested ReviewDecision = "CHANGES_REQUESTED"
 	ReviewDecisionReviewRequired   ReviewDecision = "REVIEW_REQUIRED"
 )
-
-// graphQLAliasRegex matches characters not valid in GraphQL alias identifiers
-var graphQLAliasRegex = regexp.MustCompile(`[^a-zA-Z0-9]`)
 
 // ChecksByBranch maps branch names to their PR check status. Branches without
 // a PR (or whose status could not be fetched) are absent.
@@ -79,48 +75,30 @@ func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner GitCommandRunner,
 		return make(ChecksByBranch), nil
 	}
 
-	// Sanitize branch names for GraphQL aliases
-	aliasMap := make(map[string]string)
-	aliasToBranch := make(map[string]string)
-	for _, name := range branchNames {
-		alias := "b_" + graphQLAliasRegex.ReplaceAllString(name, "_")
-		// Ensure unique aliases if multiple branches map to same sanitized name
-		baseAlias := alias
-		counter := 1
-		for {
-			if _, exists := aliasToBranch[alias]; !exists {
-				break
-			}
-			alias = fmt.Sprintf("%s_%d", baseAlias, counter)
-			counter++
-		}
-		aliasMap[name] = alias
-		aliasToBranch[alias] = name
-	}
-
-	// Build GraphQL query - query pullRequests to get both CI status and review decision
-	query := buildPRStatusQuery(aliasMap)
-
-	variables := map[string]any{
-		graphqlVarOwner: repo.Owner,
-		graphqlVarRepo:  repo.Name,
-	}
+	query, variables := buildPRStatusQuery(repo, branchNames)
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)
 	if err != nil {
 		return nil, err
 	}
 
-	return parsePRStatusResponse(body, aliasToBranch)
+	return parsePRStatusResponse(body, branchNames)
 }
 
-// buildPRStatusQuery builds a GraphQL query to fetch PR status for multiple branches
-func buildPRStatusQuery(aliasMap map[string]string) string {
+// buildPRStatusQuery builds a GraphQL query that fetches PR status for each
+// branch under a b<index> alias. Branch names are passed as variables, never
+// spliced into the query text: a double quote is legal in a Git ref name and
+// would otherwise end the string literal and produce a malformed query.
+func buildPRStatusQuery(repo Repo, branches []string) (string, map[string]any) {
 	var queryBuilder strings.Builder
-	queryBuilder.WriteString("query($owner: String!, $repo: String!) {\n")
+	queryBuilder.WriteString("query($owner: String!, $repo: String!")
+	for i := range branches {
+		fmt.Fprintf(&queryBuilder, ", $b%d: String!", i)
+	}
+	queryBuilder.WriteString(") {\n")
 	queryBuilder.WriteString("  repository(owner: $owner, name: $repo) {\n")
-	for branch, alias := range aliasMap {
-		fmt.Fprintf(&queryBuilder, "    %s: pullRequests(headRefName: \"%s\", first: 1, orderBy: {field: CREATED_AT, direction: DESC}) {\n", alias, branch)
+	for i := range branches {
+		fmt.Fprintf(&queryBuilder, "    b%d: pullRequests(headRefName: $b%d, first: 1, orderBy: {field: CREATED_AT, direction: DESC}) {\n", i, i)
 		queryBuilder.WriteString("      nodes {\n")
 		queryBuilder.WriteString("        state\n")
 		queryBuilder.WriteString("        author { login }\n")
@@ -157,11 +135,19 @@ func buildPRStatusQuery(aliasMap map[string]string) string {
 	}
 	queryBuilder.WriteString("  }\n")
 	queryBuilder.WriteString("}\n")
-	return queryBuilder.String()
+
+	variables := map[string]any{
+		graphqlVarOwner: repo.Owner,
+		graphqlVarRepo:  repo.Name,
+	}
+	for i, name := range branches {
+		variables[fmt.Sprintf("b%d", i)] = name
+	}
+	return queryBuilder.String(), variables
 }
 
 // parsePRStatusResponse parses the GraphQL response for PR status queries
-func parsePRStatusResponse(body []byte, aliasToBranch map[string]string) (ChecksByBranch, error) {
+func parsePRStatusResponse(body []byte, branches []string) (ChecksByBranch, error) {
 	var graphqlResponse struct {
 		Data map[string]any `json:"data"`
 	}
@@ -175,17 +161,12 @@ func parsePRStatusResponse(body []byte, aliasToBranch map[string]string) (Checks
 	}
 
 	results := make(ChecksByBranch)
-	for alias, data := range repository {
+	for i, branchName := range branches {
+		data := repository[fmt.Sprintf("b%d", i)]
 		if data == nil {
 			continue
 		}
-		branchName, ok := aliasToBranch[alias]
-		if !ok {
-			continue
-		}
-
-		status := parseBranchStatus(data)
-		if status != nil {
+		if status := parseBranchStatus(data); status != nil {
 			results[branchName] = status
 		}
 	}

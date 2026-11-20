@@ -376,6 +376,25 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 ```
 
+### Swapping Views Without Losing Background Work
+
+The `stackit ui` companion panel (`internal/cli/dashboard/companion_model.go`)
+hands the program over to the shipping dashboard by returning a different model
+from `Update`. Messages the panel scheduled for itself — the working-tree tick,
+ref-change reloads, reload results — then arrive at the dashboard instead. A
+model that drops unknown messages silently ends those chains, so:
+
+- The hidden model exposes `handleBackgroundMsg`, and the active model forwards
+  every message to it first. One tick chain keeps running; never re-arm a tick
+  on return, or the chains multiply.
+- Stop long-lived resources (the ref watcher) after `p.Run()` returns, not in
+  `Update`: `HandleCommonMsg` also reports spinner ticks as handled, and a
+  leftover tick from the other view would stop the watcher.
+- Only return to the other view from an idle state. While an operation is
+  running, its completion message must land on the view that started it.
+- The returned-to view has missed resizes, so request one with
+  `tea.RequestWindowSize`.
+
 ### Receiver Type Considerations
 
 While Bubble Tea examples use value receivers (functional style), pointer receivers enable:

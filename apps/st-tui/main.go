@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/getstackit/stackit/internal/cli/stack"
@@ -28,6 +29,8 @@ func main() {
 
 	out := output.NewDefaultOutput()
 	switch args[0] {
+	case "restack":
+		runRestackScenario(out, args[1], *delay)
 	case "sync":
 		runSyncScenario(out, args[1], *delay)
 	case "submit":
@@ -67,6 +70,8 @@ func runSubmitScenario(out output.Output, name string, delay time.Duration) {
 
 func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "Usage: st-tui [--delay duration] <command> <scenario>")
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintf(w, "Restack scenarios: %s\n", strings.Join(RestackScenarioNames(), ", "))
 	_, _ = fmt.Fprintln(w, "")
 	_, _ = fmt.Fprintln(w, "Sync scenarios:")
 	for _, name := range SyncScenarioNames() {

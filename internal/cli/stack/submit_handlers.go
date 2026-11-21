@@ -185,10 +185,10 @@ func (p *planPrinter) compactSummary() string {
 
 	parts := make([]string, 0, 2)
 	if creates > 0 {
-		parts = append(parts, fmt.Sprintf("open %d %s", creates, pluralizePRs(creates)))
+		parts = append(parts, fmt.Sprintf("open %d %s", creates, actions.Pluralize("PR", creates)))
 	}
 	if updates > 0 {
-		parts = append(parts, fmt.Sprintf("update %d %s", updates, pluralizePRs(updates)))
+		parts = append(parts, fmt.Sprintf("update %d %s", updates, actions.Pluralize("PR", updates)))
 	}
 	if len(parts) == 0 {
 		return ""
@@ -415,10 +415,10 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 		if h.plan.verbose {
 			h.Output.Newline()
 			if !h.plan.solo {
-				h.Output.Info("Submitting %d %s", len(ev.Branches), pluralizeBranches(len(ev.Branches)))
+				h.Output.Info("Submitting %d %s", len(ev.Branches), actions.Pluralize("branch", len(ev.Branches)))
 			}
 		} else {
-			h.Output.Info("Submitting %d %s...", len(ev.Branches), pluralizePRs(len(ev.Branches)))
+			h.Output.Info("Submitting %d %s...", len(ev.Branches), actions.Pluralize("PR", len(ev.Branches)))
 		}
 
 	case submit.BranchProgressEvent:
@@ -579,20 +579,6 @@ func (i *branchItem) toSubmitItem() submitComponent.Item {
 		URL:        i.url,
 		Error:      i.err,
 	}
-}
-
-func pluralizePRs(count int) string {
-	if count == 1 {
-		return "PR"
-	}
-	return "PRs"
-}
-
-func pluralizeBranches(count int) string {
-	if count == 1 {
-		return "branch"
-	}
-	return "branches"
 }
 
 // Confirm prompts for confirmation - in non-TTY mode, uses default

@@ -16,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -313,11 +314,7 @@ func renderWorktreeEntry(ctx *app.Context, wt worktree.Entry, currentAnchor stri
 	// Stack size
 	stackInfo := style.ColorDim("empty")
 	if wt.StackSize > 0 {
-		branchWord := "branch"
-		if wt.StackSize > 1 {
-			branchWord = "branches"
-		}
-		stackInfo = fmt.Sprintf("%d %s", wt.StackSize, branchWord)
+		stackInfo = fmt.Sprintf("%d %s", wt.StackSize, actions.Pluralize("branch", wt.StackSize))
 	}
 
 	rootInfo := ""

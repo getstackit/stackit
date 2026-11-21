@@ -60,14 +60,11 @@ const wordBranch = "branch"
 
 // PluralSuffix returns the appropriate plural suffix for the given word if plural is true, otherwise empty string
 func PluralSuffix(word string, plural bool) string {
-	if !plural {
+	switch {
+	case !plural:
 		return ""
-	}
-	switch word {
-	case wordBranch:
+	case word == wordBranch:
 		return "es"
-	case "PR":
-		return "s"
 	default:
 		return "s"
 	}

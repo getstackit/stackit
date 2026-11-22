@@ -743,7 +743,7 @@ func formatSyncSummaryParts(summary syncAction.Summary) []string {
 		parts = append(parts, "pulled trunk")
 	}
 	if summary.BranchesSynced > 0 {
-		parts = append(parts, fmt.Sprintf("synced %d branch%s", summary.BranchesSynced, pluralES(summary.BranchesSynced)))
+		parts = append(parts, fmt.Sprintf("synced %d %s", summary.BranchesSynced, actions.Pluralize("branch", summary.BranchesSynced)))
 	}
 	if summary.BranchesRestacked > 0 {
 		parts = append(parts, fmt.Sprintf("restacked %d", summary.BranchesRestacked))
@@ -752,7 +752,7 @@ func formatSyncSummaryParts(summary syncAction.Summary) []string {
 		parts = append(parts, fmt.Sprintf("deleted %d", summary.BranchesDeleted))
 	}
 	if summary.WorktreesCleaned > 0 {
-		parts = append(parts, fmt.Sprintf("cleaned %d worktree%s", summary.WorktreesCleaned, plural(summary.WorktreesCleaned)))
+		parts = append(parts, fmt.Sprintf("cleaned %d %s", summary.WorktreesCleaned, actions.Pluralize("worktree", summary.WorktreesCleaned)))
 	}
 	if summary.BranchesSkipped > 0 {
 		parts = append(parts, fmt.Sprintf("skipped %d (conflict)", summary.BranchesSkipped))
@@ -761,24 +761,8 @@ func formatSyncSummaryParts(summary syncAction.Summary) []string {
 		parts = append(parts, fmt.Sprintf("blocked %d", summary.BranchesBlocked))
 	}
 	if len(summary.SkippedStacks) > 0 {
-		parts = append(parts, fmt.Sprintf("skipped %d stack%s (dirty worktree)", len(summary.SkippedStacks), plural(len(summary.SkippedStacks))))
+		parts = append(parts, fmt.Sprintf("skipped %d %s (dirty worktree)", len(summary.SkippedStacks), actions.Pluralize("stack", len(summary.SkippedStacks))))
 	}
 
 	return parts
-}
-
-// plural returns "s" if count != 1, otherwise empty string
-func plural(count int) string {
-	if count == 1 {
-		return ""
-	}
-	return "s"
-}
-
-// pluralES returns "es" if count != 1, otherwise empty string (for "branch" -> "branches")
-func pluralES(count int) string {
-	if count == 1 {
-		return ""
-	}
-	return "es"
 }

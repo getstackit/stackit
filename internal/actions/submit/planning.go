@@ -188,17 +188,10 @@ func confirmPrompt(infos []Info) string {
 	case creates > 0 && updates > 0:
 		return fmt.Sprintf("Create %d and update %d PRs?", creates, updates)
 	case creates > 0:
-		return fmt.Sprintf("Create %d %s?", creates, pluralPR(creates))
+		return fmt.Sprintf("Create %d %s?", creates, actions.Pluralize("PR", creates))
 	default:
-		return fmt.Sprintf("Update %d %s?", updates, pluralPR(updates))
+		return fmt.Sprintf("Update %d %s?", updates, actions.Pluralize("PR", updates))
 	}
-}
-
-func pluralPR(count int) string {
-	if count == 1 {
-		return "PR"
-	}
-	return "PRs"
 }
 
 // getBranchesToSubmit returns the list of branches to submit based on options

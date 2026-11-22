@@ -2,13 +2,8 @@ package git
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 )
-
-// hunkHeaderWithSuffixRegex matches hunk headers and captures any trailing
-// section-heading text after the closing "@@" (e.g. "@@ -1,2 +1,3 @@ func Foo()").
-var hunkHeaderWithSuffixRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$`)
 
 // CanSplit returns true if the hunk has context lines between changes,
 // meaning it can be split into multiple smaller hunks.
@@ -61,24 +56,23 @@ func (h Hunk) Split() (Hunks, error) {
 
 	lines := strings.Split(h.Content, "\n")
 
-	var headerLine string
+	var foundHeader bool
 	var headerSuffix string
 	var contentLines []string
 	origOldStart, origNewStart := h.OldStart, h.NewStart
 
 	for i, line := range lines {
 		if strings.HasPrefix(line, "@@") {
-			headerLine = line
-			match := hunkHeaderWithSuffixRegex.FindStringSubmatch(line)
-			if len(match) > 5 {
-				headerSuffix = match[5]
+			foundHeader = true
+			if header, ok := parseHunkHeader(line); ok {
+				headerSuffix = header.Suffix
 			}
 			contentLines = lines[i+1:]
 			break
 		}
 	}
 
-	if headerLine == "" {
+	if !foundHeader {
 		return Hunks{h}, nil
 	}
 

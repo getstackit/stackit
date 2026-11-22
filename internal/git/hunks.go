@@ -25,9 +25,34 @@ type Hunk struct {
 // Hunks is an ordered collection of diff hunks.
 type Hunks []Hunk
 
-// hunkHeaderRegex matches hunk headers: @@ -old_start,old_count +new_start,new_count @@
-// Example: @@ -10,5 +10,6 @@
-var hunkHeaderRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
+// hunkHeaderRegex matches hunk headers and captures any trailing section-heading
+// text after the closing "@@":
+// @@ -old_start,old_count +new_start,new_count @@ suffix
+// Example: @@ -10,5 +10,6 @@ func Foo()
+var hunkHeaderRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)`)
+
+// hunkHeader is the parsed form of a unified diff "@@" hunk header line.
+type hunkHeader struct {
+	OldStart, OldCount int
+	NewStart, NewCount int
+	Suffix             string // section-heading text after the closing "@@", including its leading space
+}
+
+// parseHunkHeader parses a unified diff hunk header line. ok is false when the
+// line is not a hunk header.
+func parseHunkHeader(line string) (header hunkHeader, ok bool) {
+	match := hunkHeaderRegex.FindStringSubmatch(line)
+	if match == nil {
+		return hunkHeader{}, false
+	}
+	return hunkHeader{
+		OldStart: parseInt(match[1]),
+		OldCount: parseHunkCount(match[2]),
+		NewStart: parseInt(match[3]),
+		NewCount: parseHunkCount(match[4]),
+		Suffix:   match[5],
+	}, true
+}
 
 // diffGitHeaderPath extracts the post-image path from a
 // "diff --git a/<old> b/<new>" header line.
@@ -150,25 +175,19 @@ func ParseDiffOutput(diffOutput string) (Hunks, error) {
 		}
 
 		// Check for hunk header
-		if match := hunkHeaderRegex.FindStringSubmatch(line); match != nil {
+		if header, ok := parseHunkHeader(line); ok {
 			// Save previous hunk if exists
 			if currentHunk != nil {
 				currentHunk.Content = strings.Join(hunkLines, "\n")
 				hunks = append(hunks, *currentHunk)
 			}
 
-			// Parse hunk header
-			oldStart := parseInt(match[1])
-			oldCount := parseHunkCount(match[2])
-			newStart := parseInt(match[3])
-			newCount := parseHunkCount(match[4])
-
 			currentHunk = &Hunk{
 				File:          currentFile,
-				OldStart:      oldStart,
-				OldCount:      oldCount,
-				NewStart:      newStart,
-				NewCount:      newCount,
+				OldStart:      header.OldStart,
+				OldCount:      header.OldCount,
+				NewStart:      header.NewStart,
+				NewCount:      header.NewCount,
 				IndexLine:     currentIndexLine,
 				IsNewFile:     currentIsNewFile,
 				IsDeletedFile: currentIsDeletedFile,

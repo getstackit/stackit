@@ -59,7 +59,7 @@ func parseDiffHunks(diffOutput, targetFile string) []Hunk {
 			continue
 		}
 
-		if match := hunkHeaderRegex.FindStringSubmatch(line); match != nil {
+		if header, ok := parseHunkHeader(line); ok {
 			if currentHunk != nil {
 				currentHunk.Content = strings.Join(hunkLines, "\n")
 				if currentHunk.File == targetFile {
@@ -67,17 +67,12 @@ func parseDiffHunks(diffOutput, targetFile string) []Hunk {
 				}
 			}
 
-			oldStart := parseInt(match[1])
-			oldCount := parseHunkCount(match[2])
-			newStart := parseInt(match[3])
-			newCount := parseHunkCount(match[4])
-
 			currentHunk = &Hunk{
 				File:     currentFile,
-				OldStart: oldStart,
-				OldCount: oldCount,
-				NewStart: newStart,
-				NewCount: newCount,
+				OldStart: header.OldStart,
+				OldCount: header.OldCount,
+				NewStart: header.NewStart,
+				NewCount: header.NewCount,
 			}
 			hunkLines = []string{line}
 			continue

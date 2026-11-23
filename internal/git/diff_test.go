@@ -87,42 +87,45 @@ func TestGetUnmergedFiles(t *testing.T) {
 		require.Empty(t, files)
 	})
 
-	t.Run("returns unmerged files during conflict", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial file that will be modified to create conflict
-			return s.Repo.CreateChangeAndCommit("initial content", "conflict")
+	// git C-quotes paths with spaces or non-ASCII bytes unless -z is used, so
+	// cover both a plain name and one that would have come back quoted.
+	for _, tc := range []struct {
+		name   string
+		prefix string
+	}{
+		{name: "returns unmerged files during conflict", prefix: "conflict"},
+		{name: "returns unquoted paths with spaces and non-ASCII characters", prefix: "café conflict"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
+				return s.Repo.CreateChangeAndCommit("initial content", tc.prefix)
+			})
+
+			forkPoint, err := scene.Repo.GetRef("main")
+			require.NoError(t, err)
+
+			require.NoError(t, scene.Repo.CreateAndCheckoutBranch("branch1"))
+			require.NoError(t, scene.Repo.CreateChangeAndCommit("branch1 change", tc.prefix))
+
+			require.NoError(t, scene.Repo.CheckoutBranch("main"))
+			require.NoError(t, scene.Repo.CreateChangeAndCommit("main conflicting", tc.prefix))
+
+			runner := git.NewRunnerWithPath(scene.Dir, nil)
+			_, err = runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
+			require.NoError(t, err)
+
+			files, err := runner.GetUnmergedFiles(t.Context())
+			require.NoError(t, err)
+			require.Equal(t, []string{tc.prefix + "_test.txt"}, files)
 		})
+	}
 
-		// Get the fork point before branching
-		forkPoint, err := scene.Repo.GetRef("main")
-		require.NoError(t, err)
-
-		// Create branch with change to conflict file
-		err = scene.Repo.CreateAndCheckoutBranch("branch1")
-		require.NoError(t, err)
-		err = scene.Repo.CreateChange("branch1 change", "conflict", false)
-		require.NoError(t, err)
-		err = scene.Repo.CreateChangeAndCommit("branch1 change", "b1")
-		require.NoError(t, err)
-
-		// Create conflicting change in main
-		err = scene.Repo.CheckoutBranch("main")
-		require.NoError(t, err)
-		err = scene.Repo.CreateChange("main conflicting", "conflict", false)
-		require.NoError(t, err)
-		err = scene.Repo.CreateChangeAndCommit("main conflicting", "main")
-		require.NoError(t, err)
-
-		// Start rebase (will conflict)
-		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		_, err = runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
-		require.NoError(t, err)
-
-		// Should have unmerged files
+	t.Run("returns an error outside a repository", func(t *testing.T) {
+		t.Parallel()
+		runner := git.NewRunnerWithPath(t.TempDir(), nil)
 		files, err := runner.GetUnmergedFiles(t.Context())
-		require.NoError(t, err)
-		require.NotEmpty(t, files)
-		require.Contains(t, files, "conflict_test.txt")
+		require.Error(t, err)
+		require.Empty(t, files)
 	})
 }

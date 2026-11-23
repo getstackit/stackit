@@ -59,3 +59,52 @@ index 3333333..4444444 100644
 	require.Equal(t, "first.go", hunks[0].File)
 	require.Equal(t, "my dir/second file.go", hunks[1].File)
 }
+
+func TestParseHunkHeader(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		line   string
+		want   hunkHeader
+		wantOK bool
+	}{
+		{
+			name:   "explicit counts",
+			line:   "@@ -10,5 +12,6 @@",
+			want:   hunkHeader{OldStart: 10, OldCount: 5, NewStart: 12, NewCount: 6},
+			wantOK: true,
+		},
+		{
+			name:   "omitted counts default to one",
+			line:   "@@ -3 +4 @@",
+			want:   hunkHeader{OldStart: 3, OldCount: 1, NewStart: 4, NewCount: 1},
+			wantOK: true,
+		},
+		{
+			name:   "explicit zero count stays zero",
+			line:   "@@ -0,0 +1,3 @@",
+			want:   hunkHeader{OldStart: 0, OldCount: 0, NewStart: 1, NewCount: 3},
+			wantOK: true,
+		},
+		{
+			name:   "section heading suffix is captured",
+			line:   "@@ -1,2 +1,3 @@ func Foo()",
+			want:   hunkHeader{OldStart: 1, OldCount: 2, NewStart: 1, NewCount: 3, Suffix: " func Foo()"},
+			wantOK: true,
+		},
+		{
+			name: "not a hunk header",
+			line: "+@@ -1,2 +1,3 @@",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, ok := parseHunkHeader(tt.line)
+			require.Equal(t, tt.wantOK, ok)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}

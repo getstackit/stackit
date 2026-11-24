@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"maps"
 	"runtime"
 	"slices"
 	"strings"
@@ -323,10 +324,7 @@ func (p *validationWorktreePool) destroy(path WorktreePath) {
 // drain removes every worktree the pool ever created.
 func (p *validationWorktreePool) drain() {
 	p.mu.Lock()
-	cleanups := make([]func(), 0, len(p.cleanups))
-	for _, cleanup := range p.cleanups {
-		cleanups = append(cleanups, cleanup)
-	}
+	cleanups := slices.Collect(maps.Values(p.cleanups))
 	p.cleanups = map[WorktreePath]func(){}
 	p.idle = nil
 	p.mu.Unlock()

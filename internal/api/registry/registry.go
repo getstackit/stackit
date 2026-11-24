@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -318,12 +319,7 @@ func (r *Registry) FindManaged(repo RepoRef) (*RepoEntry, bool) {
 func (r *Registry) List() []*RepoEntry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := make([]*RepoEntry, 0, len(r.entries))
-	for _, e := range r.entries {
-		out = append(out, e)
-	}
-	slices.SortFunc(out, func(a, b *RepoEntry) int { return cmp.Compare(a.ID, b.ID) })
-	return out
+	return slices.SortedFunc(maps.Values(r.entries), func(a, b *RepoEntry) int { return cmp.Compare(a.ID, b.ID) })
 }
 
 // Len reports the number of registered entries.

@@ -54,16 +54,20 @@ func (r *runner) MergeAbort(ctx context.Context) error {
 	return nil
 }
 
+// GetUnmergedFiles lists the paths with unresolved conflicts. The list is
+// NUL-separated (-z) so paths with spaces or non-ASCII characters come back
+// verbatim instead of C-quoted. A failed read is returned, not reported as "no
+// conflicts": callers use an empty result to decide a conflict is resolved.
 func (r *runner) GetUnmergedFiles(ctx context.Context) ([]string, error) {
-	output, err := r.Run(ctx, "diff", "--name-only", "--diff-filter=U")
+	output, err := r.RunRaw(ctx, "diff", "--name-only", "--diff-filter=U", "-z")
 	if err != nil {
-		return []string{}, nil //nolint:nilerr
+		return nil, fmt.Errorf("failed to list unmerged files: %w", err)
 	}
-	output = strings.TrimSpace(output)
-	if output == "" {
+	files := splitNulTerminated(output)
+	if files == nil {
 		return []string{}, nil
 	}
-	return strings.Split(output, "\n"), nil
+	return files, nil
 }
 
 // IsMerged reports whether branchName's commits have landed in target using

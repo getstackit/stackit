@@ -3,6 +3,7 @@ package github
 import (
 	"github.com/getstackit/stackit/internal/git"
 
+	"fmt"
 	"testing"
 	"time"
 
@@ -238,4 +239,45 @@ func TestParseCheckRollup_ChecksSortedByName(t *testing.T) {
 		}
 		require.Equal(t, []string{"analyze", "build", "deploy", "docs", "lint", "test"}, got)
 	}
+}
+
+func TestBuildPRStatusQuery_PassesBranchNamesAsVariables(t *testing.T) {
+	t.Parallel()
+
+	// A double quote is legal in a Git ref name; spliced into the query text it
+	// would terminate the string literal and break the whole batch.
+	branches := []string{"feature", `odd"name`, "feat/a", "feat-a"}
+	query, variables := buildPRStatusQuery(Repo{Owner: "octo", Name: "repo"}, branches)
+
+	require.Contains(t, query, "query($owner: String!, $repo: String!, $b0: String!, $b1: String!, $b2: String!, $b3: String!)")
+	require.Contains(t, query, "b0: pullRequests(headRefName: $b0,")
+	require.Contains(t, query, "b3: pullRequests(headRefName: $b3,")
+	require.NotContains(t, query, `odd"name`)
+
+	require.Equal(t, "octo", variables[graphqlVarOwner])
+	require.Equal(t, "repo", variables[graphqlVarRepo])
+	for i, name := range branches {
+		require.Equal(t, name, variables[fmt.Sprintf("b%d", i)])
+	}
+}
+
+func TestParsePRStatusResponse_MapsAliasesByIndex(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{
+		"data": {
+			"repository": {
+				"b0": {"nodes": [{"state": "OPEN", "reviewDecision": "APPROVED"}]},
+				"b1": {"nodes": []},
+				"b2": null
+			}
+		}
+	}`)
+
+	results, err := parsePRStatusResponse(body, []string{"feat/a", "feat-a", `odd"name`})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.NotNil(t, results.Get("feat/a"))
+	require.Equal(t, ReviewDecisionApproved, results.Get("feat/a").ReviewDecision)
+	require.Equal(t, git.PRStateOpen, results.Get("feat/a").State)
 }

@@ -267,7 +267,8 @@ func resolveCoords(req httpcontract.OnboardRepoRequest) (owner, name string, ok 
 // parseRepoURL accepts "https://github.com/owner/name(.git)", "github.com/owner/name",
 // or "owner/name" and returns the two segments.
 func parseRepoURL(raw string) (owner, name string, ok bool) {
-	s := strings.TrimSuffix(strings.TrimSpace(raw), ".git")
+	// Trim trailing slashes first so "owner/name.git/" still drops ".git".
+	s := strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(raw), "/"), ".git")
 	if _, after, found := strings.Cut(s, "github.com/"); found {
 		s = after
 	}

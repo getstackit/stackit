@@ -47,3 +47,22 @@ func TestGetRepoInfo(t *testing.T) {
 		require.False(t, got.IsHosted())
 	})
 }
+
+func TestParseRemoteRepositoryTrailingSlash(t *testing.T) {
+	t.Parallel()
+
+	want := git.RemoteRepository{Host: "github.com", Owner: "myowner", Name: "myrepo"}
+	for _, remote := range []string{
+		"https://github.com/myowner/myrepo/",
+		"https://github.com/myowner/myrepo.git/",
+		"git@github.com:myowner/myrepo/",
+		"git@github.com:myowner/myrepo.git/",
+	} {
+		t.Run(remote, func(t *testing.T) {
+			t.Parallel()
+			got, err := git.ParseRemoteRepository(remote)
+			require.NoError(t, err)
+			require.Equal(t, want, got)
+		})
+	}
+}

@@ -35,7 +35,10 @@ func (r *runner) GetRepoInfo(ctx context.Context) (RemoteRepository, error) {
 // Git remote URL forms. Local paths are not an error; they return the zero
 // value because callers may use them in tests or non-GitHub workflows.
 func ParseRemoteRepository(remoteURL string) (RemoteRepository, error) {
-	remoteURL = strings.TrimSuffix(strings.TrimSpace(remoteURL), ".git")
+	// Trim trailing slashes before ".git": Git accepts "owner/repo/" and
+	// "owner/repo.git/", and an untrimmed slash leaves an empty last segment
+	// that shifts owner/name by one.
+	remoteURL = strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(remoteURL), "/"), ".git")
 	if remoteURL == "" {
 		return RemoteRepository{}, nil
 	}

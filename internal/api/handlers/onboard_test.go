@@ -217,3 +217,24 @@ func TestOnboardHandlerAppNotInstalled(t *testing.T) {
 	require.Contains(t, rec.Body.String(), "GitHub App")
 	require.Empty(t, reg.List())
 }
+
+func TestParseRepoURL(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []string{
+		"owner/name",
+		"github.com/owner/name",
+		"https://github.com/owner/name",
+		"https://github.com/owner/name.git",
+		"https://github.com/owner/name/",
+		"https://github.com/owner/name.git/",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			t.Parallel()
+			owner, name, ok := parseRepoURL(raw)
+			require.True(t, ok)
+			require.Equal(t, "owner", owner)
+			require.Equal(t, "name", name)
+		})
+	}
+}

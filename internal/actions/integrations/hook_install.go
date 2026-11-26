@@ -25,7 +25,7 @@ func installHook(repoRoot, hookName, marker, template, displayName string, out o
 	if _, err := os.Stat(hookPath); err == nil {
 		content, err := os.ReadFile(hookPath)
 		if err == nil && strings.Contains(string(content), marker) {
-			out.Info(fmt.Sprintf("%s hook is already installed.", displayName))
+			out.Info("%s hook is already installed.", displayName)
 			return nil
 		}
 
@@ -39,13 +39,13 @@ func installHook(repoRoot, hookName, marker, template, displayName string, out o
 		if _, err := fmt.Fprintf(f, "\n# Added by Stackit\n%s\n", marker); err != nil {
 			return fmt.Errorf("failed to append to %s hook: %w", hookName, err)
 		}
-		out.Info(fmt.Sprintf("Appended Stackit verification to existing %s hook.", strings.ToLower(displayName)))
+		out.Info("Appended Stackit verification to existing %s hook.", strings.ToLower(displayName))
 	} else {
 		// #nosec G306 - Git hooks need to be executable
 		if err := os.WriteFile(hookPath, []byte(template), 0750); err != nil {
 			return fmt.Errorf("failed to write %s hook: %w", hookName, err)
 		}
-		out.Info(fmt.Sprintf("Installed Stackit %s hook.", strings.ToLower(displayName)))
+		out.Info("Installed Stackit %s hook.", strings.ToLower(displayName))
 	}
 
 	return nil
@@ -59,7 +59,7 @@ func uninstallHook(out output.Output, repoRoot, hookName, marker, displayName st
 	hookPath := filepath.Join(hooksDir, hookName)
 
 	if _, err := os.Stat(hookPath); errors.Is(err, os.ErrNotExist) {
-		out.Info(fmt.Sprintf("%s hook is not installed.", displayName))
+		out.Info("%s hook is not installed.", displayName)
 		return nil
 	}
 
@@ -86,7 +86,7 @@ func uninstallHook(out output.Output, repoRoot, hookName, marker, displayName st
 	}
 
 	if !removed {
-		out.Info(fmt.Sprintf("Stackit verification not found in %s hook.", strings.ToLower(displayName)))
+		out.Info("Stackit verification not found in %s hook.", strings.ToLower(displayName))
 		return nil
 	}
 
@@ -105,7 +105,7 @@ func uninstallHook(out output.Output, repoRoot, hookName, marker, displayName st
 		if err := os.Remove(hookPath); err != nil {
 			return fmt.Errorf("failed to remove %s hook: %w", hookName, err)
 		}
-		out.Info(fmt.Sprintf("Removed Stackit %s hook.", strings.ToLower(displayName)))
+		out.Info("Removed Stackit %s hook.", strings.ToLower(displayName))
 	} else {
 		// Write back modified content
 		newContent := strings.Join(newLines, "\n")
@@ -115,7 +115,7 @@ func uninstallHook(out output.Output, repoRoot, hookName, marker, displayName st
 		if err := os.WriteFile(hookPath, []byte(newContent), 0750); err != nil {
 			return fmt.Errorf("failed to write %s hook: %w", hookName, err)
 		}
-		out.Info(fmt.Sprintf("Removed Stackit verification from existing %s hook.", strings.ToLower(displayName)))
+		out.Info("Removed Stackit verification from existing %s hook.", strings.ToLower(displayName))
 	}
 
 	return nil

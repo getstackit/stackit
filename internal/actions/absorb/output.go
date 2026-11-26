@@ -44,7 +44,7 @@ func printAbsorbPreview(ctx context.Context,
 		len(unabsorbedHunks),
 	)
 	splog.Newline()
-	splog.Info(heading)
+	splog.Info("%s", heading)
 
 	// Resolve owning branches in one batched scan instead of one lookup per commit.
 	commitSHAs := sortedCommitSHAs(hunksByCommit)

@@ -29,7 +29,7 @@ func checkEnvironment(ctx context.Context, versioner gitVersioner, ghRunner gith
 	// that is merely present but too old leaves the user with a tool that
 	// refuses to do anything. Reporting it as passed here is how that turns into
 	// a bug report instead of an upgrade.
-	gitVersion, err := exec.Command("git", "version").Output()
+	gitVersion, err := exec.CommandContext(ctx, "git", "version").Output()
 	switch {
 	case err != nil:
 		errors++
@@ -52,19 +52,12 @@ func checkEnvironment(ctx context.Context, versioner gitVersioner, ghRunner gith
 	}
 
 	// Check gh CLI
-	ghVersion, err := exec.Command("gh", "version").Output()
+	ghVersion, err := exec.CommandContext(ctx, "gh", "version").Output()
 	if err != nil {
 		warnings++
 		handler.OnCheck("gh", CheckWarning, "GitHub CLI (gh) is not installed or not in PATH")
 	} else {
-		version := strings.TrimSpace(string(ghVersion))
-		// Extract just the version number
-		parts := strings.Fields(version)
-		if len(parts) > 0 {
-			handler.OnCheck("gh", CheckPassed, fmt.Sprintf("gh %s", parts[0]))
-		} else {
-			handler.OnCheck("gh", CheckPassed, version)
-		}
+		handler.OnCheck("gh", CheckPassed, formatGHVersion(string(ghVersion)))
 	}
 
 	// Check GitHub authentication. Bound both the token probe and the
@@ -98,4 +91,18 @@ func checkEnvironment(ctx context.Context, versioner gitVersioner, ghRunner gith
 	}
 
 	return warnings, errors
+}
+
+// formatGHVersion condenses `gh version` output to "gh <version>". The output
+// is "gh version 2.89.0 (2026-03-26)" followed by a release URL line, so the
+// version number is the third field of the first line, not the first. Output
+// in any other shape is reported as its trimmed first line.
+func formatGHVersion(out string) string {
+	firstLine, _, _ := strings.Cut(strings.TrimSpace(out), "\n")
+	firstLine = strings.TrimSpace(firstLine)
+	fields := strings.Fields(firstLine)
+	if len(fields) >= 3 && fields[0] == "gh" && fields[1] == "version" {
+		return "gh " + fields[2]
+	}
+	return firstLine
 }

@@ -135,7 +135,7 @@ func benchmarkWideStack(b *testing.B, numBranches int) {
 	}
 
 	for b.Loop() {
-		result, err := s.Engine.ValidateRebases(b.Context(), specs)
+		result, err := s.Engine.ValidateRebases(b.Context(), specs, engine.ValidateRebasesOpts{})
 		if err != nil || !result.Success {
 			b.Fatalf("validation failed: %v, result: %+v", err, result)
 		}
@@ -186,7 +186,7 @@ func benchmarkLinearStack(b *testing.B, depth int) {
 	}
 
 	for b.Loop() {
-		result, err := s.Engine.ValidateRebases(b.Context(), specs)
+		result, err := s.Engine.ValidateRebases(b.Context(), specs, engine.ValidateRebasesOpts{})
 		if err != nil || !result.Success {
 			b.Fatalf("validation failed: %v, result: %+v", err, result)
 		}
@@ -239,7 +239,7 @@ func benchmarkMixedStack(b *testing.B) {
 	}
 
 	for b.Loop() {
-		result, err := s.Engine.ValidateRebases(b.Context(), specs)
+		result, err := s.Engine.ValidateRebases(b.Context(), specs, engine.ValidateRebasesOpts{})
 		if err != nil || !result.Success {
 			b.Fatalf("validation failed: %v, result: %+v", err, result)
 		}

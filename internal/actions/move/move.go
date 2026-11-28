@@ -41,7 +41,7 @@ type Engine interface {
 	GetDivergencePoint(ctx context.Context, branchName string) (string, error)
 	BatchRevisions(ctx context.Context, branches engine.Branches) engine.RevisionMap
 	BatchDivergencePoints(ctx context.Context, branches engine.Branches) engine.RevisionMap
-	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec) (*engine.RebaseValidation, error)
+	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec, opts engine.ValidateRebasesOpts) (*engine.RebaseValidation, error)
 	ReparentBranch(ctx context.Context, branch engine.Branch, newParent engine.Branch) error
 	AssignBranchesToNewStack(ctx context.Context, root engine.Branch, branches engine.Branches) (string, error)
 	RenameBranch(ctx context.Context, oldBranch, newBranch engine.Branch) error
@@ -232,7 +232,7 @@ func validateForExecution(ctx context.Context, eng Engine, out output.Output, h 
 }
 
 func confirmInteractive(ctx context.Context, eng Engine, out output.Output, h Handler, plan *movePlan) (bool, error) {
-	validation, validationErr := eng.ValidateRebases(ctx, plan.rebaseSpecs)
+	validation, validationErr := eng.ValidateRebases(ctx, plan.rebaseSpecs, engine.ValidateRebasesOpts{})
 	commitsData, _ := eng.GetAllCommits(ctx, plan.sourceBranch)
 	commits := commitsData.Subjects()
 
@@ -260,7 +260,7 @@ func confirmInteractive(ctx context.Context, eng Engine, out output.Output, h Ha
 
 func validateNonInteractive(ctx context.Context, eng Engine, h Handler, plan *movePlan) (bool, error) {
 	h.OnStep(StepValidating, handler.StatusStarted, "Validating rebases...")
-	validation, err := eng.ValidateRebases(ctx, plan.rebaseSpecs)
+	validation, err := eng.ValidateRebases(ctx, plan.rebaseSpecs, engine.ValidateRebasesOpts{})
 	if err != nil {
 		h.OnStep(StepValidating, handler.StatusFailed, err.Error())
 		return false, fmt.Errorf("failed to validate rebases: %w", err)
@@ -379,7 +379,7 @@ func completeMove(h Handler, plan *movePlan, renamed bool) {
 // dryRun validates and prints what the move would do without making changes.
 func dryRun(ctx context.Context, eng Engine, out output.Output, source, oldParentName, onto string, sourceBranch engine.Branch, descendants engine.Branches, rebaseSpecs []engine.RebaseSpec) error {
 	// Run validation
-	validation, validationErr := eng.ValidateRebases(ctx, rebaseSpecs)
+	validation, validationErr := eng.ValidateRebases(ctx, rebaseSpecs, engine.ValidateRebasesOpts{})
 
 	// Get commits that will be moved
 	commitsData, _ := eng.GetAllCommits(ctx, sourceBranch)

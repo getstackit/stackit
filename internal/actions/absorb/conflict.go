@@ -183,15 +183,9 @@ func Abort(ctx context.Context, deps Deps) error {
 	reflog, _ := eng.GetReflog(ctx, 20, "%gs")
 	var originalBranch string
 	for line := range strings.SplitSeq(reflog, "\n") {
-		if strings.Contains(line, "checkout: moving from") {
-			parts := strings.Split(line, "moving from ")
-			if len(parts) >= 2 {
-				branchPart := strings.Split(parts[1], " to ")
-				if len(branchPart) >= 1 {
-					originalBranch = branchPart[0]
-					break
-				}
-			}
+		if from, ok := checkoutSource(line); ok {
+			originalBranch = from
+			break
 		}
 	}
 
@@ -246,4 +240,15 @@ func popAllAbsorbStashes(gitCtx context.Context, eng engine.Engine) (int, error)
 		}
 		restored++
 	}
+}
+
+// checkoutSource returns the ref a "checkout: moving from <from> to <to>"
+// reflog subject left. ok is false for any other reflog entry.
+func checkoutSource(subject string) (from string, ok bool) {
+	_, rest, ok := strings.Cut(subject, "checkout: moving from ")
+	if !ok {
+		return "", false
+	}
+	from, _, _ = strings.Cut(rest, " to ")
+	return from, true
 }

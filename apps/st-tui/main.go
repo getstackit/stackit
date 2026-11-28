@@ -60,10 +60,8 @@ func runSubmitScenario(out output.Output, name string, delay time.Duration) {
 		printUsage(os.Stderr)
 		os.Exit(2)
 	}
-	runner, handler := stack.NewSubmitUI(out, output.NewNullLogger(), stack.SubmitCompact)
-	if runner != nil {
-		defer runner.Cleanup()
-	}
+	handler, stop := stack.NewSubmitUI(out, output.NewNullLogger(), stack.SubmitCompact)
+	defer stop()
 	scenario.Replay(handler, delay)
 }
 

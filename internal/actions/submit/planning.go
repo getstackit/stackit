@@ -64,6 +64,10 @@ func prepareBranchesForSubmit(ctx context.Context, deps Deps, branches engine.Br
 	if !opts.regenerate() && len(missingContent) > 0 && deps.GitHub() != nil {
 		current = deps.PRSync.FetchContent(ctx, missingContent)
 	}
+	// The remote reads above are the slow part of preparation. End it here,
+	// before the loop below, because PreparePRMetadata can prompt for titles,
+	// bodies, and reviewers and nothing may print over a prompt.
+	handler.OnEvent(PreparingEvent{Completed: true})
 
 	for _, branch := range branches {
 		branchName := branch.Name()

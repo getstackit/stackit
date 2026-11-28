@@ -12,13 +12,17 @@ import (
 // Item represents a branch being submitted
 type Item struct {
 	BranchName string
-	Action     engine.SubmitAction
-	PRNumber   *git.PRNumber
-	Status     Status
-	IsSkipped  bool
-	SkipReason string
-	URL        string
-	Error      error
+	// DisplayName is the name terminal rows show. Adapters set it from a
+	// style.BranchNameResolver so two branches never render alike; when empty,
+	// rows fall back to style.DisplayBranchName.
+	DisplayName string
+	Action      engine.SubmitAction
+	PRNumber    *git.PRNumber
+	Status      Status
+	IsSkipped   bool
+	SkipReason  string
+	URL         string
+	Error       error
 }
 
 // Status is the submission progress state of a branch. It mirrors the

@@ -28,19 +28,38 @@ func (s RestackRowStatus) Mark() string {
 	return style.MarkSuccess()
 }
 
+// RestackRowStyle controls how a restack row names branches. The zero value
+// prints full names and revision hashes, which is what piped output needs:
+// scripts pass those names back to stackit.
+type RestackRowStyle struct {
+	// Name maps a branch name for display (e.g. shortening it); nil keeps it.
+	Name func(string) string
+	// HideRevision drops the "→ <rev>" suffix from restacked rows.
+	HideRevision bool
+}
+
+func (s RestackRowStyle) name(branch string) string {
+	if s.Name == nil {
+		return branch
+	}
+	return s.Name(branch)
+}
+
 // FormatRestackRow renders one restack outcome without its leading marker.
 // Every command that restacks prints its rows through here, so a branch reads
 // the same whichever command moved it.
-func FormatRestackRow(event actions.RestackBranchEvent) (string, RestackRowStatus) {
-	branch := style.ColorBranchNameIf(event.Branch, event.IsCurrent) + FormatPRInfo(event.PRNumber)
+func FormatRestackRow(event actions.RestackBranchEvent, rowStyle RestackRowStyle) (string, RestackRowStatus) {
+	branch := style.ColorBranchNameIf(rowStyle.name(event.Branch), event.IsCurrent) + FormatPRInfo(event.PRNumber)
 
 	switch event.Result {
 	case actions.RestackDone:
 		row := "Restacked " + branch
 		if event.Parent != "" {
-			row += " on " + style.ColorBranchName(event.Parent)
+			row += " on " + style.ColorBranchName(rowStyle.name(event.Parent))
 		}
-		row += " → " + style.ColorDim(event.NewRevision)
+		if !rowStyle.HideRevision {
+			row += " → " + style.ColorDim(event.NewRevision)
+		}
 		if event.RerereResolvedCount > 0 {
 			row += " " + restack.FormatRerereResolved(event.RerereResolvedCount)
 		}
@@ -66,24 +85,24 @@ func FormatRestackRow(event actions.RestackBranchEvent) (string, RestackRowStatu
 
 // FormatRestackReparent renders the line announcing that a branch moved past
 // a merged or deleted parent, or "" when it did not.
-func FormatRestackReparent(event actions.RestackBranchEvent) string {
+func FormatRestackReparent(event actions.RestackBranchEvent, rowStyle RestackRowStyle) string {
 	if !event.Reparented {
 		return ""
 	}
 	return fmt.Sprintf("Reparented %s from %s to %s (parent was merged/deleted).",
-		style.ColorBranchNameIf(event.Branch, event.IsCurrent),
-		style.ColorBranchName(event.OldParent),
-		style.ColorBranchName(event.NewParent))
+		style.ColorBranchNameIf(rowStyle.name(event.Branch), event.IsCurrent),
+		style.ColorBranchName(rowStyle.name(event.OldParent)),
+		style.ColorBranchName(rowStyle.name(event.NewParent)))
 }
 
 // FormatRestackLines renders the streaming lines for one restack event: the
 // reparent notice when there is one, then the row led by its status marker.
 func FormatRestackLines(event actions.RestackBranchEvent) []string {
 	var lines []string
-	if reparent := FormatRestackReparent(event); reparent != "" {
+	if reparent := FormatRestackReparent(event, RestackRowStyle{}); reparent != "" {
 		lines = append(lines, "  "+reparent)
 	}
-	row, status := FormatRestackRow(event)
+	row, status := FormatRestackRow(event, RestackRowStyle{})
 	return append(lines, fmt.Sprintf("  %s %s", status.Mark(), row))
 }
 

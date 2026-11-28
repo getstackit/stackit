@@ -87,6 +87,9 @@ func restackBranches(ctx context.Context, deps Deps, branchesToRestack []string,
 	summary.BranchesSkipped += len(outcome.Summary.Conflicts)
 	summary.ConflictBranches = append(summary.ConflictBranches, outcome.Summary.Conflicts...)
 	summary.BranchesBlocked += len(outcome.Summary.Blocked)
+	for _, held := range outcome.Summary.Held {
+		summary.recordHold(held.Branch)
+	}
 	deps.Log.Info("restack branches completed durationMs=%d branchCount=%d", time.Since(restackStart).Milliseconds(), len(sortedBranches))
 
 	return outcome, err

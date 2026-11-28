@@ -149,3 +149,14 @@ func TestReadWorkingTreeParsesPorcelain(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, workingTreeSummary{staged: 4, unstaged: 2, untracked: 2}, summary)
 }
+
+func TestEscapeStaysInShipViewWhileBusy(t *testing.T) {
+	t.Parallel()
+
+	for _, state := range []dashboardState{stateLoading, stateShipping} {
+		m, _ := newTestCompanion()
+		ship := &shippableModel{companion: m, state: state}
+		updated, _ := ship.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+		require.Same(t, ship, updated, "an operation's result must not be orphaned by leaving its view")
+	}
+}

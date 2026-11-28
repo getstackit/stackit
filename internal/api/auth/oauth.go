@@ -243,18 +243,9 @@ type MeResponse struct {
 func (h *Handler) MeHandler(w http.ResponseWriter, r *http.Request) {
 	sess := SessionFromContext(r.Context())
 	if sess == nil {
-		cookie := readCookie(r, sessionCookieName)
-		if cookie == "" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte(`{"error":"unauthenticated"}`))
-			return
-		}
-		s, ok := h.store.Get(cookie)
+		s, ok := sessionFromRequest(h.store, r)
 		if !ok {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte(`{"error":"unauthenticated"}`))
+			writeUnauthorized(w)
 			return
 		}
 		sess = s

@@ -116,3 +116,74 @@ func TestAnalyzeAllReadsRemoteStatusOnceAcrossStacks(t *testing.T) {
 	require.Equal(t, int64(1), counting.fetchRemoteShas.Load(),
 		"AnalyzeAll should read remote branch status once for all stacks, not once per stack")
 }
+
+func TestAnalyzeAllLocalNeverReportsShippable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		prInfo     *engine.PrInfo
+		wantStatus Status
+		wantReason BlockingReason
+	}{
+		{
+			name:       "open PR is unverified without forge data",
+			prInfo:     testhelpers.NewTestPrInfo(101),
+			wantStatus: StatusUnverified,
+		},
+		{
+			name:       "draft PR is incomplete",
+			prInfo:     testhelpers.NewTestPrInfoDraft(101),
+			wantStatus: StatusIncomplete,
+			wantReason: ReasonDraft,
+		},
+		{
+			name:       "closed PR is blocked",
+			prInfo:     testhelpers.NewTestPrInfoClosed(101),
+			wantStatus: StatusBlocked,
+			wantReason: ReasonPRClosed,
+		},
+		{
+			name:       "merged PR is blocked",
+			prInfo:     testhelpers.NewTestPrInfoMerged(101, "main"),
+			wantStatus: StatusBlocked,
+			wantReason: ReasonPRMerged,
+		},
+		{
+			name:       "missing PR is incomplete",
+			wantStatus: StatusIncomplete,
+			wantReason: ReasonNoPR,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+				WithStack(map[string]string{"P": "main"})
+			analyzer, eng, counting := newCountingAnalyzer(t, s.Scene.Dir)
+			if tt.prInfo != nil {
+				require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("P"), tt.prInfo))
+			}
+
+			result, err := analyzer.AnalyzeAllLocal()
+			require.NoError(t, err)
+			require.Len(t, result.Stacks, 1)
+			stack := result.Stacks[0]
+			require.Equal(t, tt.wantStatus, stack.Status)
+			require.False(t, stack.ApprovalOK, "offline analysis cannot know review state")
+			require.False(t, stack.GitHubCIOK, "offline analysis cannot know CI state")
+			require.Zero(t, result.ShippableCount)
+			if tt.wantReason == "" {
+				require.Empty(t, stack.BlockingPRs)
+				require.Equal(t, 1, result.UnverifiedCount)
+			} else {
+				require.Len(t, stack.BlockingPRs, 1)
+				require.Equal(t, tt.wantReason, stack.BlockingPRs[0].Reason)
+			}
+			require.Equal(t, int64(0), counting.fetchRemoteShas.Load(),
+				"local analysis must not contact a remote")
+		})
+	}
+}

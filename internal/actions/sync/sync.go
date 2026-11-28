@@ -3,6 +3,7 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -12,6 +13,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/engine"
+	stackErrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
 
 	"golang.org/x/sync/errgroup"
@@ -38,7 +40,7 @@ type Options struct {
 }
 
 // Action performs the sync operation
-func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error {
+func Action(ctx context.Context, deps Deps, opts Options, handler Handler) (err error) {
 	eng := deps.Engine
 	out := deps.Out
 	summary := &Summary{}
@@ -87,6 +89,24 @@ func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error
 	}
 
 	handler.Start()
+
+	// Every outcome after Start reports exactly once. A sync can pull trunk and
+	// delete branches before a later phase fails, so an error return still
+	// completes with what happened — marked failed — unless the conflict
+	// workflow took over the terminal (its guidance must be the last thing the
+	// user sees) or the user canceled a prompt.
+	var completed, handedOff bool
+	complete := func() {
+		completed = true
+		handler.Complete(*summary)
+	}
+	defer func() {
+		if err == nil || completed || handedOff || errors.Is(err, stackErrors.ErrCanceled) {
+			return
+		}
+		summary.Failed = true
+		complete()
+	}()
 
 	// Phase 1: Parallel network operations
 	// Fetch trunk and metadata refs, and sync GitHub PR info concurrently.
@@ -262,7 +282,7 @@ func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error
 		if !summary.HasChanges() {
 			summary.UpToDate = true
 		}
-		handler.Complete(*summary)
+		complete()
 		return nil
 	}
 
@@ -273,7 +293,7 @@ func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error
 		if !summary.HasChanges() {
 			summary.UpToDate = true
 		}
-		handler.Complete(*summary)
+		complete()
 		return nil
 	}
 
@@ -283,11 +303,16 @@ func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error
 	if outcome.EnteredConflictWorkflow {
 		// The user chose to resolve a conflict now; sync hands off to the
 		// conflict workflow and does not report a finished summary.
+		handedOff = true
+		return err
+	}
+	if errors.Is(err, stackErrors.ErrCanceled) {
+		// The user canceled the conflict workflow: report what sync did, as
+		// incomplete rather than failed.
+		complete()
 		return err
 	}
 	if err != nil {
-		// Even on error, complete with summary
-		handler.Complete(*summary)
 		return fmt.Errorf("failed to restack branches: %w", err)
 	}
 
@@ -298,7 +323,7 @@ func Action(ctx context.Context, deps Deps, opts Options, handler Handler) error
 
 	deps.Log.Info("sync completed trunkUpdated=%v branchesRestacked=%v branchesDeleted=%v branchesSkipped=%v", summary.TrunkUpdated, summary.BranchesRestacked, summary.BranchesDeleted, summary.BranchesSkipped)
 
-	handler.Complete(*summary)
+	complete()
 	return nil
 }
 
@@ -342,6 +367,7 @@ type Event struct {
 
 // Summary holds aggregate results from a sync operation
 type Summary struct {
+	Failed            bool     // unexpected error after sync started
 	TrunkUpdated      bool     // Was trunk updated?
 	TrunkRevision     string   // New trunk revision (short hash)
 	BranchesSynced    int      // Number of branches synced from remote
